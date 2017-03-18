@@ -200,6 +200,7 @@ std::unordered_map<std::string, std::string> get_container_by_key(
 bool add_application(redox::Redox& redis, const std::string& appname,
                      const std::vector<VersionedModelId>& models,
                      const InputType& input_type, const std::string& policy,
+                     const std::string& default_output,
                      const long latency_slo_micros);
 
 /**

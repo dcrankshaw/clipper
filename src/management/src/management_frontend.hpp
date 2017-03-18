@@ -201,7 +201,7 @@ class RequestHandler {
    *    {"model_name" := string, "model_version" := int}
    *  ],
    *  "input_type" := "integers" | "bytes" | "floats" | "doubles" | "strings",
-   *  "selection_policy" := string,
+   *  "default_output" := json_string,
    *  "latency_slo_micros" := int
    * }
    */
@@ -210,15 +210,26 @@ class RequestHandler {
     parse_json(json, d);
 
     std::string app_name = get_string(d, "name");
+    // TODO(CLIPPER-111): Applications should specify the name but not
+    // version of the model. The versioning will be handled by Clipper.
     std::vector<VersionedModelId> candidate_models =
         get_candidate_models(d, "candidate_models");
+    if (candidate_models.size() != 1) {
+      std::stringstream ss;
+      ss << "Applications must provide exactly 1 candidate model. ";
+      ss << app_name << " provided " << candidate_models.size();
+      std::string error_msg = ss.str();
+      clipper::log_error(LOGGING_TAG_MANAGEMENT_FRONTEND, error_msg);
+      return error_msg;
+    }
     InputType input_type =
         clipper::parse_input_type(get_string(d, "input_type"));
-    std::string selection_policy = get_string(d, "selection_policy");
+    std::string default_output = get_string(d, "default_output");
+    std::string selection_policy = "DefaultOutputSelectionPolicy";
     int latency_slo_micros = get_int(d, "latency_slo_micros");
-    if (clipper::redis::add_application(redis_connection_, app_name,
-                                        candidate_models, input_type,
-                                        selection_policy, latency_slo_micros)) {
+    if (clipper::redis::add_application(
+            redis_connection_, app_name, candidate_models, input_type,
+            selection_policy, default_output, latency_slo_micros)) {
       return "Success!";
     } else {
       return "Error adding application to Redis.";
