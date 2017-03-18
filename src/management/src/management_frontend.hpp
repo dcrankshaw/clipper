@@ -75,22 +75,6 @@ const std::string SELECTION_JSON_SCHEMA = R"(
   }
 )";
 
-template <typename Policy>
-std::string lookup_selection_state(
-    clipper::StateDB& state_db, const std::string& appname, const int uid,
-    const std::vector<VersionedModelId> candidate_models) {
-  auto hashkey = Policy::hash_models(candidate_models);
-  typename Policy::state_type state;
-  std::string serialized_state;
-  if (auto state_opt = state_db.get(clipper::StateKey{appname, uid, hashkey})) {
-    serialized_state = *state_opt;
-    state = Policy::deserialize_state(serialized_state);
-  } else {
-    state = Policy::initialize(candidate_models);
-  }
-  return Policy::state_debug_string(state);
-}
-
 void respond_http(std::string content, std::string message,
                   std::shared_ptr<HttpServer::Response> response) {
   *response << "HTTP/1.1 " << message
@@ -285,28 +269,17 @@ class RequestHandler {
 
     std::string app_name = get_string(d, "app_name");
     int uid = get_int(d, "uid");
+    if (uid != clipper::DEFAULT_USER_ID) {
+      clipper::log_error_formatted(LOGGING_TAG_MANAGEMENT_FRONTEND,
+                                   "Personalized default outputs are not "
+                                   "currently supported. Using default UID {} "
+                                   "instead",
+                                   clipper::DEFAULT_USER_ID);
+      uid = clipper::DEFAULT_USER_ID;
+    }
     auto app_metadata =
         clipper::redis::get_application(redis_connection_, app_name);
-    std::vector<VersionedModelId> candidate_models =
-        clipper::redis::str_to_models(app_metadata["candidate_models"]);
-    std::string policy = app_metadata["policy"];
-
-    if (policy == "EXP3") {
-      return lookup_selection_state<clipper::Exp3Policy>(state_db_, app_name,
-                                                         uid, candidate_models);
-    } else if (policy == "EXP4") {
-      return lookup_selection_state<clipper::Exp4Policy>(state_db_, app_name,
-                                                         uid, candidate_models);
-    } else if (policy == "EpsilonGreedy") {
-      return lookup_selection_state<clipper::EpsilonGreedyPolicy>(
-          state_db_, app_name, uid, candidate_models);
-    } else if (policy == "UCB") {
-      return lookup_selection_state<clipper::UCBPolicy>(state_db_, app_name,
-                                                        uid, candidate_models);
-    } else {
-      return "ERROR: " + app_name +
-             " does not support looking up selection policy state";
-    }
+    return app_metadata["default_output"];
   }
 
   void start_listening() { server_.start(); }
