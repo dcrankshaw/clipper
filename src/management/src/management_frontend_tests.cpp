@@ -48,10 +48,10 @@ TEST_F(ManagementFrontendTest, TestAddApplicationCorrect) {
   {
     "name": "myappname",
     "candidate_models": [
-        {"model_name": "m", "model_version": 4},
         {"model_name": "image_model", "model_version": 3}],
     "input_type": "integers",
     "selection_policy": "sample_policy",
+    "default_output": "4.3",
     "latency_slo_micros": 10000
   }
   )";
@@ -61,7 +61,7 @@ TEST_F(ManagementFrontendTest, TestAddApplicationCorrect) {
   // The application table has 5 fields, so we expect to get back a map with 5
   // entries in it (see add_application() in redis.cpp for details on what the
   // fields are).
-  ASSERT_EQ(result.size(), static_cast<size_t>(4));
+  ASSERT_EQ(result.size(), static_cast<size_t>(5));
 }
 
 TEST_F(ManagementFrontendTest, TestAddApplicationMissingField) {
