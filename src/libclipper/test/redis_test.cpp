@@ -146,7 +146,7 @@ TEST_F(RedisTest, AddApplication) {
       std::make_pair("music_random_features", 1),
       std::make_pair("simple_svm", 2), std::make_pair("music_cnn", 4)};
   InputType input_type = InputType::Doubles;
-  std::string policy = "exp3_policy";
+  std::string policy = DefaultOutputSelectionPolicy::get_name();
   std::string default_output = "1.0";
   int latency_slo_micros = 10000;
   ASSERT_TRUE(add_application(*redis_, name, models, input_type, policy,
