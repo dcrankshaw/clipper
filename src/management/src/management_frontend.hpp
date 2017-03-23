@@ -185,7 +185,7 @@ class RequestHandler {
    *    {"model_name" := string, "model_version" := int}
    *  ],
    *  "input_type" := "integers" | "bytes" | "floats" | "doubles" | "strings",
-   *  "default_output" := json_string,
+   *  "default_output" := float,
    *  "latency_slo_micros" := int
    * }
    */
