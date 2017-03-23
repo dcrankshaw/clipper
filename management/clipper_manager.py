@@ -241,7 +241,7 @@ class Clipper:
 
     def register_application(self,
                              name,
-                             candidate_models,
+                             model,
                              input_type,
                              selection_policy,
                              slo_micros=20000):
@@ -251,14 +251,11 @@ class Clipper:
         ----------
         name : str
             The name of the application.
-        candidate_models : list of dict
-            The list of models this application will attempt to query.
-            Each candidate model is defined as a dict with keys `model_name`
+        model : dict
+            The model this application will query.
+            The model is defined as a dict with keys `model_name`
             and `model_version`. Example::
-                candidate_models = [
-                    {"model_name": "my_model", "model_version": 1},
-                    {"model_name": "other_model", "model_version": 1},
-                ]
+                model = {"model_name": "my_model", "model_version": 1}
         input_type : str
             One of "integers", "floats", "doubles", "bytes", or "strings".
         selection_policy : str
@@ -271,7 +268,7 @@ class Clipper:
         url = "http://%s:1338/admin/add_app" % self.host
         req_json = json.dumps({
             "name": name,
-            "candidate_models": candidate_models,
+            "candidate_models": list(model),
             "input_type": input_type,
             "selection_policy": selection_policy,
             "latency_slo_micros": slo_micros
