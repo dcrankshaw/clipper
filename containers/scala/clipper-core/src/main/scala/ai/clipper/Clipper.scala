@@ -1,4 +1,4 @@
-package clipper
+package ai.clipper
 
 import scala.reflect.runtime.universe
 import scala.reflect.runtime.universe.TypeTag
@@ -6,36 +6,14 @@ import scala.reflect.api
 import java.io._
 import scala.io.Source
 
+import org.apache.spark.{SparkContext, SparkConf}
+
+
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
-object MLlibLoader {
-  def metadataPath(path: String): String = s"$path/metadata"
+import ai.clipper.container.{MLlibModel,MLlibLoader}
 
-  def getModelClassName(sc: SparkContext, path: String) = {
-    val str = sc.textFile(metadataPath(path)).take(1)(0)
-    println(s"JSON STRING: $str")
-    val json = parse(str)
-    val JString(className) = (json \ "class")
-    className
-  }
-
-  def load(sc: SparkContext, path: String): MLlibModel = {
-    val className = getModelClassName(sc, path)
-    // Reflection Code
-    val mirror = universe.runtimeMirror(getClass.getClassLoader)
-    val modelModule = mirror.staticModule(className)
-    val anyInst = mirror.reflectModule(modelModule).instance
-    val loader = anyInst.asInstanceOf[org.apache.spark.mllib.util.Loader[_]]
-    val model = loader.load(sc, path) match {
-      case model: LogisticRegressionModel => MLlibLogisticRegressionModel(model)
-      case model: NaiveBayesModel => MLlibNaiveBayesModel(model)
-      case model: SVMModel => MLlibSVMModel(model)
-      case model: BisectingKMeansModel => MLlibBisectingKMeansModel(model)
-    }
-    model
-  }
-}
 
 object Clipper {
 

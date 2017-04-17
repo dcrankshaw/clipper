@@ -1,4 +1,4 @@
-package clipper.container
+package ai.clipper.container
 
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.tree.model.DecisionTreeModel
@@ -68,6 +68,34 @@ abstract class Container {
 
   def predict(xs: Vector) : Double
 
+}
+
+object MLlibLoader {
+  def metadataPath(path: String): String = s"$path/metadata"
+
+  def getModelClassName(sc: SparkContext, path: String) = {
+    val str = sc.textFile(metadataPath(path)).take(1)(0)
+    println(s"JSON STRING: $str")
+    val json = parse(str)
+    val JString(className) = (json \ "class")
+    className
+  }
+
+  def load(sc: SparkContext, path: String): MLlibModel = {
+    val className = getModelClassName(sc, path)
+    // Reflection Code
+    val mirror = universe.runtimeMirror(getClass.getClassLoader)
+    val modelModule = mirror.staticModule(className)
+    val anyInst = mirror.reflectModule(modelModule).instance
+    val loader = anyInst.asInstanceOf[org.apache.spark.mllib.util.Loader[_]]
+    val model = loader.load(sc, path) match {
+      case model: LogisticRegressionModel => MLlibLogisticRegressionModel(model)
+      case model: NaiveBayesModel => MLlibNaiveBayesModel(model)
+      case model: SVMModel => MLlibSVMModel(model)
+      case model: BisectingKMeansModel => MLlibBisectingKMeansModel(model)
+    }
+    model
+  }
 }
 
 // GaussianMixtureModel

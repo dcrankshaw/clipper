@@ -23,7 +23,7 @@ import org.apache.spark.mllib.classification.NaiveBayesModel
 import org.apache.spark.mllib.classification.SVMModel
 import org.apache.spark.mllib.clustering.BisectingKMeansModel
 
-//
+
 // sealed abstract class MLlibModel {
 //   def predict(features: Vector): Double
 //   def save(sc: SparkContext, path: String): Unit
@@ -74,8 +74,8 @@ import org.apache.spark.mllib.clustering.BisectingKMeansModel
 //     model.save(sc, path)
 //   }
 // }
-//
-//
+
+
 
 
 class LogisticRegressionContainer extends Container {
