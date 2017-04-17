@@ -3,8 +3,10 @@ package ai.clipper
 import scala.reflect.runtime.universe
 import scala.reflect.runtime.universe.TypeTag
 import scala.reflect.api
-import java.io._
 import scala.io.Source
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.StandardOpenOption.CREATE
+import java.nio.file.{Files,Paths,Path}
 
 import org.apache.spark.{SparkContext, SparkConf}
 
@@ -26,9 +28,11 @@ object Clipper {
     val path = s"/tmp/$name/$version/"
     model.save(sc, path)
     // val containerClass = container.getClass.getName
-    val pw = new PrintWriter(new File(s"$path/container.txt" ))
-    pw.write(containerClass)
-    pw.close
+    Files.write(Paths.get(s"$path/container.txt"), s"$containerClass\n".getBytes(), CREATE)
+    val jarPath = Paths.get(getClass.getProtectionDomain().getCodeSource().getLocation().getPath())
+    println(s"JAR path: $jarPath")
+    System.out.flush()
+    Files.copy(jarPath, Paths.get(s"$path/container.jar"), REPLACE_EXISTING)
 
   }
 
