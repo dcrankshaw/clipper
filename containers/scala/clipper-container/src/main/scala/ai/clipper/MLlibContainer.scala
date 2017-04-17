@@ -1,5 +1,14 @@
 package ai.clipper.container
 
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
+
+import scala.reflect.runtime.universe
+import scala.reflect.runtime.universe.TypeTag
+import scala.reflect.api
+import java.io._
+import scala.io.Source
+
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.tree.model.DecisionTreeModel
 import org.apache.spark.mllib.tree.DecisionTree

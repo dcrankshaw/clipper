@@ -12,7 +12,7 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
-import ai.clipper.container.{MLlibModel,MLlibLoader}
+import ai.clipper.container.{MLlibModel,MLlibLoader,Container}
 
 
 object Clipper {

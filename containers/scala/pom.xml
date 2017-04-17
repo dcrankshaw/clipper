@@ -3,6 +3,8 @@
   <groupId>ai.clipper</groupId>
   <artifactId>clipper-parent</artifactId>
   <version>0.1</version>
+  <packaging>pom</packaging>
+
   <name>${project.artifactId}</name>
   <inceptionYear>2017</inceptionYear>
   <licenses>
@@ -21,7 +23,7 @@
     <module>clipper-core</module>
     <module>clipper-container</module>
     <module>clipper-example-train</module>
-    <module>clipper-example-serve</module>
+    <!-- <module>clipper&#45;example&#45;serve</module> -->
   </modules>
 
   <properties>
@@ -30,6 +32,7 @@
     <encoding>UTF-8</encoding>
     <scala.version>2.11.5</scala.version>
     <scala.compat.version>2.11</scala.compat.version>
+    <scala.binary.version>2.11</scala.binary.version>
     <spark.version>2.1.0</spark.version>
   </properties>
 
@@ -95,18 +98,13 @@
           <version>3.2.11</version>
       </dependency>
       <dependency>
-          <groupId>clipper</groupId>
+          <groupId>ai.clipper</groupId>
           <artifactId>clipper-core</artifactId>
           <version>0.1</version>
       </dependency>
       <dependency>
-          <groupId>clipper</groupId>
-          <artifactId>clipper-mllib-container</artifactId>
-          <version>0.1</version>
-      </dependency>
-      <dependency>
-          <groupId>clipper</groupId>
-          <artifactId>clipper-ml-container</artifactId>
+          <groupId>ai.clipper</groupId>
+          <artifactId>clipper-container</artifactId>
           <version>0.1</version>
       </dependency>
 
