@@ -7,9 +7,10 @@ import scala.io.Source
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.{Files,Paths,Path}
+import java.net.URL
+import java.net.URLClassLoader
 
 import org.apache.spark.{SparkContext, SparkConf}
-
 
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
@@ -28,8 +29,8 @@ object Clipper {
     val path = s"/tmp/$name/$version/"
     model.save(sc, path)
     // val containerClass = container.getClass.getName
-    Files.write(Paths.get(s"$path/container.txt"), s"$containerClass\n".getBytes(), CREATE)
-    val jarPath = Paths.get(getClass.getProtectionDomain().getCodeSource().getLocation().getPath())
+    Files.write(Paths.get(s"$path/container.txt"), s"$containerClass\n".getBytes, CREATE)
+    val jarPath = Paths.get(getClass.getProtectionDomain.getCodeSource.getLocation.getPath)
     println(s"JAR path: $jarPath")
     System.out.flush()
     Files.copy(jarPath, Paths.get(s"$path/container.jar"), REPLACE_EXISTING)
@@ -40,7 +41,9 @@ object Clipper {
                 path: String,
                 containerClass: String) : Container = {
     val model = MLlibLoader.load(sc, path)
-    val container: Container = constructContainer(containerClass).get
+    val jarPath = Paths.get(s"$path/container.jar")
+    val classLoader = new URLClassLoader(Array(jarPath.toUri.toURL), getClass.getClassLoader)
+    val container: Container = constructContainer(classLoader, containerClass).get
     container.init(sc, model)
     container
   }
@@ -54,8 +57,8 @@ object Clipper {
     }
 
   // adapted from http://stackoverflow.com/q/34227984/814642
-  def constructContainer(containerClass: String) : Option[Container] = {
-    val runtimeMirror: universe.Mirror = universe.runtimeMirror(getClass.getClassLoader)
+  def constructContainer(classLoader: URLClassLoader, containerClass: String) : Option[Container] = {
+    val runtimeMirror: universe.Mirror = universe.runtimeMirror(classLoader)
     val classSymbol: universe.ClassSymbol = runtimeMirror.classSymbol(Class.forName(containerClass))
     val classMirror: universe.ClassMirror = runtimeMirror.reflectClass(classSymbol)
     val constructorMirror = classMirror.reflectConstructor(selectConstructor(classSymbol))

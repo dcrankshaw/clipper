@@ -23,7 +23,7 @@
     <module>clipper-core</module>
     <module>clipper-container</module>
     <module>clipper-example-train</module>
-    <!-- <module>clipper&#45;example&#45;serve</module> -->
+    <module>clipper-example-serve</module>
   </modules>
 
   <properties>
@@ -90,7 +90,6 @@
           <groupId>org.apache.spark</groupId>
           <artifactId>spark-mllib_${scala.compat.version}</artifactId>
           <version>${spark.version}</version>
-          <scope>provided</scope>
       </dependency>
       <dependency>
           <groupId>org.json4s</groupId>
