@@ -9,6 +9,7 @@ import java.nio.file.StandardOpenOption.CREATE
 import java.nio.file.{Files,Paths,Path}
 import java.net.URL
 import java.net.URLClassLoader
+import java.lang.ClassLoader
 
 import org.apache.spark.{SparkContext, SparkConf}
 
@@ -57,9 +58,12 @@ object Clipper {
     }
 
   // adapted from http://stackoverflow.com/q/34227984/814642
-  def constructContainer(classLoader: URLClassLoader, containerClass: String) : Option[Container] = {
+  def constructContainer(classLoader: ClassLoader, containerClass: String) : Option[Container] = {
+    val clazz = classLoader.loadClass(containerClass)
     val runtimeMirror: universe.Mirror = universe.runtimeMirror(classLoader)
-    val classSymbol: universe.ClassSymbol = runtimeMirror.classSymbol(Class.forName(containerClass))
+    val classToLoad = Class.forName(containerClass, true, classLoader)
+    // val classSymbol: universe.ClassSymbol = runtimeMirror.classSymbol(Class.forName(containerClass))
+    val classSymbol: universe.ClassSymbol = runtimeMirror.classSymbol(classToLoad)
     val classMirror: universe.ClassMirror = runtimeMirror.reflectClass(classSymbol)
     val constructorMirror = classMirror.reflectConstructor(selectConstructor(classSymbol))
     try {

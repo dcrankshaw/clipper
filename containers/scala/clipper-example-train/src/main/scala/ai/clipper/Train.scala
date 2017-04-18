@@ -86,7 +86,7 @@ object Train {
     println("Learned logistic regression model:\n" + model.toString)
 
     // Clipper.deployModel(sc, "test", 1, model, "ai.clipper.example.LogisticRegressionContainer")
-    Clipper.deployModel(sc, "test", 1, model, LogisticRegressionContainer.getClass.getName)
+    Clipper.deployModel(sc, "test", 1, model, (new LogisticRegressionContainer).getClass.getName)
     sc.stop()
   }
 }
