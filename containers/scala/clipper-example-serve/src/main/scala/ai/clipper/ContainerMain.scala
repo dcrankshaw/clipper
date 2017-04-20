@@ -5,7 +5,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.util.MLUtils
 
 import ai.clipper.Clipper
-import ai.clipper.container.Container
+import ai.clipper.container.{MLlibContainer, PipelineModelContainer}
 
 object Serve {
 
@@ -35,16 +35,16 @@ object Serve {
     // Split the data into training and test sets (30% held out for testing)
     // val splits = data.randomSplit(Array(0.7, 0.3))
     // val (trainingData, testData) = (splits(0), splits(1))
-    val container: Container =
-      Clipper.loadModel(sc, modelPath, getContainerClass(modelPath))
-
-
-    val labelAndPreds = data.collect().map { point =>
-      val prediction = container.predict(point.features)
-      (point.label, prediction)
-    }
-    val numWrong = labelAndPreds.filter(r => r._1 != r._2).size
-    println(s"Test Error $numWrong")
+    // val container: Container =
+    //   Clipper.loadModel(sc, modelPath, getContainerClass(modelPath))
+    //
+    //
+    // val labelAndPreds = data.collect().map { point =>
+    //   val prediction = container.predict(point.features)
+    //   (point.label, prediction)
+    // }
+    // val numWrong = labelAndPreds.filter(r => r._1 != r._2).size
+    // println(s"Test Error $numWrong")
   }
 
   def getContainerClass(path: String) : String = {

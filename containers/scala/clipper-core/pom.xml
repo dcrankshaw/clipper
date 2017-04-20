@@ -25,6 +25,22 @@
         <artifactId>json4s-jackson_${scala.compat.version}</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.xbean</groupId>
+      <artifactId>xbean-asm5-shaded</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>commons-io</groupId>
+        <artifactId>commons-io</artifactId>
+    </dependency>
+    <!-- <dependency> -->
+    <!--     <groupId>org.ow2.asm</groupId> -->
+    <!--     <artifactId>asm</artifactId> -->
+    <!-- </dependency> -->
+    <!-- <dependency> -->
+    <!--   <groupId>org.apache.bcel</groupId> -->
+    <!--   <artifactId>bcel</artifactId> -->
+    <!-- </dependency> -->
+    <dependency>
       <groupId>ai.clipper</groupId>
       <artifactId>clipper-container</artifactId>
     </dependency>
@@ -63,22 +79,22 @@
           </filters>
         </configuration>
         <executions>
-          <!-- <execution> -->
-          <!--   <phase>package</phase> -->
-          <!--   <goals> -->
-          <!--     <goal>shade</goal> -->
-          <!--   </goals> -->
-          <!--   <configuration> -->
-          <!--     <transformers> -->
-          <!--       <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/> -->
-          <!--       <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"> -->
-          <!--       </transformer> -->
-          <!--       <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer"> -->
-          <!--         <resource>reference.conf</resource> -->
-          <!--       </transformer> -->
-          <!--     </transformers> -->
-          <!--   </configuration> -->
-          <!-- </execution> -->
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>reference.conf</resource>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

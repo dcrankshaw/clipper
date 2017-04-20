@@ -15,10 +15,10 @@ import org.apache.spark.mllib.linalg.Vector
 import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS}
 
 import ai.clipper.Clipper
-import ai.clipper.container.{MLlibModel, MLlibLogisticRegressionModel,Container}
+import ai.clipper.container.{MLlibModel,MLlibLogisticRegressionModel,MLlibContainer, PipelineModelContainer}
 
 
-class LogisticRegressionContainer extends Container {
+class LogisticRegressionContainer extends MLlibContainer {
 
   // var model: Option[MLlibLogisticRegressionModel] = None
   var model: Option[MLlibModel] = None
@@ -86,7 +86,7 @@ object Train {
     println("Learned logistic regression model:\n" + model.toString)
 
     // Clipper.deployModel(sc, "test", 1, model, "ai.clipper.example.LogisticRegressionContainer")
-    Clipper.deployModel(sc, "test", 1, model, (new LogisticRegressionContainer).getClass.getName)
+    Clipper.deployModel(sc, "test", 1, model, classOf[LogisticRegressionContainer].getName)
     sc.stop()
   }
 }
