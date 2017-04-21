@@ -1,18 +1,15 @@
 package ai.clipper
 
-import java.io.{ByteArrayOutputStream, FileNotFoundException, FilterInputStream, InputStream, IOException}
-import org.apache.xbean.asm5._
-import org.apache.xbean.asm5.Opcodes._
+import java.io.{ByteArrayOutputStream, FileNotFoundException, InputStream}
+import java.net.URL
+import java.nio.file.{Files, Paths}
 
-import java.net.{HttpURLConnection, URI, URL, URLEncoder}
-import scala.io.Source
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.StandardOpenOption.CREATE
-import java.nio.file.{Files,Paths,Path}
+import org.apache.xbean.asm5.Opcodes._
+import org.apache.xbean.asm5._
 
 /**
- * A class loader which makes some protected methods in ClassLoader accessible.
- */
+  * A class loader which makes some protected methods in ClassLoader accessible.
+  */
 class ParentClassLoader(parent: ClassLoader) extends ClassLoader(parent) {
 
   override def findClass(name: String): Class[_] = {
@@ -29,18 +26,17 @@ class ParentClassLoader(parent: ClassLoader) extends ClassLoader(parent) {
 
 }
 
-
 /**
- * A ClassLoader that first tries to load classes from the parent ClassLoader and
- * otherwise will load REPL defined classes stored in the directory specified
- * by replClassUri
- *
- * @param classRootDir The directory corresponding to Spark's spark.repl.class.outputDir
- * option. The directory will be copied into the model container, and this option should
- * be the path of the copied directory.
- */
-class ContainerClassLoader(parent: ClassLoader, classRootDir: String) extends ClassLoader {
-
+  * A ClassLoader that first tries to load classes from the parent ClassLoader and
+  * otherwise will load REPL defined classes stored in the directory specified
+  * by replClassUri
+  *
+  * @param classRootDir The directory corresponding to Spark's spark.repl.class.outputDir
+  * option. The directory will be copied into the model container, and this option should
+  * be the path of the copied directory.
+  */
+class ClipperClassLoader(parent: ClassLoader, classRootDir: String)
+    extends ClassLoader {
 
   // val directory = uri.getPath
   val parentLoader = new ParentClassLoader(parent)
@@ -67,7 +63,7 @@ class ContainerClassLoader(parent: ClassLoader, classRootDir: String) extends Cl
     }
   }
 
-  def findReplClass(name: String) : Option[Class[_]] = {
+  def findReplClass(name: String): Option[Class[_]] = {
     val pathInDirectory = name.replace('.', '/') + ".class"
     var inputStream: InputStream = null
     try {
@@ -81,7 +77,9 @@ class ContainerClassLoader(parent: ClassLoader, classRootDir: String) extends Cl
         None
       case e: Exception =>
         // Something bad happened while checking if the class exists
-        println(s"Failed to check existence of class $name in REPL class directory", e)
+        println(
+          s"Failed to check existence of class $name in REPL class directory",
+          e)
         None
     } finally {
       if (inputStream != null) {
@@ -94,7 +92,6 @@ class ContainerClassLoader(parent: ClassLoader, classRootDir: String) extends Cl
       }
     }
   }
-
 
   private def getClassFileInputStream(pathInDirectory: String): InputStream = {
     val path = Paths.get(classRootDir, pathInDirectory)
@@ -138,9 +135,12 @@ class ContainerClassLoader(parent: ClassLoader, classRootDir: String) extends Cl
 
 // Copied from org.apache.spark.repl.ConstructorCleaner
 class ConstructorCleaner(className: String, cv: ClassVisitor)
-extends ClassVisitor(ASM5, cv) {
-  override def visitMethod(access: Int, name: String, desc: String,
-      sig: String, exceptions: Array[String]): MethodVisitor = {
+    extends ClassVisitor(ASM5, cv) {
+  override def visitMethod(access: Int,
+                           name: String,
+                           desc: String,
+                           sig: String,
+                           exceptions: Array[String]): MethodVisitor = {
     val mv = cv.visitMethod(access, name, desc, sig, exceptions)
     if (name == "<init>" && (access & ACC_STATIC) == 0) {
       // This is the constructor, time to clean it; just output some new
@@ -148,7 +148,11 @@ extends ClassVisitor(ASM5, cv) {
       // field in the class to point to it, but do nothing otherwise.
       mv.visitCode()
       mv.visitVarInsn(ALOAD, 0) // load this
-      mv.visitMethodInsn(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+      mv.visitMethodInsn(INVOKESPECIAL,
+                         "java/lang/Object",
+                         "<init>",
+                         "()V",
+                         false)
       mv.visitVarInsn(ALOAD, 0) // load this
       // val classType = className.replace('.', '/')
       // mv.visitFieldInsn(PUTSTATIC, classType, "MODULE$", "L" + classType + ";")

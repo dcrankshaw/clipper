@@ -1,26 +1,55 @@
 package ai.clipper.container
 
+import org.apache.spark.SparkContext
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.mllib.classification.{
+  LogisticRegressionModel,
+  NaiveBayesModel,
+  SVMModel
+}
+import org.apache.spark.mllib.clustering.{
+  BisectingKMeansModel,
+  GaussianMixtureModel,
+  KMeansModel
+}
+import org.apache.spark.mllib.linalg.Vector
+import org.apache.spark.mllib.recommendation.MatrixFactorizationModel
+import org.apache.spark.mllib.regression.{
+  IsotonicRegressionModel,
+  LassoModel,
+  LinearRegressionModel,
+  RidgeRegressionModel
+}
+import org.apache.spark.mllib.tree.model.{
+  DecisionTreeModel,
+  GradientBoostedTreesModel,
+  RandomForestModel
+}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 import scala.reflect.runtime.universe
-import scala.reflect.runtime.universe.TypeTag
-import scala.reflect.api
-import java.io._
-import scala.io.Source
 
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.mllib.classification.{LogisticRegressionModel,SVMModel,NaiveBayesModel}
-import org.apache.spark.mllib.clustering.{BisectingKMeansModel, GaussianMixtureModel, KMeansModel, LDAModel, PowerIterationClusteringModel}
-import org.apache.spark.mllib.feature.{ChiSqSelectorModel, Word2VecModel}
-import org.apache.spark.mllib.fpm.{FPGrowthModel, PrefixSpanModel}
-import org.apache.spark.mllib.recommendation.MatrixFactorizationModel
-import org.apache.spark.mllib.regression.{IsotonicRegressionModel, LassoModel, LinearRegressionModel, RidgeRegressionModel}
-import org.apache.spark.mllib.tree.model.{DecisionTreeModel, RandomForestModel, GradientBoostedTreesModel}
-import org.apache.spark.mllib.util.MLUtils
-import org.apache.spark.mllib.linalg.Vector
+abstract class Container {
 
-import org.apache.spark.ml.PipelineModel
+  def predict(x: Vector): Double
+
+}
+
+abstract class MLlibContainer extends Container {
+
+  def init(sc: SparkContext, model: MLlibModel): Unit
+
+  override def predict(xs: Vector): Double
+
+}
+abstract class PipelineModelContainer extends Container {
+
+  def init(sc: SparkContext, model: PipelineModel): Unit
+
+  override def predict(xs: Vector): Double
+
+}
 
 sealed abstract class MLlibModel {
   def predict(features: Vector): Double
@@ -30,8 +59,9 @@ sealed abstract class MLlibModel {
 // Classification
 
 // LogisticRegressionModel
-case class MLlibLogisticRegressionModel(model: LogisticRegressionModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibLogisticRegressionModel(model: LogisticRegressionModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -42,7 +72,7 @@ case class MLlibLogisticRegressionModel(model: LogisticRegressionModel) extends 
 
 // SVMModel
 case class MLlibSVMModel(model: SVMModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -53,7 +83,7 @@ case class MLlibSVMModel(model: SVMModel) extends MLlibModel {
 
 // NaiveBayesModel
 case class MLlibNaiveBayesModel(model: NaiveBayesModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -65,8 +95,9 @@ case class MLlibNaiveBayesModel(model: NaiveBayesModel) extends MLlibModel {
 // Clustering
 
 // BisectingKMeansModel
-case class MLlibBisectingKMeansModel(model: BisectingKMeansModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibBisectingKMeansModel(model: BisectingKMeansModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -76,8 +107,9 @@ case class MLlibBisectingKMeansModel(model: BisectingKMeansModel) extends MLlibM
 }
 
 // GaussianMixtureModel
-case class MLlibGaussianMixtureModel(model: GaussianMixtureModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibGaussianMixtureModel(model: GaussianMixtureModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -88,7 +120,7 @@ case class MLlibGaussianMixtureModel(model: GaussianMixtureModel) extends MLlibM
 
 // KMeansModel
 case class MLlibKMeansModel(model: KMeansModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -170,8 +202,9 @@ case class MLlibKMeansModel(model: KMeansModel) extends MLlibModel {
 //Recommendation
 
 // MatrixFactorizationModel
-case class MLlibMatrixFactorizationModel(model: MatrixFactorizationModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibMatrixFactorizationModel(model: MatrixFactorizationModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     val userId = features(0).toInt
     val productId = features(1).toInt
     model.predict(userId, productId)
@@ -185,8 +218,9 @@ case class MLlibMatrixFactorizationModel(model: MatrixFactorizationModel) extend
 // Regression
 
 // IsotonicRegressionModel
-case class MLlibIsotonicRegressionModel(model: IsotonicRegressionModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibIsotonicRegressionModel(model: IsotonicRegressionModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features(0))
   }
 
@@ -197,7 +231,7 @@ case class MLlibIsotonicRegressionModel(model: IsotonicRegressionModel) extends 
 
 // LassoModel
 case class MLlibLassoModel(model: LassoModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -207,8 +241,9 @@ case class MLlibLassoModel(model: LassoModel) extends MLlibModel {
 }
 
 // LinearRegressionModel
-case class MLlibLinearRegressionModel(model: LinearRegressionModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibLinearRegressionModel(model: LinearRegressionModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -218,8 +253,9 @@ case class MLlibLinearRegressionModel(model: LinearRegressionModel) extends MLli
 }
 
 // RidgeRegressionModel
-case class MLlibRidgeRegressionModel(model: RidgeRegressionModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibRidgeRegressionModel(model: RidgeRegressionModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -231,8 +267,9 @@ case class MLlibRidgeRegressionModel(model: RidgeRegressionModel) extends MLlibM
 // Tree
 
 // DecisionTreeModel
-case class MLlibDecisionTreeModel(model: DecisionTreeModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibDecisionTreeModel(model: DecisionTreeModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -242,8 +279,9 @@ case class MLlibDecisionTreeModel(model: DecisionTreeModel) extends MLlibModel {
 }
 
 // RandomForestModel
-case class MLlibRandomForestModel(model: RandomForestModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibRandomForestModel(model: RandomForestModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -253,8 +291,9 @@ case class MLlibRandomForestModel(model: RandomForestModel) extends MLlibModel {
 }
 
 // GradientBoostedTreesModel
-case class MLlibGradientBoostedTreesModel(model: GradientBoostedTreesModel) extends MLlibModel {
-  override def predict(features: Vector): Double  = {
+case class MLlibGradientBoostedTreesModel(model: GradientBoostedTreesModel)
+    extends MLlibModel {
+  override def predict(features: Vector): Double = {
     model.predict(features)
   }
 
@@ -262,15 +301,6 @@ case class MLlibGradientBoostedTreesModel(model: GradientBoostedTreesModel) exte
     model.save(sc, path)
   }
 }
-
-abstract class MLlibContainer {
-
-  def init(sc: SparkContext, model: MLlibModel): Unit
-
-  def predict(xs: Vector) : Double
-
-}
-
 
 object MLlibLoader {
   def metadataPath(path: String): String = s"$path/metadata"
@@ -291,7 +321,8 @@ object MLlibLoader {
     val anyInst = mirror.reflectModule(modelModule).instance
     val loader = anyInst.asInstanceOf[org.apache.spark.mllib.util.Loader[_]]
     val model = loader.load(sc, path) match {
-      case model: LogisticRegressionModel => MLlibLogisticRegressionModel(model)
+      case model: LogisticRegressionModel =>
+        MLlibLogisticRegressionModel(model)
       case model: NaiveBayesModel => MLlibNaiveBayesModel(model)
       case model: SVMModel => MLlibSVMModel(model)
       case model: BisectingKMeansModel => MLlibBisectingKMeansModel(model)
@@ -303,24 +334,18 @@ object MLlibLoader {
       // case model: Word2VecModel => MLlibWord2VecModel(model)
       // case model: FPGrowthModel => MLlibFPGrowthModel(model)
       // case model: PrefixSpanModel => MLlibPrefixSpanModel(model)
-      case model: MatrixFactorizationModel => MLlibMatrixFactorizationModel(model)
-      case model: IsotonicRegressionModel => MLlibIsotonicRegressionModel(model)
+      case model: MatrixFactorizationModel =>
+        MLlibMatrixFactorizationModel(model)
+      case model: IsotonicRegressionModel =>
+        MLlibIsotonicRegressionModel(model)
       case model: LassoModel => MLlibLassoModel(model)
       case model: LinearRegressionModel => MLlibLinearRegressionModel(model)
       case model: RidgeRegressionModel => MLlibRidgeRegressionModel(model)
       case model: DecisionTreeModel => MLlibDecisionTreeModel(model)
       case model: RandomForestModel => MLlibRandomForestModel(model)
-      case model: GradientBoostedTreesModel => MLlibGradientBoostedTreesModel(model)
+      case model: GradientBoostedTreesModel =>
+        MLlibGradientBoostedTreesModel(model)
     }
     model
   }
-}
-
-
-abstract class PipelineModelContainer {
-
-  def init(sc: SparkContext, model: PipelineModel): Unit
-
-  def predict(xs: Vector) : Double
-
 }

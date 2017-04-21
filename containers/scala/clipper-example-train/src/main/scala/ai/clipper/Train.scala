@@ -2,20 +2,13 @@
 package ai.clipper.example
 
 // import scala.reflect.runtime.universe._
-import scala.reflect.runtime.universe
-import scala.reflect.runtime.universe.TypeTag
-import scala.reflect.api
-import java.io._
-import scala.io.Source
-
-
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS
 import org.apache.spark.mllib.linalg.Vector
-import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS}
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.{SparkConf, SparkContext}
 
-import ai.clipper.Clipper
-import ai.clipper.container.{MLlibModel,MLlibLogisticRegressionModel,MLlibContainer, PipelineModelContainer}
+ import ai.clipper.Clipper
+import ai.clipper.container.{MLlibContainer, MLlibLogisticRegressionModel, MLlibModel}
 
 
 class LogisticRegressionContainer extends MLlibContainer {
@@ -43,8 +36,8 @@ object Train {
     val conf = new SparkConf().setAppName("ClipperTest").setMaster("local[2]")
     val sc = new SparkContext(conf)
     sc.parallelize(Seq("")).foreachPartition(x => {
-        import org.apache.log4j.{LogManager, Level}
         import org.apache.commons.logging.LogFactory
+        import org.apache.log4j.{Level, LogManager}
         LogManager.getRootLogger().setLevel(Level.WARN)
         val log = LogFactory.getLog("EXECUTOR-LOG:")
         log.warn("START EXECUTOR WARN LOG LEVEL")
@@ -65,7 +58,8 @@ object Train {
     // val maxDepth = 5
     // val maxBins = 32
 
-    val model = MLlibLogisticRegressionModel(new LogisticRegressionWithLBFGS().setNumClasses(numClasses).run(trainingData))
+    val model = MLlibLogisticRegressionModel(
+      new LogisticRegressionWithLBFGS().setNumClasses(numClasses).run(trainingData))
 
     // val model = MLlibLogisticRegressionModel(LogisticRegressionModelWithSGD.train(trainingData,
     //                                          numClasses,
@@ -86,7 +80,7 @@ object Train {
     println("Learned logistic regression model:\n" + model.toString)
 
     // Clipper.deployModel(sc, "test", 1, model, "ai.clipper.example.LogisticRegressionContainer")
-    Clipper.deployModel(sc, "test", 1, model, classOf[LogisticRegressionContainer].getName)
+    Clipper.deployModel(sc, "test", 1, model, classOf[LogisticRegressionContainer])
     sc.stop()
   }
 }
