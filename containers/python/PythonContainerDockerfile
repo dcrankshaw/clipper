@@ -2,6 +2,38 @@ FROM clipper/py-rpc:latest
 
 MAINTAINER Dan Crankshaw <dscrankshaw@gmail.com>
 
+ARG SPARK_VERSION=2.1.0
+ARG SHA=3FC94096AE34F9A1A148D37E5ED640A7E5DE1812F1F2ECD715D92BBF2901E895CF4B93E6D8EE0D64DEBB5DF7C56D673C0A36E5FC49503EC0F4507EB0EDF961A4
+ARG BASE_URL=http://www.apache.org/dist/spark/spark-${SPARK_VERSION}
+
+# Add Spark 2.1
+
+RUN mkdir -p /usr/share/spark \
+  && curl -fsSL -o /tmp/spark.tar.gz ${BASE_URL}/spark-${SPARK_VERSION}-bin-hadoop2.7.tgz \
+  && echo "${SHA}  /tmp/spark.tar.gz" | sha256sum -c - \
+  && tar -xzf /tmp/spark.tar.gz -C /usr/share/spark --strip-components=1 \
+  && rm -f /tmp/spark.tar.gz \
+
+# Install Java
+RUN echo "deb http://http.debian.net/debian jessie-backports main" > /etc/apt/sources.list.d/jessie-backports.list \
+      && apt-get update --fix-missing \
+      && apt-get install -t jessie-backports -y openjdk-8-jre-headless
+
+
+# COPY spark_docker_deps/spark-1.6.2-bin-hadoop2.6.tgz /tmp/
+# COPY spark_modelwrapper.py /modelwrapper
+
+# ENV JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64
+ENV SPARK_HOME=/usr/share/spark
+
+# RUN apt-get update --fix-missing && apt-get install -y openjdk-7-jdk \
+#   # && ln -sf "${JAVA_HOME}/bin/"* "/usr/bin/" \
+#   && tar zxvf /tmp/spark-1.6.2-bin-hadoop2.6.tgz -C /tmp/ \
+#   && pip install findspark
+
+
+
+
 COPY python_container.py python_container_entry.sh /container/
 COPY pywrencloudpickle.py python_container_conda_deps.txt /lib/
 
