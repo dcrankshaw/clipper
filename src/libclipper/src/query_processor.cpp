@@ -66,25 +66,32 @@ boost::future<Response> QueryProcessor::predict(Query query) {
   std::vector<PredictTask> tasks =
       current_policy->select_predict_tasks(selection_state, query, query_id);
 
+  log_info_formatted(LOGGING_TAG_QUERY_PROCESSOR,
+                     "Query before scheduling tasks: {}", query.debug_string());
+
   log_info_formatted(LOGGING_TAG_QUERY_PROCESSOR, "Found {} tasks",
                      tasks.size());
-
   vector<boost::future<Output>> task_futures =
       task_executor_.schedule_predictions(tasks);
   boost::future<void> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
-
-  // vector<boost::future<Output>> task_completion_futures;
+  if (timer_future.is_ready()) {
+    log_info(LOGGING_TAG_QUERY_PROCESSOR,
+             "Freshly set timer future is already ready");
+  } else {
+    log_info(LOGGING_TAG_QUERY_PROCESSOR,
+             "Freshly set timer future is not ready yet (this is good!)");
+  }
 
   boost::future<void> all_tasks_completed;
   auto num_completed = std::make_shared<std::atomic<int>>(0);
   std::tie(all_tasks_completed, task_futures) =
       future::when_all(std::move(task_futures), num_completed);
 
-  auto completed_flag = std::make_shared<std::atomic_flag>();
+  auto completed_flag = std::make_shared<std::atomic<int>>(0);
   // Due to some complexities of initializing the atomic_flag in a shared_ptr,
   // we explicitly set the value of the flag to false after initialization.
-  completed_flag->clear();
+  // completed_flag->clear();
   boost::future<void> response_ready_future;
 
   std::tie(response_ready_future, all_tasks_completed, timer_future) =
@@ -99,22 +106,38 @@ boost::future<Response> QueryProcessor::predict(Query query) {
   response_ready_future.then([
     this, query, query_id, response_promise = std::move(response_promise),
     selection_state, current_policy, task_futures = std::move(task_futures),
-    num_completed, completed_flag
+    timer_future = std::move(timer_future),
+    all_tasks_completed = std::move(all_tasks_completed), num_completed,
+    completed_flag
   ](auto) mutable {
 
     vector<Output> outputs;
     vector<VersionedModelId> used_models;
+    log_info_formatted(LOGGING_TAG_QUERY_PROCESSOR,
+                       "Query in response_ready callback: {}",
+                       query.debug_string());
+    if (!(all_tasks_completed.is_ready() || timer_future.is_ready())) {
+      log_error(LOGGING_TAG_QUERY_PROCESSOR,
+                "In response_ready callback but not all tasks completed and "
+                "timer hasn't expired");
+    }
+
     for (auto r = task_futures.begin(); r != task_futures.end(); ++r) {
       if ((*r).is_ready()) {
         outputs.push_back((*r).get());
+        log_info(LOGGING_TAG_QUERY_PROCESSOR,
+                 "Response_ready_callback: Found completed task");
+      } else {
+        log_info(LOGGING_TAG_QUERY_PROCESSOR,
+                 "Response_ready_callback: Task did not complete");
       }
     }
 
     std::pair<Output, bool> final_output =
         current_policy->combine_predictions(selection_state, query, outputs);
 
-    std::chrono::time_point<std::chrono::high_resolution_clock> end =
-        std::chrono::high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> end =
+        std::chrono::system_clock::now();
     long duration_micros =
         std::chrono::duration_cast<std::chrono::microseconds>(
             end - query.create_time_)

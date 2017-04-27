@@ -22,6 +22,23 @@ std::string versioned_model_to_str(const VersionedModelId &model) {
   return ss.str();
 }
 
+std::string Query::debug_string() const {
+  std::stringstream ss;
+  ss << "QUERY: " << label_;
+  ss << ", slo: " << std::to_string(latency_budget_micros_);
+  ss << ", time remaining: ";
+  // time_remaining = start + slo - now
+  auto time_elapsed = std::chrono::microseconds(
+      std::chrono::system_clock::now() - create_time_);
+  auto time_remaining =
+      latency_budget_micros_ - static_cast<int64_t>(time_elapsed.count());
+  //
+  // std::chrono::microseconds(latency_budget_micros_) -
+  // std::chrono::system_clock::now();
+  ss << std::to_string(time_remaining) << " us\n";
+  return ss.str();
+}
+
 template <typename T>
 ByteBuffer get_byte_buffer(std::vector<T> vector) {
   uint8_t *data = reinterpret_cast<uint8_t *>(vector.data());
@@ -277,7 +294,7 @@ Query::Query(std::string label, long user_id, std::shared_ptr<Input> input,
       latency_budget_micros_(latency_budget_micros),
       selection_policy_(selection_policy),
       candidate_models_(candidate_models),
-      create_time_(std::chrono::high_resolution_clock::now()) {}
+      create_time_(std::chrono::system_clock::now()) {}
 
 Response::Response(Query query, QueryId query_id, const long duration_micros,
                    Output output, const bool output_is_default)

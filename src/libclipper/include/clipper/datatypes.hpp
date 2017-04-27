@@ -207,6 +207,8 @@ class Query {
   Query(Query &&) = default;
   Query &operator=(Query &&) = default;
 
+  std::string debug_string() const;
+
   // Used to provide a namespace for queries. The expected
   // use is to distinguish queries coming from different
   // REST endpoints.
@@ -217,7 +219,7 @@ class Query {
   long latency_budget_micros_;
   std::string selection_policy_;
   std::vector<VersionedModelId> candidate_models_;
-  std::chrono::time_point<std::chrono::high_resolution_clock> create_time_;
+  std::chrono::time_point<std::chrono::system_clock> create_time_;
 };
 
 class Response {

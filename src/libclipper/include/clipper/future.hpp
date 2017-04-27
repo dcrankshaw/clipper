@@ -7,11 +7,15 @@
 #include <thread>
 #include <vector>
 
+#include <clipper/logging.hpp>
+
 #include "boost/thread.hpp"
 
 namespace clipper {
 
 namespace future {
+
+const std::string LOGGING_TAG_FUTURE = "FUTURE";
 
 /*
  * The first element in the pair is a future that will complete when
@@ -37,14 +41,15 @@ std::pair<boost::future<void>, std::vector<boost::future<T>>> when_all(
   auto completion_promise = std::make_shared<boost::promise<void>>();
   std::vector<boost::future<T>> wrapped_futures;
   for (auto f = futures.begin(); f != futures.end(); ++f) {
-    wrapped_futures.push_back(f->then(
-        [num_futures, completion_promise, num_completed](auto result) mutable {
-          if (num_completed->fetch_add(1) + 1 == num_futures) {
-            completion_promise->set_value();
-            assert(*num_completed == num_futures);
-          }
-          return result.get();
-        }));
+    wrapped_futures.push_back(f->then([num_futures, completion_promise,
+                                       num_completed](auto result) mutable {
+      if (num_completed->fetch_add(1) + 1 == num_futures) {
+        log_info_formatted(LOGGING_TAG_FUTURE, "when_all future is completed");
+        completion_promise->set_value();
+        assert(*num_completed == num_futures);
+      }
+      return result.get();
+    }));
   }
 
   return std::make_pair<boost::future<void>, std::vector<boost::future<T>>>(
@@ -98,19 +103,30 @@ std::tuple<boost::future<void>, boost::future<R0>, boost::future<R1>> when_both(
 
 template <typename R>
 boost::future<R> wrap_when_either(
-    boost::future<R> future, std::shared_ptr<std::atomic_flag> completed_flag,
-    std::shared_ptr<boost::promise<void>> completion_promise) {
-  return future.then([completion_promise, completed_flag](auto result) mutable {
+    boost::future<R> future, std::shared_ptr<std::atomic<int>> completed_flag,
+    std::shared_ptr<boost::promise<void>> completion_promise,
+    const std::string debug_tag) {
+  return future.then(
+      [completion_promise, completed_flag, debug_tag](auto result) mutable {
 
-    // Only set completed to true if the original value was false. This ensures
-    // that we only set the value once, and therefore only complete the promise
-    // once.
-    bool flag_already_set = completed_flag->test_and_set();
-    if (!flag_already_set) {
-      completion_promise->set_value();
-    }
-    return result.get();
-  });
+        // Only set completed to true if the original value was false. This
+        // ensures
+        // that we only set the value once, and therefore only complete the
+        // promise
+        // once.
+        int num_already_completed = completed_flag->fetch_add(1);
+        if (num_already_completed == 0) {
+          log_info_formatted(LOGGING_TAG_FUTURE,
+                             "First when_either future is completing: {}",
+                             debug_tag);
+          completion_promise->set_value();
+        } else {
+          log_info_formatted(LOGGING_TAG_FUTURE,
+                             "Second when_either future is completing: {}",
+                             debug_tag);
+        }
+        return result.get();
+      });
 }
 
 /**
@@ -129,12 +145,12 @@ boost::future<R> wrap_when_either(
 template <typename R0, typename R1>
 std::tuple<boost::future<void>, boost::future<R0>, boost::future<R1>>
 when_either(boost::future<R0> f0, boost::future<R1> f1,
-            std::shared_ptr<std::atomic_flag> completed_flag) {
+            std::shared_ptr<std::atomic<int>> completed_flag) {
   auto completion_promise = std::make_shared<boost::promise<void>>();
   auto wrapped_f0 =
-      wrap_when_either(std::move(f0), completed_flag, completion_promise);
+      wrap_when_either(std::move(f0), completed_flag, completion_promise, "f0");
   auto wrapped_f1 =
-      wrap_when_either(std::move(f1), completed_flag, completion_promise);
+      wrap_when_either(std::move(f1), completed_flag, completion_promise, "f1");
 
   return std::make_tuple<boost::future<void>, boost::future<R0>,
                          boost::future<R1>>(completion_promise->get_future(),

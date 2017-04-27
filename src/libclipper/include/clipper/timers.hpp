@@ -25,8 +25,8 @@ class HighPrecisionClock {
   HighPrecisionClock(HighPrecisionClock &&) = default;
   HighPrecisionClock &operator=(HighPrecisionClock &&) = default;
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> now() const {
-    return std::chrono::high_resolution_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> now() const {
+    return std::chrono::system_clock::now();
   }
 };
 
@@ -34,8 +34,7 @@ class HighPrecisionClock {
 class ManualClock {
  public:
   ManualClock()
-      : now_{std::chrono::time_point<
-            std::chrono::high_resolution_clock>::min()} {}
+      : now_{std::chrono::time_point<std::chrono::system_clock>::min()} {}
 
   ManualClock(const ManualClock &other) = default;
   ManualClock &operator=(const ManualClock &other) = default;
@@ -50,18 +49,18 @@ class ManualClock {
     now_ += std::chrono::microseconds(increment_micros);
   }
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> now() const {
+  std::chrono::time_point<std::chrono::system_clock> now() const {
     return now_;
   }
 
  private:
-  std::chrono::time_point<std::chrono::high_resolution_clock> now_;
+  std::chrono::time_point<std::chrono::system_clock> now_;
 };
 
 class Timer {
  public:
   Timer() = delete;
-  Timer(std::chrono::time_point<std::chrono::high_resolution_clock> deadline,
+  Timer(std::chrono::time_point<std::chrono::system_clock> deadline,
         boost::promise<void> completion_promise);
   ~Timer() = default;
 
@@ -80,7 +79,7 @@ class Timer {
 
   void expire();
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> deadline_;
+  std::chrono::time_point<std::chrono::system_clock> deadline_;
 
  private:
   boost::promise<void> completion_promise_;
@@ -125,15 +124,26 @@ class TimerSystem {
     log_info(LOGGING_TAG_TIMERS, "In timer event loop");
     while (!shutdown_) {
       // wait for next timer to expire
-      //    auto cur_time = high_resolution_clock::now();
+      //    auto cur_time = system_clock::now();
       auto cur_time = clock_.now();
       std::unique_lock<std::mutex> l(queue_mutex_);
       if (queue_.size() > 0) {
         auto earliest_timer = queue_.top();
-        auto duration_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
+        auto duration_micros =
+            std::chrono::duration_cast<std::chrono::microseconds>(
                 earliest_timer->deadline_ - cur_time);
-        if (duration_ms.count() <= 0) {
+
+        if (duration_micros.count() <= 0) {
+          log_info_formatted(
+              LOGGING_TAG_TIMERS,
+              "Expiring timer. Duration micros: {}. Deadline: {}. cur_time: {}",
+              std::to_string(duration_micros.count()),
+              std::chrono::duration_cast<std::chrono::microseconds>(
+                  earliest_timer->deadline_.time_since_epoch())
+                  .count(),
+              std::chrono::duration_cast<std::chrono::microseconds>(
+                  cur_time.time_since_epoch())
+                  .count());
           earliest_timer->expire();
           queue_.pop();
         }
@@ -148,8 +158,23 @@ class TimerSystem {
     manager_thread_.join();
   }
 
+  /**
+   * Set a timer to expire in `duration_micros` microseconds
+   */
   boost::future<void> set_timer(long duration_micros) {
     assert(initialized_);
+    if (!initialized_) {
+      throw std::runtime_error("Error: Timer system not initialized");
+    }
+    log_info_formatted(LOGGING_TAG_TIMERS, "Setting timer for {} microseconds",
+                       duration_micros);
+
+    auto cur_time = clock_.now();
+    log_info_formatted(LOGGING_TAG_TIMERS, "Timer start time: {}",
+                       std::chrono::duration_cast<std::chrono::microseconds>(
+                           cur_time.time_since_epoch())
+                           .count());
+
     boost::promise<void> promise;
     auto f = promise.get_future();
     auto tp = clock_.now() + std::chrono::microseconds(duration_micros);

@@ -155,8 +155,9 @@ TEST(WhenEitherTests, CompleteFirstEntry) {
   boost::future<void> f1 = p1.get_future();
   boost::future<void> f2 = p2.get_future();
 
-  auto num_completed = std::make_shared<std::atomic_flag>();
-  num_completed->clear();
+  // auto num_completed = std::make_shared<std::atomic_flag>();
+  // num_completed->clear();
+  auto num_completed = std::make_shared<std::atomic<int>>(0);
   boost::future<void> completion_future;
   std::tie(completion_future, f1, f2) =
       future::when_either(std::move(f1), std::move(f2), num_completed);
@@ -173,8 +174,9 @@ TEST(WhenEitherTests, CompleteSecondEntry) {
   boost::future<void> f1 = p1.get_future();
   boost::future<void> f2 = p2.get_future();
 
-  auto num_completed = std::make_shared<std::atomic_flag>();
-  num_completed->clear();
+  // auto num_completed = std::make_shared<std::atomic_flag>();
+  // num_completed->clear();
+  auto num_completed = std::make_shared<std::atomic<int>>(0);
   boost::future<void> completion_future;
   std::tie(completion_future, f1, f2) =
       future::when_either(std::move(f1), std::move(f2), num_completed);
@@ -190,8 +192,9 @@ TEST(WhenEitherTests, EntryAlreadyComplete) {
   boost::future<void> f1 = boost::make_ready_future();
   boost::future<void> f2 = p2.get_future();
 
-  auto num_completed = std::make_shared<std::atomic_flag>();
-  num_completed->clear();
+  // auto num_completed = std::make_shared<std::atomic_flag>();
+  // num_completed->clear();
+  auto num_completed = std::make_shared<std::atomic<int>>(0);
   boost::future<void> completion_future;
   std::tie(completion_future, f1, f2) =
       future::when_either(std::move(f1), std::move(f2), num_completed);
