@@ -7,3 +7,6 @@
 [submodule "src/libs/spdlog"]
 	path = src/libs/spdlog
 	url = https://github.com/gabime/spdlog.git
+[submodule "clipper_ai/themes/hugo-theme-learn"]
+	path = clipper_ai/themes/hugo-theme-learn
+	url = https://github.com/matcornic/hugo-theme-learn.git
