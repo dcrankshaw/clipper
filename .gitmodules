@@ -10,3 +10,6 @@
 [submodule "bin/yapf"]
 	path = bin/yapf
 	url = https://github.com/google/yapf.git
+[submodule "clipper_ai/themes/hugo-theme-learn"]
+	path = clipper_ai/themes/hugo-theme-learn
+	url = https://github.com/matcornic/hugo-theme-learn.git

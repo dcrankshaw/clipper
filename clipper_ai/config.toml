@@ -1,0 +1,4 @@
+baseURL = "http://clipper.ai/"
+languageCode = "en-us"
+title = "Clipper"
+theme = "hugo-theme-learn"
