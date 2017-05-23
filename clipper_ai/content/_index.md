@@ -1,8 +1,9 @@
 +++
-date = "2017-05-14T12:56:44-07:00"
-icon = "<b>1. </b>"
-title = "Basics"
-weight = 0
+date = "2017-05-20T17:53:26-07:00"
+title = "Clipper"
+toc = false
+weight = 5
+chapter = false
 
 +++
 
