@@ -1,8 +1,9 @@
 +++
-date = "2017-05-23T08:40:43-07:00"
+date = "2017-05-23T08:59:49-07:00"
+icon = "<b>4. </b>"
 title = "Contributing"
-icon = "<b>1. </b>"
 weight = 4
+chapter = false
 
 +++
 
@@ -46,7 +47,8 @@ You can test this with `redis-server --version`.
 {{% /notice %}}
 
 For example:
-```sh
+
+```console
 cd $CLIPPER_ROOT_DIR
 ./configure
 cd debug

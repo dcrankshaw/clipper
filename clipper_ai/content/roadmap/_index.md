@@ -1,8 +1,9 @@
 +++
-date = "2017-05-23T08:40:43-07:00"
-title = "Status and Roadmap"
+date = "2017-05-23T09:00:06-07:00"
 icon = "<b>5. </b>"
+title = "Status and Roadmap"
 weight = 5
+chapter = false
 
 +++
 
@@ -31,3 +32,4 @@ running on GPUs.
 + Support for selection policies and multi-model applications including the use of adversarial bandit algorithms
 + Model performance monitoring to detect and prevent application performance degradation over time
 + New scheduler design to leverage the model and resource heterogeneity common to machine learning applications
+

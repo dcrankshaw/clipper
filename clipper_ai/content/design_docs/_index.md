@@ -1,13 +1,10 @@
 +++
 date = "2017-05-23T08:39:59-07:00"
-icon = "<b>X. </b>"
-title = "Some Chapter title"
-weight = 0
+icon = "<b>6. </b>"
+title = "Design Docs"
+weight = 6
 
 +++
 
-### Chapter X
-
-# Some Chapter title
-
-Lorem ipsum
+This section contains design documents that provide implementation details
+for some components of the system.

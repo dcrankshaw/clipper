@@ -9,7 +9,7 @@ The easiest way to get started using Clipper is to install the `clipper_admin` p
 REPL.
 
 ```py
-pip install clipper_admin
+$ pip install clipper_admin
 $ python
 ```
 
@@ -20,6 +20,7 @@ From the Python REPL:
 
 ```py
 >>> import clipper_admin.clipper_manager as cm
+# Start
 >>> clipper = cm.Clipper("localhost")
 Checking if Docker is running...
 >>> clipper.start()
