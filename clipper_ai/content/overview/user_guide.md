@@ -1,9 +1,19 @@
 +++
 date = "2017-05-23T09:08:57-07:00"
-title = "Some Title"
+title = "User Guide"
 toc = true
-weight = 5
+weight = 2
+draft = true
 
 +++
 
-Lorem Ipsum
+Coming soon
+
+Key concepts in Clipper
+
++ Applications
++ Models
++ Containers
+
+Lifecycle
+

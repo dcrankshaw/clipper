@@ -29,6 +29,7 @@ hardware support. Critical features include:
 
 + First class support for TensorFlow models including Docker support for
 running on GPUs.
++ Improve container management and support running Clipper on Kubernetes.
 + Support for selection policies and multi-model applications including the use of adversarial bandit algorithms
 + Model performance monitoring to detect and prevent application performance degradation over time
 + New scheduler design to leverage the model and resource heterogeneity common to machine learning applications
