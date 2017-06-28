@@ -74,12 +74,12 @@ class ObjectStore(object):
         self.prefix = prefix
 
     def _connect(self, address):
-        return redis.Redis(host=address.host, port=address.port)
+        return redis.Redis(host=address.host, port=address.port, decode_responses=True)
 
     def _connect_local(self, address):
         # TODO: can't get Redis + Docker + Unix Sockets working yet
         # return Redis(unix_socket_path=socket)
-        return redis.Redis(host=address.host, port=address.port)
+        return redis.Redis(host=address.host, port=address.port, decode_responses=True)
 
     def generate_key(self, t):
         return KEY_DELIMITER.join([
@@ -149,11 +149,6 @@ class Transformer(object):
             transformed_tuples = self.transform_func(tuples)
             completed_ids = self.object_store.put(transformed_tuples)
 
-    def get_next_batch():
-        pass
-
-    def complete_batch():
-        pass
 
 
 if __name__ == "__main__":
