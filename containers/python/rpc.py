@@ -340,9 +340,9 @@ class PredictionRequest:
     Parameters
     ----------
     msg_id : bytes
-        The raw message id associated with the RPC 
+        The raw message id associated with the RPC
         prediction request message
-    inputs : 
+    inputs :
         One of [[byte]], [[int]], [[float]], [[double]], [string]
     """
 
