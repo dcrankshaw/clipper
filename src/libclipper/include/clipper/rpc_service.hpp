@@ -27,16 +27,17 @@ namespace rpc {
 
 const std::string LOGGING_TAG_RPC = "RPC";
 
-using RPCResponse = std::pair<const int, vector<uint8_t>>;
-/// Tuple of zmq_connection_id, message_id, vector of messages, creation time
-using RPCRequest =
-    std::tuple<const int, const int, const std::vector<std::vector<uint8_t>>,
-               const long>;
+// using RPCResponse = std::pair<const int, vector<uint8_t>>;
+/// Tuple of zmq_connection_id, /*message_id,*/ vector of messages, creation
+/// time
+using TransformerRPCRequest =
+    std::tuple<const int, const TransformerBatchMessage, const long>;
 
 enum class MessageType {
   NewContainer = 0,
-  ContainerContent = 1,
-  Heartbeat = 2
+  TransformerBatch = 1,
+  JoinBatch = 2,
+  ConditionalBatch = 3,
 };
 
 enum class HeartbeatType { KeepAlive = 0, RequestContainerMetadata = 1 };
@@ -48,15 +49,16 @@ class RPCService {
   // Disallow copy
   RPCService(const RPCService &) = delete;
   RPCService &operator=(const RPCService &) = delete;
-  vector<RPCResponse> try_get_responses(const int max_num_responses);
+  // vector<RPCResponse> try_get_responses(const int max_num_responses);
   /**
    * Starts the RPC Service. This must be called explicitly, as it is not
    * invoked during construction.
    */
   void start(
       const string ip, const int port,
-      std::function<void(VersionedModelId, int)> &&container_ready_callback,
-      std::function<void(RPCResponse)> &&new_response_callback);
+      std::function<void(VersionedModelId, int)> &&transform_ready_callback,
+      std::function<void(std::vector<std::vector<uint8_t>>)>
+          &&new_transformer_response_callback);
   /**
    * Stops the RPC Service. This is called implicitly within the RPCService
    * destructor.
@@ -67,12 +69,9 @@ class RPCService {
   * Send message takes ownership of the msg data because the caller cannot
   * know when the message will actually be sent.
   *
-  * \param `msg`: A vector of individual messages to send to this container.
-  * The messages will be sent as a single, multi-part ZeroMQ message so
-  * it is very efficient.
   */
-  int send_message(const std::vector<std::vector<uint8_t>> msg,
-                   const int zmq_connection_id);
+  void send_transformer_message(const TransformerBatchMessage msg,
+                                const int zmq_connection_id);
 
  private:
   void manage_service(const string address);
@@ -90,14 +89,14 @@ class RPCService {
           &connections_containers_map,
       int &zmq_connection_id, std::shared_ptr<redox::Redox> redis_connection);
 
-  void send_heartbeat_response(socket_t &socket,
-                               const vector<uint8_t> &connection_id,
-                               bool request_container_metadata);
+  // void send_heartbeat_response(socket_t &socket,
+  //                              const vector<uint8_t> &connection_id,
+  //                              bool request_container_metadata);
 
   void shutdown_service(socket_t &socket);
   std::thread rpc_thread_;
-  shared_ptr<Queue<RPCRequest>> request_queue_;
-  shared_ptr<Queue<RPCResponse>> response_queue_;
+  shared_ptr<Queue<TransformerRPCRequest>> request_queue_;
+  // shared_ptr<Queue<RPCResponse>> response_queue_;
   // Flag indicating whether rpc service is active
   std::atomic_bool active_;
   // The next available message id
@@ -106,7 +105,8 @@ class RPCService {
   std::shared_ptr<metrics::Histogram> msg_queueing_hist_;
 
   std::function<void(VersionedModelId, int)> container_ready_callback_;
-  std::function<void(RPCResponse)> new_response_callback_;
+  std::function<void(std::vector<std::vector<uint8_t>>)>
+      new_transformer_response_callback_;
 };
 
 }  // namespace rpc

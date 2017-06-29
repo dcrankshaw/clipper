@@ -6,6 +6,7 @@ from datetime import datetime
 import zmq
 import redis
 import hashlib
+import itertools
 
 KEY_DELIMITER = ":"
 
@@ -19,7 +20,6 @@ transformer nodes and Clipper.
 
 
 Structure of a batch message:
-    First item: Address of object store containing the IDS.
     List of new object store IDs.
 """
 
@@ -185,17 +185,17 @@ class ClipperConnection(object):
         """
             Parameters
             ----------
-            response_batch : (SocketAddress, list(string)), optional
-                A tuple where the first item is the address of the object store that the tuples
-                have been inserted into and the second item is the list of object IDs as strings.
+            response_batch : list(string), optional
+                The list of object IDs as strings. Each ID has the following format
+                <obj_store_host>:<obj_store_port>:<obj_id_key>
 
             Returns
             -------
-            (SocketAddress, list(string)) : The next batch of inputs
+            list(string) : The next batch of inputs
         """
         if response_batch is not None:
             send_time_start = datetime.now()
-            addr, batch_ids = response_batch
+            batch_ids = response_batch
             if not type(batch_ids) == list:
                 raise TransformerError("Response batch has incorrect type")
             # if len(outputs) != len(prediction_request.inputs):
@@ -205,8 +205,8 @@ class ClipperConnection(object):
             if not type(outputs[0]) == str:
                 raise PredictionError("Model must return a list of strs. Found %s"
                                     % type(outputs[0]))
-            addr_string = "%s:%d" % (addr.host, addr.port)
-            response_msg = TransformerMessage(addr_string, batch_ids)
+            # addr_string = "%s:%d" % (addr.host, addr.port)
+            response_msg = TransformerMessage(batch_ids)
             response_msg.send(self.socket)
             send_time_end = datetime.now()
             print("sent batch of %d ids in %f microseconds" % (len(batch_ids), (send_time_end-send_time_start).microseconds))
@@ -231,7 +231,7 @@ class ClipperConnection(object):
         batch_size_bytes = self.socket.recv()
         batch_size = struct.unpack("<I", batch_size_bytes)[0]
 
-        address = self.socket.recv().decode('utf-8')
+        # address = self.socket.recv().decode('utf-8')
         batch_ids = [self.socket.recv().decode('utf-8') for _ in range(batch_size)]
 
         recv_time_end = datetime.now()
@@ -239,19 +239,20 @@ class ClipperConnection(object):
         print("received batch of %d ids in %f microseconds" % (batch_size, (recv_time_end-recv_time_start).microseconds))
         sys.stdout.flush()
         sys.stderr.flush()
-        host, port = address.split(":")
-        return (SocketAddress(host, int(port)), batch_ids)
+        return batch_ids
+        # host, port = address.split(":")
+        # return (SocketAddress(host, int(port)), batch_ids)
 
 
 class TransformerMessage():
-    def __init__(self, address, batch_ids):
+    # def __init__(self, address, batch_ids):
+    def __init__(self, batch_ids):
         """
         Parameters
         ----------
-        address : str
         batch_ids : list(str)
         """
-        self.address = address
+        # self.address = address
         self.batch_ids = batch_ids
 
 
@@ -260,7 +261,6 @@ class TransformerMessage():
         Structure of message (each line is separate ZMQ msg)
             4 bytes: message type as int
             4 bytes: size of batch as int
-            address
             batch_id_string_0
             batch_id_string_1
             ...
@@ -269,7 +269,7 @@ class TransformerMessage():
         socket.send("", flags=zmq.SNDMORE)
         socket.send(int(MESSAGE_TYPE_BATCH), flags=zmq.SNDMORE)
         socket.send(len(self.batch_ids), flags=zmq.SNDMORE)
-        socket.send(self.address.encode('utf-8'), flags=zmq.SNDMORE)
+        # socket.send(self.address.encode('utf-8'), flags=zmq.SNDMORE)
         for i in range(len(batch_ids) - 1):
             socket.send(self.batch_ids[i].encode('utf-8'), flags=zmq.SNDMORE)
         socket.send(self.batch_ids[-1].encode('utf-8'))
@@ -290,29 +290,46 @@ class Transformer(object):
         while True:
             # Combine notification of completed batch and request for next batch
             # into single message
-            addr, ids = self.clipper_conn.get_next_batch(completed_batch_ids=completed_ids)
-            tuples = self.object_store.get(addr, ids)
+            ids = self.clipper_conn.get_next_batch(completed_batch_ids=completed_ids)
+            keyfunc = lambda item: item[0]
+            addrs_and_ids = [extract_addr(i) for i in ids].sort(key=keyfunc)
+            tuples = []
+            for k, g in itertools.groupby(addrs_and_ids, key=keyfunc):
+                tuples.extend(self.object_store.get(k, [item[1] for item in g]))
+            # tuples = self.object_store.get(addr, ids)
             transformed_tuples = self.transform_func(tuples)
             put_addr, put_objects = self.object_store.put(transformed_tuples)
-            put_object_ids = list(put_objects.keys())
-            completed_batch = (put_addr, put_object_ids)
+            completed_batch = [prepend_addr(put_addr, k) for k in put_objects.keys()]
+
+def prepend_addr(addr, id_str):
+    full_id = addr.host + KEY_DELIMITER + str(addr.port) + KEY_DELIMITER + id_str
+    print(full_id)
+    return full_id
+
+
+def extract_addr(id_str):
+    splits = id_str.split(KEY_DELIMITER)
+    assert len(splits) == 5
+    host = splits[0]
+    port = int(splits[1])
+    obj_id = KEY_DELIMITER.join(splits[2:])
+    return (SocketAddr(host, port), obj_id)
+    
 
 
 
-
-if __name__ == "__main__":
-    local_redis = SocketAddress("127.0.0.1", 6379)
-    cluster = [SocketAddress("127.0.0.1", 6380)]
-    obj_store = ObjectStore("test", local_redis, cluster)
-
-    batch = [Tuple(1, u"run"), Tuple(2, u"the"), Tuple(3, u"jewels")]
-    addr, ids = obj_store.put(batch)
-
-    fetched_tuples = obj_store.get(addr, ids)
-    for f in fetched_tuples:
-        print("ID: %d, data: %s" % (int(f.tuple_id), f.data.decode("utf-8")))
-
-    # print([str(f) for f in fetched_tuples])
+# if __name__ == "__main__":
+#     local_redis = SocketAddress("127.0.0.1", 6379)
+#     cluster = [SocketAddress("127.0.0.1", 6380)]
+#     obj_store = ObjectStore("test", local_redis, cluster)
+#
+#     batch = [Tuple(1, u"run"), Tuple(2, u"the"), Tuple(3, u"jewels")]
+#     addr, ids = obj_store.put(batch)
+#
+#     fetched_tuples = obj_store.get(addr, ids)
+#     for f in fetched_tuples:
+#         print("ID: %d, data: %s" % (int(f.tuple_id), f.data.decode("utf-8")))
+#
 
 
 

@@ -16,6 +16,23 @@ using ByteBuffer = std::vector<uint8_t>;
 using QueryId = long;
 using FeedbackAck = bool;
 
+class TransformerBatchMessage {
+ public:
+  explicit TransformerBatchMessage(
+      const std::vector<std::vector<uint8_t>> object_ids);
+
+  ~TransformerBatchMessage() = default;
+
+  // explicit TransformerBatchMessage() = default;
+  TransformerBatchMessage(const TransformerBatchMessage &) = default;
+  TransformerBatchMessage &operator=(const TransformerBatchMessage &) = default;
+
+  TransformerBatchMessage(TransformerBatchMessage &&) = default;
+  TransformerBatchMessage &operator=(TransformerBatchMessage &&) = default;
+
+  std::vector<std::vector<uint8_t>> object_ids_;
+};
+
 enum class InputType {
   Bytes = 0,
   Ints = 1,
@@ -34,7 +51,7 @@ InputType parse_input_type(std::string type_string);
 
 class VersionedModelId {
  public:
-  VersionedModelId(const std::string name, const std::string id);
+  VersionedModelId(const std::string name, const std::string id = "1");
 
   std::string get_name() const;
   std::string get_id() const;

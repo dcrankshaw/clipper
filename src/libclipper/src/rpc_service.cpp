@@ -30,8 +30,8 @@ namespace rpc {
 constexpr int INITIAL_REPLICA_ID_SIZE = 100;
 
 RPCService::RPCService()
-    : request_queue_(std::make_shared<Queue<RPCRequest>>()),
-      response_queue_(std::make_shared<Queue<RPCResponse>>()),
+    : request_queue_(std::make_shared<Queue<TransformerRPCRequest>>()),
+      // response_queue_(std::make_shared<Queue<RPCResponse>>()),
       active_(false),
       // The version of the unordered_map constructor that allows
       // you to specify your own hash function also requires you
@@ -47,9 +47,10 @@ RPCService::~RPCService() { stop(); }
 void RPCService::start(
     const string ip, const int port,
     std::function<void(VersionedModelId, int)> &&container_ready_callback,
-    std::function<void(RPCResponse)> &&new_response_callback) {
+    std::function<void(std::vector<std::vector<uint8_t>>)>
+        &&new_transformer_response_callback) {
   container_ready_callback_ = container_ready_callback;
-  new_response_callback_ = new_response_callback;
+  new_transformer_response_callback_ = new_transformer_response_callback;
   if (active_) {
     throw std::runtime_error(
         "Attempted to start RPC Service when it is already running!");
@@ -68,37 +69,34 @@ void RPCService::stop() {
   }
 }
 
-int RPCService::send_message(const vector<vector<uint8_t>> msg,
-                             const int zmq_connection_id) {
+void RPCService::send_transformer_message(const TransformerBatchMessage msg,
+                                          const int zmq_connection_id) {
   if (!active_) {
     log_error(LOGGING_TAG_RPC,
               "Cannot send message to inactive RPCService instance",
               "Dropping Message");
-    return -1;
   }
-  int id = message_id_;
-  message_id_ += 1;
   long current_time_micros =
       std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch())
           .count();
-  RPCRequest request(zmq_connection_id, id, std::move(msg),
-                     current_time_micros);
+  TransformerRPCRequest request(zmq_connection_id, std::move(msg),
+                                current_time_micros);
   request_queue_->push(request);
-  return id;
 }
 
-vector<RPCResponse> RPCService::try_get_responses(const int max_num_responses) {
-  vector<RPCResponse> responses;
-  for (int i = 0; i < max_num_responses; i++) {
-    if (auto response = response_queue_->try_pop()) {
-      responses.push_back(*response);
-    } else {
-      break;
-    }
-  }
-  return responses;
-}
+// vector<RPCResponse> RPCService::try_get_responses(const int
+// max_num_responses) {
+//   vector<RPCResponse> responses;
+//   for (int i = 0; i < max_num_responses; i++) {
+//     if (auto response = response_queue_->try_pop()) {
+//       responses.push_back(*response);
+//     } else {
+//       break;
+//     }
+//   }
+//   return responses;
+// }
 
 void RPCService::manage_service(const string address) {
   // Map from container id to unique routing id for zeromq
@@ -136,10 +134,10 @@ void RPCService::manage_service(const string address) {
     if (request_queue_->size() == 0) {
       poll_timeout = 1;
     }
+    // TODO(model_comp): Balance message sending and receiving fairly
+    // Note: We only receive one message per event loop iteration
     zmq_poll(items, 1, poll_timeout);
     if (items[0].revents & ZMQ_POLLIN) {
-      // TODO: Balance message sending and receiving fairly
-      // Note: We only receive one message per event loop iteration
       log_info(LOGGING_TAG_RPC, "Found message to receive");
 
       receive_message(socket, connections, connections_containers_map,
@@ -167,7 +165,7 @@ void RPCService::send_messages(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch())
             .count();
-    RPCRequest request = request_queue_->pop();
+    TransformerRPCRequest request = request_queue_->pop();
     msg_queueing_hist_->insert(current_time_micros - std::get<3>(request));
     boost::bimap<int, vector<uint8_t>>::left_const_iterator connection =
         connections.left.find(std::get<0>(request));
@@ -181,27 +179,37 @@ void RPCService::send_messages(
 
     message_t type_message(sizeof(int));
     static_cast<int *>(type_message.data())[0] =
-        static_cast<int>(MessageType::ContainerContent);
-    message_t id_message(sizeof(int));
-    memcpy(id_message.data(), &std::get<1>(request), sizeof(int));
+        static_cast<int>(MessageType::TransformerBatch);
     vector<uint8_t> routing_identity = connection->second;
 
     socket.send(routing_identity.data(), routing_identity.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(type_message, ZMQ_SNDMORE);
-    socket.send(id_message, ZMQ_SNDMORE);
-    int cur_msg_num = 0;
-    // subtract 1 because we start counting at 0
-    int last_msg_num = std::get<2>(request).size() - 1;
-    for (const std::vector<uint8_t> &m : std::get<2>(request)) {
-      // send the sndmore flag unless we are on the last message part
-      if (cur_msg_num < last_msg_num) {
+    message_t size_message(sizeof(int));
+    int batch_size = (int)std::get<1>(request).object_ids_.size();
+    static_cast<int *>(size_message.data())[0] = batch_size;
+
+    int cur_id_num = 0;
+    for (const std::vector<uint8_t> &m : std::get<1>(request).object_ids_) {
+      if (cur_id_num < batch_size - 1) {
         socket.send((uint8_t *)m.data(), m.size(), ZMQ_SNDMORE);
       } else {
         socket.send((uint8_t *)m.data(), m.size(), 0);
       }
-      cur_msg_num += 1;
+
+      cur_id_num += 1;
     }
+    // // subtract 1 because we start counting at 0
+    // int last_msg_num = std::get<2>(request).size() - 1;
+    // for (const std::vector<uint8_t> &m : std::get<2>(request)) {
+    //   // send the sndmore flag unless we are on the last message part
+    //   if (cur_msg_num < last_msg_num) {
+    //     socket.send((uint8_t *)m.data(), m.size(), ZMQ_SNDMORE);
+    //   } else {
+    //     socket.send((uint8_t *)m.data(), m.size(), 0);
+    //   }
+    //   cur_msg_num += 1;
+    // }
   }
 }
 
@@ -231,11 +239,7 @@ void RPCService::receive_message(
   switch (type) {
     case MessageType::NewContainer: {
       message_t model_name;
-      message_t model_version;
-      message_t model_input_type;
       socket.recv(&model_name, 0);
-      socket.recv(&model_version, 0);
-      socket.recv(&model_input_type, 0);
       if (new_connection) {
         // We have a new connection with container metadata, process it
         // accordingly
@@ -244,13 +248,7 @@ void RPCService::receive_message(
         log_info(LOGGING_TAG_RPC, "New container connected");
         std::string name(static_cast<char *>(model_name.data()),
                          model_name.size());
-        std::string version(static_cast<char *>(model_version.data()),
-                            model_version.size());
-        std::string input_type_str(static_cast<char *>(model_input_type.data()),
-                                   model_input_type.size());
-
-        InputType input_type =
-            static_cast<InputType>(std::stoi(input_type_str));
+        std::string version = "1";
 
         VersionedModelId model = VersionedModelId(name, version);
         log_info(LOGGING_TAG_RPC, "Container added");
@@ -262,7 +260,7 @@ void RPCService::receive_message(
         int cur_replica_id = replica_ids_[model];
         replica_ids_[model] = cur_replica_id + 1;
         redis::add_container(*redis_connection, model, cur_replica_id,
-                             zmq_connection_id, input_type);
+                             zmq_connection_id, InputType::Strings);
         connections_containers_map.emplace(
             connection_id,
             std::pair<VersionedModelId, int>(model, cur_replica_id));
@@ -271,18 +269,31 @@ void RPCService::receive_message(
         zmq_connection_id += 1;
       }
     } break;
-    case MessageType::ContainerContent: {
-      // This message is a response to a container query
-      message_t msg_id;
-      message_t msg_content;
-      socket.recv(&msg_id, 0);
-      socket.recv(&msg_content, 0);
+    case MessageType::TransformerBatch: {
+      message_t batch_size_msg;
+      socket.recv(&batch_size_msg, 0);
       if (!new_connection) {
-        int id = static_cast<int *>(msg_id.data())[0];
-        vector<uint8_t> content(
-            (uint8_t *)msg_content.data(),
-            (uint8_t *)msg_content.data() + msg_content.size());
-        RPCResponse response(id, content);
+        int batch_size = static_cast<int *>(batch_size_msg.data())[0];
+        std::vector<std::vector<uint8_t>> batch{(size_t)batch_size};
+        // message_t addr_msg;
+        // socket.recv(&addr_msg, 0);
+        // std::string address =
+        //     std::string(reinterpret_cast<char *>(addr_msg.data()));
+        message_t obj_id_msg;
+        for (int i = 0; i < batch_size; ++i) {
+          // TODO: create message object once???
+
+          socket.recv(&obj_id_msg, 0);
+
+          batch[i] = std::vector<uint8_t>(
+              (uint8_t *)obj_id_msg.data(),
+              (uint8_t *)obj_id_msg.data() + obj_id_msg.size());
+        }
+
+        // vector<uint8_t> content(
+        //     (uint8_t *)msg_content.data(),
+        //     (uint8_t *)msg_content.data() + msg_content.size());
+        // RPCResponse response(id, content);
 
         auto container_info_entry =
             connections_containers_map.find(connection_id);
@@ -296,35 +307,39 @@ void RPCService::receive_message(
 
         VersionedModelId vm = container_info.first;
         int replica_id = container_info.second;
-        TaskExecutionThreadPool::submit_job(vm, replica_id,
-                                            new_response_callback_, response);
+        TaskExecutionThreadPool::submit_job(
+            vm, replica_id, new_transformer_response_callback_, batch);
         TaskExecutionThreadPool::submit_job(
             vm, replica_id, container_ready_callback_, vm, replica_id);
 
-        response_queue_->push(response);
+        // response_queue_->push(response);
       }
     } break;
-    case MessageType::Heartbeat:
-      send_heartbeat_response(socket, connection_id, new_connection);
+    case MessageType::JoinBatch:
+      log_info(LOGGING_TAG_RPC, "JoinBatch messages not supported yet");
+      break;
+    case MessageType::ConditionalBatch:
+      log_info(LOGGING_TAG_RPC, "ConditionalBatch messages not supported yet");
       break;
   }
 }
 
-void RPCService::send_heartbeat_response(socket_t &socket,
-                                         const vector<uint8_t> &connection_id,
-                                         bool request_container_metadata) {
-  message_t type_message(sizeof(int));
-  message_t heartbeat_type_message(sizeof(int));
-  static_cast<int *>(type_message.data())[0] =
-      static_cast<int>(MessageType::Heartbeat);
-  static_cast<int *>(heartbeat_type_message.data())[0] = static_cast<int>(
-      request_container_metadata ? HeartbeatType::RequestContainerMetadata
-                                 : HeartbeatType::KeepAlive);
-  socket.send(connection_id.data(), connection_id.size(), ZMQ_SNDMORE);
-  socket.send("", 0, ZMQ_SNDMORE);
-  socket.send(type_message, ZMQ_SNDMORE);
-  socket.send(heartbeat_type_message);
-}
+// void RPCService::send_heartbeat_response(socket_t &socket,
+//                                          const vector<uint8_t>
+//                                          &connection_id,
+//                                          bool request_container_metadata) {
+//   message_t type_message(sizeof(int));
+//   message_t heartbeat_type_message(sizeof(int));
+//   static_cast<int *>(type_message.data())[0] =
+//       static_cast<int>(MessageType::Heartbeat);
+//   static_cast<int *>(heartbeat_type_message.data())[0] = static_cast<int>(
+//       request_container_metadata ? HeartbeatType::RequestContainerMetadata
+//                                  : HeartbeatType::KeepAlive);
+//   socket.send(connection_id.data(), connection_id.size(), ZMQ_SNDMORE);
+//   socket.send("", 0, ZMQ_SNDMORE);
+//   socket.send(type_message, ZMQ_SNDMORE);
+//   socket.send(heartbeat_type_message);
+// }
 
 }  // namespace rpc
 

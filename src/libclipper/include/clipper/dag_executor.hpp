@@ -1,0 +1,6 @@
+#ifndef CLIPPER_DAG_EXECUTOR_HPP
+#define CLIPPER_DAG_EXECUTOR_HPP
+
+class DAGExecutor {};
+
+#endif  // CLIPPER_DAG_EXECUTOR_HPP
