@@ -26,6 +26,10 @@ size_t serialize_to_buffer(const std::vector<T> &vector, uint8_t *buf) {
   return amt_to_write;
 }
 
+TransformerBatchMessage::TransformerBatchMessage(
+    const std::vector<std::vector<uint8_t>> object_ids)
+    : object_ids_(std::move(object_ids)) {}
+
 std::string get_readable_input_type(InputType type) {
   switch (type) {
     case InputType::Bytes: return std::string("bytes");

@@ -7,7 +7,7 @@
 
 #include "query_frontend.hpp"
 
-int main(int argc, char* argv[]) {
+int main() {
   cxxopts::Options options("query_frontend",
                            "Clipper query processing frontend");
   // clang-format off

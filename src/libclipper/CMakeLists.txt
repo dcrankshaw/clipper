@@ -4,19 +4,20 @@ project(libclipper VERSION 0.1.0 LANGUAGES CXX)
 
 
 add_library(clipper
-    src/query_processor.cpp
+    # src/query_processor.cpp
     src/datatypes.cpp
     src/metrics.cpp
-    src/selection_policies.cpp
-    src/persistent_state.cpp
-    src/task_executor.cpp
+    # src/selection_policies.cpp
+    # src/persistent_state.cpp
+    # src/task_executor.cpp
     src/rpc_service.cpp
-    src/timers.cpp
+    # src/timers.cpp
     src/containers.cpp
-    src/redis.cpp
+    # src/redis.cpp
     src/logging.cpp
     src/json_util.cpp
     src/exceptions.cpp
+    src/dag_executor.cpp
     )
 
 
@@ -37,24 +38,24 @@ export(TARGETS clipper FILE ClipperConfig.cmake)
 
 # config_test resets the value of the config so it should always
 # be last in the list
-add_executable(libclippertests EXCLUDE_FROM_ALL
-    test/test_main.cpp
-    test/threadpool_test.cpp
-    test/container_test.cpp
-    test/metrics_test.cpp
-    test/rpc_service_test.cpp
-    test/timers_test.cpp
-    test/data_serialization_tests.cpp
-    test/persistent_state_test.cpp
-    test/redis_test.cpp
-    test/selection_policies_test.cpp
-    test/json_util_test.cpp
-    test/logging_test.cpp
-    test/future_test.cpp
-    test/task_executor_test.cpp
-    test/config_test.cpp
-    test/base64_test.cpp)
-
-target_link_libraries(libclippertests clipper gtest gmock_main cxxopts)
-add_dependencies(unittests libclippertests)
+# add_executable(libclippertests EXCLUDE_FROM_ALL
+#     test/test_main.cpp
+#     test/threadpool_test.cpp
+#     test/container_test.cpp
+#     test/metrics_test.cpp
+#     test/rpc_service_test.cpp
+#     test/timers_test.cpp
+#     test/data_serialization_tests.cpp
+#     test/persistent_state_test.cpp
+#     test/redis_test.cpp
+#     test/selection_policies_test.cpp
+#     test/json_util_test.cpp
+#     test/logging_test.cpp
+#     test/future_test.cpp
+#     test/task_executor_test.cpp
+#     test/config_test.cpp
+#     test/base64_test.cpp)
+#
+# target_link_libraries(libclippertests clipper gtest gmock_main cxxopts)
+# add_dependencies(unittests libclippertests)
 

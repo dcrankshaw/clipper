@@ -6,13 +6,13 @@
 
 #include <redox.hpp>
 
-#include <clipper/config.hpp>
+// #include <clipper/config.hpp>
 #include <clipper/datatypes.hpp>
 #include <clipper/logging.hpp>
 #include <clipper/metrics.hpp>
-#include <clipper/redis.hpp>
+// #include <clipper/redis.hpp>
 #include <clipper/rpc_service.hpp>
-#include <clipper/task_executor.hpp>
+// #include <clipper/task_executor.hpp>
 #include <clipper/threadpool.hpp>
 #include <clipper/util.hpp>
 
@@ -47,10 +47,13 @@ RPCService::~RPCService() { stop(); }
 void RPCService::start(
     const string ip, const int port,
     std::function<void(VersionedModelId, int)> &&container_ready_callback,
-    std::function<void(std::vector<std::vector<uint8_t>>)>
-        &&new_transformer_response_callback) {
+    std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
+        &&new_transformer_response_callback,
+    std::function<void(VersionedModelId, int, int, InputType)>
+        &&new_container_callback) {
   container_ready_callback_ = container_ready_callback;
   new_transformer_response_callback_ = new_transformer_response_callback;
+  new_container_callback_ = new_container_callback;
   if (active_) {
     throw std::runtime_error(
         "Attempted to start RPC Service when it is already running!");
@@ -117,14 +120,14 @@ void RPCService::manage_service(const string address) {
   // Indicate that we will poll our zmq service socket for new inbound messages
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   int zmq_connection_id = 0;
-  auto redis_connection = std::make_shared<redox::Redox>();
-  Config &conf = get_config();
-  while (!redis_connection->connect(conf.get_redis_address(),
-                                    conf.get_redis_port())) {
-    log_error(LOGGING_TAG_RPC, "RPCService failed to connect to Redis",
-              "Retrying in 1 second...");
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-  }
+  // auto redis_connection = std::make_shared<redox::Redox>();
+  // Config &conf = get_config();
+  // while (!redis_connection->connect(conf.get_redis_address(),
+  //                                   conf.get_redis_port())) {
+  //   log_error(LOGGING_TAG_RPC, "RPCService failed to connect to Redis",
+  //             "Retrying in 1 second...");
+  //   std::this_thread::sleep_for(std::chrono::seconds(1));
+  // }
 
   while (active_) {
     // Set poll timeout based on whether there are outgoing messages to
@@ -141,7 +144,7 @@ void RPCService::manage_service(const string address) {
       log_info(LOGGING_TAG_RPC, "Found message to receive");
 
       receive_message(socket, connections, connections_containers_map,
-                      zmq_connection_id, redis_connection);
+                      zmq_connection_id);
     }
     // Note: We send all queued messages per event loop iteration
     send_messages(socket, connections);
@@ -166,12 +169,12 @@ void RPCService::send_messages(
             std::chrono::system_clock::now().time_since_epoch())
             .count();
     TransformerRPCRequest request = request_queue_->pop();
-    msg_queueing_hist_->insert(current_time_micros - std::get<3>(request));
+    msg_queueing_hist_->insert(current_time_micros - std::get<2>(request));
     boost::bimap<int, vector<uint8_t>>::left_const_iterator connection =
         connections.left.find(std::get<0>(request));
     if (connection == connections.left.end()) {
       // Error handling
-      log_error_formatted(LOGGING_TAG_CLIPPER,
+      log_error_formatted(LOGGING_TAG_RPC,
                           "Attempted to send message to unknown container: ",
                           std::get<0>(request));
       continue;
@@ -218,7 +221,7 @@ void RPCService::receive_message(
     std::unordered_map<std::vector<uint8_t>, std::pair<VersionedModelId, int>,
                        std::function<size_t(const std::vector<uint8_t> &vec)>>
         &connections_containers_map,
-    int &zmq_connection_id, std::shared_ptr<redox::Redox> redis_connection) {
+    int &zmq_connection_id) {
   message_t msg_routing_identity;
   message_t msg_delimiter;
   message_t msg_type;
@@ -259,8 +262,10 @@ void RPCService::receive_message(
         // check if the key is present in the map.
         int cur_replica_id = replica_ids_[model];
         replica_ids_[model] = cur_replica_id + 1;
-        redis::add_container(*redis_connection, model, cur_replica_id,
-                             zmq_connection_id, InputType::Strings);
+        new_container_callback_(model, cur_replica_id, zmq_connection_id,
+                                InputType::Strings);
+        // redis::add_container(*redis_connection, model, cur_replica_id,
+        //                      zmq_connection_id, InputType::Strings);
         connections_containers_map.emplace(
             connection_id,
             std::pair<VersionedModelId, int>(model, cur_replica_id));
@@ -308,7 +313,7 @@ void RPCService::receive_message(
         VersionedModelId vm = container_info.first;
         int replica_id = container_info.second;
         TaskExecutionThreadPool::submit_job(
-            vm, replica_id, new_transformer_response_callback_, batch);
+            vm, replica_id, new_transformer_response_callback_, vm, batch);
         TaskExecutionThreadPool::submit_job(
             vm, replica_id, container_ready_callback_, vm, replica_id);
 

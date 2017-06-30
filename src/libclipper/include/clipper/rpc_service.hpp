@@ -57,8 +57,10 @@ class RPCService {
   void start(
       const string ip, const int port,
       std::function<void(VersionedModelId, int)> &&transform_ready_callback,
-      std::function<void(std::vector<std::vector<uint8_t>>)>
-          &&new_transformer_response_callback);
+      std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
+          &&new_transformer_response_callback,
+      std::function<void(VersionedModelId, int, int, InputType)>
+          &&new_container_callback);
   /**
    * Stops the RPC Service. This is called implicitly within the RPCService
    * destructor.
@@ -87,7 +89,7 @@ class RPCService {
       std::unordered_map<std::vector<uint8_t>, std::pair<VersionedModelId, int>,
                          std::function<size_t(const std::vector<uint8_t> &vec)>>
           &connections_containers_map,
-      int &zmq_connection_id, std::shared_ptr<redox::Redox> redis_connection);
+      int &zmq_connection_id);
 
   // void send_heartbeat_response(socket_t &socket,
   //                              const vector<uint8_t> &connection_id,
@@ -100,13 +102,15 @@ class RPCService {
   // Flag indicating whether rpc service is active
   std::atomic_bool active_;
   // The next available message id
-  int message_id_ = 0;
+  // int message_id_ = 0;
   std::unordered_map<VersionedModelId, int> replica_ids_;
   std::shared_ptr<metrics::Histogram> msg_queueing_hist_;
 
   std::function<void(VersionedModelId, int)> container_ready_callback_;
-  std::function<void(std::vector<std::vector<uint8_t>>)>
+  std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
       new_transformer_response_callback_;
+  std::function<void(VersionedModelId, int, int, InputType)>
+      new_container_callback_;
 };
 
 }  // namespace rpc
