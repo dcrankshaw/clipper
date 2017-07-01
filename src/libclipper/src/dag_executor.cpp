@@ -28,46 +28,51 @@ DAGExecutor::DAGExecutor(
     node_queues_.emplace(std::make_pair(node, std::make_shared<ModelQueue>()));
   }
 
-  rpc_->start("*", RPC_SERVICE_PORT,
-              [ this, task_executor_valid = active_ ](VersionedModelId model,
-                                                      int replica_id) {
-                if (*task_executor_valid) {
-                  send_next_batch(model, replica_id);
-                } else {
-                  log_info(LOGGING_TAG_DAG_EXECUTOR,
-                           "Not running send_next_batch callback because "
-                           "DAGExecutor has been destroyed.");
-                }
-              },
-              [ this, task_executor_valid = active_ ](
-                  VersionedModelId model, std::vector<ObjectId> objects) {
-                if (*task_executor_valid) {
-                  process_response(model, std::move(objects));
-                } else {
-                  log_info(LOGGING_TAG_DAG_EXECUTOR,
-                           "Not running process_response callback because "
-                           "DAGExecutor has been destroyed.");
-                }
+  rpc_->start(
+      "*", RPC_SERVICE_PORT, [ this, task_executor_valid = active_ ](
+                                 VersionedModelId model, int replica_id) {
+        if (*task_executor_valid) {
+          send_next_batch(model, replica_id);
+        } else {
+          log_info(LOGGING_TAG_DAG_EXECUTOR,
+                   "Not running send_next_batch callback because "
+                   "DAGExecutor has been destroyed.");
+        }
+      },
+      [ this, task_executor_valid = active_ ](VersionedModelId model,
+                                              std::vector<ObjectId> objects) {
+        if (*task_executor_valid) {
+          process_response(model, std::move(objects));
+        } else {
+          log_info(LOGGING_TAG_DAG_EXECUTOR,
+                   "Not running process_response callback because "
+                   "DAGExecutor has been destroyed.");
+        }
 
-              },
-              [ this, task_executor_valid = active_ ](
-                  VersionedModelId model, int replica_id, int zmq_connection_id,
-                  InputType input_type) {
-                if (*task_executor_valid) {
-                  active_containers_->add_container(model, zmq_connection_id,
-                                                    replica_id, input_type);
-                } else {
-                  log_info(LOGGING_TAG_DAG_EXECUTOR,
-                           "Not running new_container callback because "
-                           "DAGExecutor has been destroyed.");
-                }
-              });
+      },
+      [ this, task_executor_valid = active_ ](
+          VersionedModelId model, int replica_id, int zmq_connection_id,
+          InputType input_type) {
+        if (*task_executor_valid) {
+          log_info_formatted(LOGGING_TAG_DAG_EXECUTOR,
+                             "NEW CONNECTION: Replica {} for model {}",
+                             std::to_string(replica_id), model.serialize());
+          active_containers_->add_container(model, zmq_connection_id,
+                                            replica_id, input_type);
+        } else {
+          log_info(LOGGING_TAG_DAG_EXECUTOR,
+                   "Not running new_container callback because "
+                   "DAGExecutor has been destroyed.");
+        }
+      });
 }
 
 DAGExecutor::~DAGExecutor() { active_->store(false); }
 
 void DAGExecutor::process_response(VersionedModelId vm,
                                    std::vector<ObjectId> objects) {
+  log_info_formatted(LOGGING_TAG_DAG_EXECUTOR,
+                     "Processing response from model {}", vm.serialize());
   auto next_node = edges_.find(vm);
   if (next_node != edges_.end()) {
     auto q = node_queues_[next_node->second];
@@ -91,6 +96,8 @@ void DAGExecutor::send_next_batch(VersionedModelId vm, int replica_id) {
     }
     TransformerBatchMessage msg{batch};
     rpc_->send_transformer_message(msg, container->container_id_);
+    log_info_formatted(LOGGING_TAG_DAG_EXECUTOR, "Sent batch to model {}",
+                       vm.serialize());
   }
 }
 

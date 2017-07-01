@@ -104,7 +104,7 @@ void RPCService::send_transformer_message(const TransformerBatchMessage msg,
 void RPCService::manage_service(const string address) {
   // Map from container id to unique routing id for zeromq
   // Note that zeromq socket id is a byte vector
-  log_info_formatted(LOGGING_TAG_RPC, "RPC thread started at address: ",
+  log_info_formatted(LOGGING_TAG_RPC, "RPC thread started at address: {}",
                      address);
   boost::bimap<int, vector<uint8_t>> connections;
   // Initializes a map to associate the ZMQ connection IDs
