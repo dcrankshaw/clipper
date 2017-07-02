@@ -192,6 +192,7 @@ void RPCService::send_messages(
     message_t size_message(sizeof(int));
     int batch_size = (int)std::get<1>(request).object_ids_.size();
     static_cast<int *>(size_message.data())[0] = batch_size;
+    socket.send(size_message, ZMQ_SNDMORE);
 
     int cur_id_num = 0;
     for (const std::vector<uint8_t> &m : std::get<1>(request).object_ids_) {

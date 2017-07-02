@@ -13,12 +13,18 @@ def run_source():
     for line in sys.stdin:
         source.send(line.split(" "))
 
+def double(tuples):
+    return [Tuple(t.tuple_id, "%s%s" % (t.data, t.data)) for t in tuples]
+
+
+def prepend_len(tuples):
+    return [Tuple(t.tuple_id, "%d: %s" % (len(t.data), t.data)) for t in tuples]
 
 def run_m1():
     print("Running m1")
     Transformer(
             "m1",
-            lambda x: "%sm1%s" % (x,x),
+            double,
             SocketAddress("127.0.0.1", 7000),
             redis_zero,
             [redis_one]).run()
@@ -27,7 +33,7 @@ def run_m2():
     print("Running m2")
     Transformer(
             "m2",
-            lambda x: "%sm2%s" % (x,x),
+            prepend_len,
             SocketAddress("127.0.0.1", 7000),
             redis_one,
             [redis_zero]).run()

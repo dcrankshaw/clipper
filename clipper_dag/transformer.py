@@ -47,6 +47,7 @@ class Tuple(object):
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
+
     def __hash__(self):
         return hash((self.tuple_id, self.data))
 
@@ -62,6 +63,11 @@ class SocketAddress(object):
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
+
+    def __gt__(self, other):
+        if self.host > other.host:
+            return True
+        return self.port > other.port
 
     def __hash__(self):
         return hash((self.host, self.port))
@@ -309,7 +315,8 @@ class Transformer(object):
             if ids is None:
                 continue
             keyfunc = lambda item: item[0]
-            addrs_and_ids = [extract_addr(i) for i in ids].sort(key=keyfunc)
+            addrs_and_ids = sorted([extract_addr(i) for i in ids], key=keyfunc)
+            print(addrs_and_ids)
             tuples = []
             for k, g in itertools.groupby(addrs_and_ids, key=keyfunc):
                 tuples.extend(self.object_store.get(k, [item[1] for item in g]))
@@ -378,4 +385,6 @@ def extract_addr(id_str):
     host = splits[0]
     port = int(splits[1])
     obj_id = KEY_DELIMITER.join(splits[2:])
-    return (SocketAddr(host, port), obj_id)
+    address = SocketAddress(host, port)
+    # print(address, obj_id)
+    return (address, obj_id)
