@@ -18,7 +18,9 @@ def double(tuples):
 
 
 def prepend_len(tuples):
-    return [Tuple(t.tuple_id, "%d: %s" % (len(t.data), t.data)) for t in tuples]
+    new_ts = [Tuple(t.tuple_id, "%d: %s" % (len(t.data), t.data)) for t in tuples]
+    print(new_ts)
+    return new_ts
 
 def run_m1():
     print("Running m1")

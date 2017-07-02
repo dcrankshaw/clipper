@@ -44,6 +44,9 @@ class Tuple(object):
     def __str__(self):
         return "id: {id}, data: {data}".format(id=self.tuple_id, data=str(self.data))
 
+    def __repr__(self):
+        return self.__str__()
+
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
 
