@@ -366,7 +366,7 @@ class Sink(object):
             if ids is None:
                 continue
             keyfunc = lambda item: item[0]
-            addrs_and_ids = [extract_addr(i) for i in ids].sort(key=keyfunc)
+            addrs_and_ids = sorted([extract_addr(i) for i in ids], key=keyfunc)
             tuples = []
             for k, g in itertools.groupby(addrs_and_ids, key=keyfunc):
                 tuples.extend(self.object_store.get(k, [item[1] for item in g]))

@@ -11,7 +11,7 @@ def run_source():
     print("Running source node")
     source = Source("source", SocketAddress("127.0.0.1", 7000), redis_zero, [redis_one])
     for line in sys.stdin:
-        source.send(line.split(" "))
+        source.send(line.strip().split(" "))
 
 def double(tuples):
     return [Tuple(t.tuple_id, "%s%s" % (t.data, t.data)) for t in tuples]

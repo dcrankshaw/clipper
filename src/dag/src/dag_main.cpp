@@ -21,14 +21,14 @@ using namespace clipper;
 int main() {
   std::vector<VersionedModelId> nodes{
       VersionedModelId("source", "1"), VersionedModelId("m1", "1"),
-      VersionedModelId("m2", "1"), VersionedModelId("m3", "1"),
+      // VersionedModelId("m2", "1"), VersionedModelId("m3", "1"),
       VersionedModelId("sink", "1")};
 
   std::unordered_map<VersionedModelId, VersionedModelId> edges{
-      {nodes[0], nodes[1]},
-      {nodes[1], nodes[2]},
-      {nodes[2], nodes[3]},
-      {nodes[3], nodes[4]}};
+      {nodes[0], nodes[1]}, {nodes[1], nodes[2]},
+      // {nodes[2], nodes[3]},
+      // {nodes[3], nodes[4]}
+  };
 
   DAGExecutor dag{nodes, edges};
   while (true) {
