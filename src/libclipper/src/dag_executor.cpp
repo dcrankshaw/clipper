@@ -4,6 +4,7 @@
 #include <clipper/dag_executor.hpp>
 #include <clipper/logging.hpp>
 #include <clipper/rpc_service.hpp>
+#include <clipper/threadpool.hpp>
 
 namespace clipper {
 
@@ -29,20 +30,38 @@ DAGExecutor::DAGExecutor(
   }
 
   rpc_->start(
-      "*", RPC_SERVICE_PORT, [ this, task_executor_valid = active_ ](
-                                 VersionedModelId model, int replica_id) {
-        if (*task_executor_valid) {
-          send_next_batch(model, replica_id);
-        } else {
-          log_info(LOGGING_TAG_DAG_EXECUTOR,
-                   "Not running send_next_batch callback because "
-                   "DAGExecutor has been destroyed.");
-        }
-      },
+      "*", RPC_SERVICE_PORT,
+      // [ this, task_executor_valid = active_ ](
+      //                            VersionedModelId model, int replica_id) {
+      //   if (*task_executor_valid) {
+      //     send_next_batch(model, replica_id);
+      //   } else {
+      //     log_info(LOGGING_TAG_DAG_EXECUTOR,
+      //              "Not running send_next_batch callback because "
+      //              "DAGExecutor has been destroyed.");
+      //   }
+      // },
       [ this, task_executor_valid = active_ ](VersionedModelId model,
+                                              int replica_id,
                                               std::vector<ObjectId> objects) {
         if (*task_executor_valid) {
           process_response(model, std::move(objects));
+          std::shared_ptr<ModelContainer> container =
+              active_containers_->get_model_replica(model, replica_id);
+          if (container->get_type() != ContainerType::Source) {
+            TaskExecutionThreadPool::submit_job(
+                model, replica_id, [ this, task_executor_valid = active_ ](
+                                       VersionedModelId model, int replica_id) {
+                  if (*task_executor_valid) {
+                    send_next_batch(model, replica_id);
+                  } else {
+                    log_info(LOGGING_TAG_DAG_EXECUTOR,
+                             "Not running send_next_batch callback because "
+                             "DAGExecutor has been destroyed.");
+                  }
+                },
+                model, replica_id);
+          }
         } else {
           log_info(LOGGING_TAG_DAG_EXECUTOR,
                    "Not running process_response callback because "
@@ -52,13 +71,29 @@ DAGExecutor::DAGExecutor(
       },
       [ this, task_executor_valid = active_ ](
           VersionedModelId model, int replica_id, int zmq_connection_id,
-          InputType input_type) {
+          InputType input_type, ContainerType ct) {
         if (*task_executor_valid) {
           log_info_formatted(LOGGING_TAG_DAG_EXECUTOR,
                              "NEW CONNECTION: Replica {} for model {}",
                              std::to_string(replica_id), model.serialize());
           active_containers_->add_container(model, zmq_connection_id,
-                                            replica_id, input_type);
+                                            replica_id, input_type, ct);
+          std::shared_ptr<ModelContainer> container =
+              active_containers_->get_model_replica(model, replica_id);
+          if (container->get_type() != ContainerType::Source) {
+            TaskExecutionThreadPool::submit_job(
+                model, replica_id, [ this, task_executor_valid = active_ ](
+                                       VersionedModelId model, int replica_id) {
+                  if (*task_executor_valid) {
+                    send_next_batch(model, replica_id);
+                  } else {
+                    log_info(LOGGING_TAG_DAG_EXECUTOR,
+                             "Not running send_next_batch callback because "
+                             "DAGExecutor has been destroyed.");
+                  }
+                },
+                model, replica_id);
+          }
         } else {
           log_info(LOGGING_TAG_DAG_EXECUTOR,
                    "Not running new_container callback because "
@@ -79,16 +114,27 @@ void DAGExecutor::process_response(VersionedModelId vm,
     for (auto o : objects) {
       q->add_task(o);
     }
+    log_info_formatted(LOGGING_TAG_DAG_EXECUTOR, "Added {} tasks to {} queue",
+                       objects.size(), next_node->second.serialize());
+  } else {
+    log_error_formatted(LOGGING_TAG_DAG_EXECUTOR,
+                        "No outgoing node found from model {}", vm.serialize());
   }
 }
 
 void DAGExecutor::send_next_batch(VersionedModelId vm, int replica_id) {
+  log_info_formatted(LOGGING_TAG_DAG_EXECUTOR,
+                     "Ready to send next batch for model {} replica {}",
+                     vm.serialize(), std::to_string(replica_id));
   auto q = node_queues_[vm];
+  log_info_formatted(LOGGING_TAG_DAG_EXECUTOR, "{} queue size {}",
+                     vm.serialize(), std::to_string(q->get_size()));
   std::vector<ObjectId> batch =
       q->get_batch([](Deadline /*deadline*/) { return batch_size; });
+  log_info(LOGGING_TAG_DAG_EXECUTOR, "Found {} item batch", batch.size());
+  std::shared_ptr<ModelContainer> container =
+      active_containers_->get_model_replica(vm, replica_id);
   if (batch.size() > 0) {
-    std::shared_ptr<ModelContainer> container =
-        active_containers_->get_model_replica(vm, replica_id);
     if (!container) {
       throw std::runtime_error(
           "TaskExecutor failed to find previously registered active "
@@ -99,12 +145,31 @@ void DAGExecutor::send_next_batch(VersionedModelId vm, int replica_id) {
     log_info_formatted(LOGGING_TAG_DAG_EXECUTOR, "Sent batch to model {}",
                        vm.serialize());
   }
+
+  // TODO: need some back pressure here?
+  // If this is a sink node, don't wait for a response,
+  // immediately allow the next batch of messages to be sent
+  if (container->get_type() == ContainerType::Sink) {
+    TaskExecutionThreadPool::submit_job(
+        vm, replica_id, [ this, task_executor_valid = active_ ](
+                            VersionedModelId model, int replica_id) {
+          if (*task_executor_valid) {
+            send_next_batch(model, replica_id);
+
+          } else {
+            log_info(LOGGING_TAG_DAG_EXECUTOR,
+                     "Not running send_next_batch callback because "
+                     "DAGExecutor has been destroyed.");
+          }
+        },
+        vm, replica_id);
+  }
 }
 
 ModelQueue::ModelQueue() : queue_(ModelPQueue{}) {}
 
 void ModelQueue::add_task(ObjectId task) {
-  std::lock_guard<std::mutex> lock(queue_mutex_);
+  std::unique_lock<std::mutex> lock(queue_mutex_);
   Deadline deadline =
       std::chrono::system_clock::now() + std::chrono::microseconds(latency_slo);
   queue_.emplace(deadline, std::move(task));

@@ -21,11 +21,13 @@ namespace clipper {
 const std::string LOGGING_TAG_CONTAINERS = "CONTAINERS";
 
 ModelContainer::ModelContainer(VersionedModelId model, int container_id,
-                               int replica_id, InputType input_type)
+                               int replica_id, InputType input_type,
+                               ContainerType container_type)
     : model_(model),
       container_id_(container_id),
       replica_id_(replica_id),
       input_type_(input_type),
+      container_type_(container_type),
       avg_throughput_per_milli_(0),
       throughput_buffer_(THROUGHPUT_BUFFER_CAPACITY) {
   std::string model_str = model.serialize();
@@ -89,6 +91,8 @@ size_t ModelContainer::get_batch_size(Deadline deadline) {
   return batch_size;
 }
 
+ContainerType ModelContainer::get_type() const { return container_type_; }
+
 ActiveContainers::ActiveContainers()
     : containers_(
           std::unordered_map<VersionedModelId,
@@ -96,15 +100,16 @@ ActiveContainers::ActiveContainers()
               {})) {}
 
 void ActiveContainers::add_container(VersionedModelId model, int connection_id,
-                                     int replica_id, InputType input_type) {
+                                     int replica_id, InputType input_type,
+                                     ContainerType ct) {
   log_info_formatted(LOGGING_TAG_CONTAINERS,
                      "Adding new container - model: {}, version: {}, "
                      "connection ID: {}, replica ID: {}, input_type: {}",
                      model.get_name(), model.get_id(), connection_id,
                      replica_id, get_readable_input_type(input_type));
   boost::unique_lock<boost::shared_mutex> l{m_};
-  auto new_container = std::make_shared<ModelContainer>(model, connection_id,
-                                                        replica_id, input_type);
+  auto new_container = std::make_shared<ModelContainer>(
+      model, connection_id, replica_id, input_type, ct);
   auto entry = containers_[new_container->model_];
   entry.emplace(replica_id, new_container);
   containers_[new_container->model_] = entry;

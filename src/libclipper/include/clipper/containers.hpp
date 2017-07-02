@@ -16,11 +16,17 @@ namespace clipper {
 // due to its cross-platform consistency (consistent epoch, resolution)
 using Deadline = std::chrono::time_point<std::chrono::system_clock>;
 
+enum class ContainerType {
+  Inner = 0,
+  Source = 1,
+  Sink = 2,
+};
+
 class ModelContainer {
  public:
   ~ModelContainer() = default;
   ModelContainer(VersionedModelId model, int container_id, int replica_id,
-                 InputType input_type);
+                 InputType input_type, ContainerType container_type);
   // disallow copy
   ModelContainer(const ModelContainer &) = delete;
   ModelContainer &operator=(const ModelContainer &) = delete;
@@ -29,6 +35,7 @@ class ModelContainer {
   ModelContainer &operator=(ModelContainer &&) = default;
 
   size_t get_batch_size(Deadline deadline);
+  ContainerType get_type() const;
   double get_average_throughput_per_millisecond();
   void update_throughput(size_t batch_size, long total_latency);
   void send_feedback(PredictTask task);
@@ -37,6 +44,7 @@ class ModelContainer {
   int container_id_;
   int replica_id_;
   InputType input_type_;
+  ContainerType container_type_;
 
  private:
   bool connected_{true};
@@ -62,7 +70,7 @@ class ActiveContainers {
   ActiveContainers &operator=(ActiveContainers &&) = default;
 
   void add_container(VersionedModelId model, int connection_id, int replica_id,
-                     InputType input_type);
+                     InputType input_type, ContainerType ct);
 
   /// This method returns the active container specified by the
   /// provided model id and replica id. This is threadsafe because each

@@ -34,10 +34,16 @@ using TransformerRPCRequest =
     std::tuple<const int, const TransformerBatchMessage, const long>;
 
 enum class MessageType {
-  NewContainer = 0,
+  NewInnerNode = 0,
   TransformerBatch = 1,
   JoinBatch = 2,
   ConditionalBatch = 3,
+  // TODO TODO TODO: The issue is that source nodes should
+  // never call on_container_ready (no messages are sent to sources)
+  // and sink nodes should never call process_response (no responses
+  // are received from sinks).
+  NewSourceNode = 4,
+  NewSinkNode = 5,
 };
 
 enum class HeartbeatType { KeepAlive = 0, RequestContainerMetadata = 1 };
@@ -56,10 +62,11 @@ class RPCService {
    */
   void start(
       const string ip, const int port,
-      std::function<void(VersionedModelId, int)> &&transform_ready_callback,
-      std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
+      // std::function<void(VersionedModelId, int)> &&transform_ready_callback,
+      std::function<void(VersionedModelId, int,
+                         std::vector<std::vector<uint8_t>>)>
           &&new_transformer_response_callback,
-      std::function<void(VersionedModelId, int, int, InputType)>
+      std::function<void(VersionedModelId, int, int, InputType, ContainerType)>
           &&new_container_callback);
   /**
    * Stops the RPC Service. This is called implicitly within the RPCService
@@ -106,10 +113,10 @@ class RPCService {
   std::unordered_map<VersionedModelId, int> replica_ids_;
   std::shared_ptr<metrics::Histogram> msg_queueing_hist_;
 
-  std::function<void(VersionedModelId, int)> container_ready_callback_;
-  std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
-      new_transformer_response_callback_;
-  std::function<void(VersionedModelId, int, int, InputType)>
+  // std::function<void(VersionedModelId, int)> container_ready_callback_;
+  std::function<void(VersionedModelId, int, std::vector<std::vector<uint8_t>>)>
+      transformer_response_callback_;
+  std::function<void(VersionedModelId, int, int, InputType, ContainerType)>
       new_container_callback_;
 };
 

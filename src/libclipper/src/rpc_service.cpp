@@ -46,13 +46,14 @@ RPCService::~RPCService() { stop(); }
 
 void RPCService::start(
     const string ip, const int port,
-    std::function<void(VersionedModelId, int)> &&container_ready_callback,
-    std::function<void(VersionedModelId, std::vector<std::vector<uint8_t>>)>
-        &&new_transformer_response_callback,
-    std::function<void(VersionedModelId, int, int, InputType)>
+    // std::function<void(VersionedModelId, int)> &&container_ready_callback,
+    std::function<void(VersionedModelId, int,
+                       std::vector<std::vector<uint8_t>>)>
+        &&transformer_response_callback,
+    std::function<void(VersionedModelId, int, int, InputType, ContainerType)>
         &&new_container_callback) {
-  container_ready_callback_ = container_ready_callback;
-  new_transformer_response_callback_ = new_transformer_response_callback;
+  // container_ready_callback_ = container_ready_callback;
+  transformer_response_callback_ = transformer_response_callback;
   new_container_callback_ = new_container_callback;
   if (active_) {
     throw std::runtime_error(
@@ -240,7 +241,16 @@ void RPCService::receive_message(
       connections.right.find(connection_id);
   bool new_connection = (connection == connections.right.end());
   switch (type) {
-    case MessageType::NewContainer: {
+    case MessageType::NewSourceNode:
+    case MessageType::NewSinkNode:
+    case MessageType::NewInnerNode: {
+      if (type == MessageType::NewSourceNode) {
+        log_info(LOGGING_TAG_RPC, "Received NewSourceNode message");
+      } else if (type == MessageType::NewSinkNode) {
+        log_info(LOGGING_TAG_RPC, "Received NewSinkNode message");
+      } else if (type == MessageType::NewInnerNode) {
+        log_info(LOGGING_TAG_RPC, "Received NewInnerNode message");
+      }
       message_t model_name;
       socket.recv(&model_name, 0);
       if (new_connection) {
@@ -262,19 +272,33 @@ void RPCService::receive_message(
         // check if the key is present in the map.
         int cur_replica_id = replica_ids_[model];
         replica_ids_[model] = cur_replica_id + 1;
-        new_container_callback_(model, cur_replica_id, zmq_connection_id,
-                                InputType::Strings);
-        // redis::add_container(*redis_connection, model, cur_replica_id,
-        //                      zmq_connection_id, InputType::Strings);
+
+        ContainerType ct = ContainerType::Inner;
+        if (type == MessageType::NewSourceNode) {
+          ct = ContainerType::Source;
+        } else if (type == MessageType::NewSinkNode) {
+          ct = ContainerType::Sink;
+        }
+        TaskExecutionThreadPool::create_queue(model, cur_replica_id);
+
         connections_containers_map.emplace(
             connection_id,
             std::pair<VersionedModelId, int>(model, cur_replica_id));
 
-        TaskExecutionThreadPool::create_queue(model, cur_replica_id);
+        new_container_callback_(model, cur_replica_id, zmq_connection_id,
+                                InputType::Strings, ct);
+
+        // if (ct != ContainerType::Source) {
+        //   TaskExecutionThreadPool::submit_job(model, cur_replica_id,
+        //                                       container_ready_callback_,
+        //                                       model,
+        //                                       cur_replica_id);
+        // }
         zmq_connection_id += 1;
       }
     } break;
     case MessageType::TransformerBatch: {
+      log_info(LOGGING_TAG_RPC, "Received TransformerBatch message");
       message_t batch_size_msg;
       socket.recv(&batch_size_msg, 0);
       if (!new_connection) {
@@ -312,12 +336,13 @@ void RPCService::receive_message(
 
         VersionedModelId vm = container_info.first;
         int replica_id = container_info.second;
-        TaskExecutionThreadPool::submit_job(
-            vm, replica_id, new_transformer_response_callback_, vm, batch);
-        TaskExecutionThreadPool::submit_job(
-            vm, replica_id, container_ready_callback_, vm, replica_id);
-
-        // response_queue_->push(response);
+        TaskExecutionThreadPool::submit_job(vm, replica_id,
+                                            transformer_response_callback_, vm,
+                                            replica_id, batch);
+        // if (ct == ContainerType::Inner) {
+        //   TaskExecutionThreadPool::submit_job(
+        //       vm, replica_id, container_ready_callback_, vm, replica_id);
+        // }
       }
     } break;
     case MessageType::JoinBatch:

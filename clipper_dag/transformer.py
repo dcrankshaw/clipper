@@ -11,8 +11,14 @@ import itertools
 KEY_DELIMITER = ":"
 
 SOCKET_POLLING_TIMEOUT_MILLIS = None # never time out
+MESSAGE_TYPE_NEW_INNER_NODE = 0
+MESSAGE_TYPE_NEW_SOURCE_NODE = 4
+MESSAGE_TYPE_NEW_SINK_NODE = 5
 MESSAGE_TYPE_BATCH = 1
-MESSAGE_TYPE_NEW_CONTAINER = 0
+
+NODE_TYPE_SOURCE = "source"
+NODE_TYPE_SINK = "sink"
+NODE_TYPE_INNER = "inner"
 
 """
 Batch messages are the only message types sent and received between
@@ -141,7 +147,8 @@ class ObjectStore(object):
 
 class ClipperConnection(object):
 
-    def __init__(self, address, node_name):
+
+    def __init__(self, address, node_name, node_type):
         """
 
         Parameters
@@ -150,6 +157,8 @@ class ClipperConnection(object):
             Address of Clipper service
         node_name : str
             Unique identifier for this node in the DAG
+        node_name : str
+            One of inner, source, sink
         """
         self.address = address
         self.node_name = node_name
@@ -158,6 +167,9 @@ class ClipperConnection(object):
         self.socket = self.context.socket(zmq.DEALER)
         self.clipper_addr_string = "tcp://{0}:{1}".format(self.address.host,
                                                  self.address.port)
+        if node_type not in [NODE_TYPE_INNER, NODE_TYPE_SOURCE, NODE_TYPE_SINK]:
+            raise TransformerError("Invalid node type: %s provided to ClipperConnection" % node_type)
+        self.node_type = node_type
         sys.stdout.flush()
         sys.stderr.flush()
         self.connected = False
@@ -166,7 +178,12 @@ class ClipperConnection(object):
         self.poller.register(self.socket, zmq.POLLIN)
         self.socket.connect(self.clipper_addr_string)
         self.socket.send("".encode('utf-8'), zmq.SNDMORE)
-        self.socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_CONTAINER), zmq.SNDMORE)
+        if self.node_type == NODE_TYPE_SOURCE:
+            self.socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_SOURCE_NODE), zmq.SNDMORE)
+        elif self.node_type == NODE_TYPE_SINK:
+            self.socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_SINK_NODE), zmq.SNDMORE)
+        else:
+            self.socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_INNER_NODE), zmq.SNDMORE)
         # self.socket.send_string(self.node_name.encode('utf-8'))
         self.socket.send(self.node_name.encode('utf-8'))
         print("Sent container metadata!")
@@ -190,6 +207,8 @@ class ClipperConnection(object):
                 <obj_store_host>:<obj_store_port>:<obj_id_key>
 
         """
+        # Sinks can't send messages to Clipper
+        assert self.node_type != NODE_TYPE_SINK
         send_time_start = datetime.now()
         batch_ids = response_batch
         if not type(batch_ids) == list:
@@ -215,6 +234,8 @@ class ClipperConnection(object):
             -------
             list(string) : The next batch of inputs
         """
+        # Sources can't receive messages from Clipper
+        assert self.node_type != NODE_TYPE_SOURCE
         receivable_sockets = dict(
             self.poller.poll(SOCKET_POLLING_TIMEOUT_MILLIS))
         if self.socket not in receivable_sockets or receivable_sockets[self.socket] != zmq.POLLIN:
@@ -224,7 +245,7 @@ class ClipperConnection(object):
         self.socket.recv()
         msg_type_bytes = self.socket.recv()
         msg_type = struct.unpack("<I", msg_type_bytes)[0]
-        if msg_type != MESSAGE_TYPE_CONTAINER_CONTENT:
+        if msg_type != MESSAGE_TYPE_BATCH:
             print("Received incorrect message type: %d. Shutting down!" % msg_type)
             self.disconnect()
             raise TransformerException("Received invalid message from Clipper Service")
@@ -242,37 +263,15 @@ class ClipperConnection(object):
         sys.stdout.flush()
         sys.stderr.flush()
         return batch_ids
-        # host, port = address.split(":")
-        # return (SocketAddress(host, int(port)), batch_ids)
-
-    # def get_next_batch(self, response_batch=None):
-    #     """
-    #         Parameters
-    #         ----------
-    #         response_batch : list(string), optional
-    #             The list of object IDs as strings. Each ID has the following format
-    #             <obj_store_host>:<obj_store_port>:<obj_id_key>
-    #
-    #         Returns
-    #         -------
-    #         list(string) : The next batch of inputs
-    #     """
-    #     if response_batch is not None:
-    #         self.send_batch(response_batch)
-    #
-    #     return self.receive_batch()
-
 
 
 class TransformerMessage():
-    # def __init__(self, address, batch_ids):
     def __init__(self, batch_ids):
         """
         Parameters
         ----------
         batch_ids : list(str)
         """
-        # self.address = address
         self.batch_ids = batch_ids
 
 
@@ -289,9 +288,6 @@ class TransformerMessage():
         socket.send("".encode('utf-8'), flags=zmq.SNDMORE)
         socket.send(struct.pack("<I", MESSAGE_TYPE_BATCH), zmq.SNDMORE)
         socket.send(struct.pack("<I", len(self.batch_ids)), zmq.SNDMORE)
-        # socket.send(int(MESSAGE_TYPE_BATCH), flags=zmq.SNDMORE)
-        # socket.send(len(self.batch_ids), flags=zmq.SNDMORE)
-        # socket.send(self.address.encode('utf-8'), flags=zmq.SNDMORE)
         for i in range(len(self.batch_ids) - 1):
             socket.send(self.batch_ids[i].encode('utf-8'), flags=zmq.SNDMORE)
         socket.send(self.batch_ids[-1].encode('utf-8'))
@@ -302,16 +298,13 @@ class Transformer(object):
 
     def __init__(self, name, transform_func, clipper_addr, local_obj_store, cluster):
         self.name = name
-        self.clipper_conn = ClipperConnection(clipper_addr, name)
+        self.clipper_conn = ClipperConnection(clipper_addr, name, NODE_TYPE_INNER)
         self.clipper_conn.connect()
         self.object_store = ObjectStore(name, local_obj_store, cluster)
         self.transform_func = transform_func
 
     def run(self):
-        # completed_batch = None
         while True:
-            # Combine notification of completed batch and request for next batch
-            # into single message
             ids = self.clipper_conn.receive_batch()
             if ids is None:
                 continue
@@ -330,7 +323,7 @@ class Source(object):
 
     def __init__(self, name, clipper_addr, local_obj_store, cluster):
         self.name = name
-        self.clipper_conn = ClipperConnection(clipper_addr, name)
+        self.clipper_conn = ClipperConnection(clipper_addr, name, NODE_TYPE_SOURCE)
         self.object_store = ObjectStore(name, local_obj_store, cluster)
         self.clipper_conn.connect()
         self.current_tuple_id = 0
@@ -350,7 +343,7 @@ class Sink(object):
 
     def __init__(self, name, clipper_addr, local_obj_store, cluster):
         self.name = name
-        self.clipper_conn = ClipperConnection(clipper_addr, name)
+        self.clipper_conn = ClipperConnection(clipper_addr, name, NODE_TYPE_SINK)
         self.clipper_conn.connect()
         self.object_store = ObjectStore(name, local_obj_store, cluster)
 
