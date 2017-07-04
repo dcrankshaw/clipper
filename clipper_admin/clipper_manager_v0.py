@@ -1,21 +1,20 @@
 """Clipper Management Utilities"""
 
 from __future__ import print_function, with_statement, absolute_import
-import docker
 from fabric.api import *
 from fabric.contrib.files import append
 import os
 import requests
 import json
 import yaml
+import pprint
 import subprocess32 as subprocess
 import shutil
 from sklearn import base
 from sklearn.externals import joblib
 from cStringIO import StringIO
+import sys
 from .cloudpickle import CloudPickler
-from .clipper_k8s import ClipperK8s
-import logging
 import time
 import re
 
@@ -34,6 +33,7 @@ REDIS_CONTAINER_DB_NUM = 3
 REDIS_RESOURCE_DB_NUM = 4
 REDIS_APPLICATION_DB_NUM = 5
 
+DEFAULT_REDIS_IP = "redis"
 DEFAULT_REDIS_PORT = 6379
 CLIPPER_QUERY_PORT = 1337
 CLIPPER_MANAGEMENT_PORT = 1338
@@ -42,8 +42,11 @@ CLIPPER_RPC_PORT = 7000
 CLIPPER_LOGS_PATH = "/tmp/clipper-logs"
 
 CLIPPER_DOCKER_LABEL = "ai.clipper.container.label"
-CLIPPER_MODEL_CONTAINER_LABEL = "ai.clipper.model_container.label"
+CLIPPER_MODEL_CONTAINER_LABEL = "ai.clipper.model_container.model_version"
 
+DEFAULT_MODEL_VERSION = 1
+DEFAULT_DEFAULT_OUTPUT = "None"
+DEFAULT_SLO_MICROS = 100000
 DEFAULT_LABEL = ["DEFAULT"]
 
 aws_cli_config = """
@@ -60,7 +63,6 @@ EXTERNALLY_MANAGED_MODEL = "EXTERNAL"
 
 class ClipperManagerException(Exception):
     pass
-
 
 
 class Clipper:
@@ -88,6 +90,15 @@ class Clipper:
         The SSH port to use. Default is port 22.
     check_for_docker : bool, optional
         If True, checks that Docker is running on the host machine. Default is True.
+    redis_port : int, optional
+        The port to use for connecting to redis. Default is port 6379.
+    redis_ip : string, optional
+        The ip address of the redis instance that Clipper should use.
+        If unspecified, a docker container running redis will be started
+        on `host` at the port specified by `redis_port`.
+    redis_persistence_path : string, optional
+        The directory path to which redis data should be persisted. The directory
+        should not already exist. If unspecified, redis will not persist data to disk. 
     restart_containers : bool, optional
         If true, containers will restart on failure. If false, containers
         will not restart automatically.
@@ -101,16 +112,128 @@ class Clipper:
                  sudo=False,
                  ssh_port=22,
                  check_for_docker=True,
-                 restart_containers=True):
-        # TODO: support deploying redis host off-cluster by taking redis_ip as constructor param to ClipperK8s
-        logging.basicConfig(level=logging.INFO)
-        self.clipper_k8s = ClipperK8s()
+                 redis_ip=DEFAULT_REDIS_IP,
+                 redis_port=DEFAULT_REDIS_PORT,
+                 redis_persistence_path=None,
+                 restart_containers=False):
+        self.redis_ip = redis_ip
+        self.redis_port = redis_port
+        self.docker_compost_dict = {
+            'networks': {
+                'default': {
+                    'external': {
+                        'name': DOCKER_NW
+                    }
+                }
+            },
+            'services': {
+                'mgmt_frontend': {
+                    'command': [
+                        '--redis_ip=%s' % self.redis_ip,
+                        '--redis_port=%d' % self.redis_port
+                    ],
+                    'image':
+                    'clipper/management_frontend:latest',
+                    'ports': [
+                        '%d:%d' % (CLIPPER_MANAGEMENT_PORT,
+                                   CLIPPER_MANAGEMENT_PORT)
+                    ],
+                    'labels': {
+                        CLIPPER_DOCKER_LABEL: ""
+                    }
+                },
+                'query_frontend': {
+                    'command': [
+                        '--redis_ip=%s' % self.redis_ip,
+                        '--redis_port=%d' % self.redis_port
+                    ],
+                    'depends_on': ['mgmt_frontend'],
+                    'image':
+                    'clipper/query_frontend:latest',
+                    'ports': [
+                        '%d:%d' % (CLIPPER_RPC_PORT, CLIPPER_RPC_PORT),
+                        '%d:%d' % (CLIPPER_QUERY_PORT, CLIPPER_QUERY_PORT)
+                    ],
+                    'labels': {
+                        CLIPPER_DOCKER_LABEL: ""
+                    }
+                }
+            },
+            'version': '2'
+        }
+        start_redis = (self.redis_ip == DEFAULT_REDIS_IP)
+        if start_redis:
+            self.docker_compost_dict['services']['redis'] = {
+                'image': 'redis:alpine',
+                'ports': ['%d:%d' % (self.redis_port, self.redis_port)],
+                'command': "redis-server --port %d" % self.redis_port,
+                'labels': {
+                    CLIPPER_DOCKER_LABEL: ""
+                }
+            }
+            self.docker_compost_dict['services']['mgmt_frontend'][
+                'depends_on'] = ['redis']
+            self.docker_compost_dict['services']['query_frontend'][
+                'depends_on'].append('redis')
+            if redis_persistence_path:
+                if not os.path.exists(redis_persistence_path):
+                    self.docker_compost_dict['services']['redis'][
+                        'volumes'] = ['%s:/data' % redis_persistence_path]
+                else:
+                    print(
+                        "The directory specified by the redis persistence path already exists"
+                    )
+                    raise ClipperManagerException(
+                        "The directory specified by the redis persistence path already exists"
+                    )
+        self.restart_containers = restart_containers
+        if self.restart_containers:
+            self.docker_compost_dict['services']['mgmt_frontend'][
+                'restart'] = 'always'
+            self.docker_compost_dict['services']['query_frontend'][
+                'restart'] = 'always'
+            if start_redis:
+                self.docker_compost_dict['services']['redis'][
+                    'restart'] = 'always'
+
         self.sudo = sudo
         self.host = host
-        self.host_string = self.host
+        if self._host_is_local():
+            self.host = "localhost"
+            env.host_string = self.host
+        else:
+            if not user or not key_path:
+                print(
+                    "user and key_path must be specified when instantiating Clipper with a nonlocal host"
+                )
+                raise ClipperManagerException(
+                    "user and key_path must be specified when instantiating Clipper with a nonlocal host"
+                )
+            env.user = user
+            env.key_filename = key_path
+            env.host_string = "%s:%d" % (host, ssh_port)
+        if check_for_docker:
+            # Make sure docker is running on cluster
+            self._start_docker_if_necessary()
 
     def _host_is_local(self):
-        return True
+        return self.host in LOCAL_HOST_NAMES
+
+    def _start_docker_if_necessary(self):
+        with hide("warnings", "output", "running"):
+            print("Checking if Docker is running...")
+            self._execute_root("docker ps")
+            dc_installed = self._execute_root(
+                "docker-compose --version", warn_only=True)
+            if dc_installed.return_code != 0:
+                print("docker-compose not installed on host.")
+                raise ClipperManagerException(
+                    "docker-compose not installed on host.")
+            nw_create_command = ("docker network create --driver bridge {nw}"
+                                 .format(nw=DOCKER_NW))
+            self._execute_root(nw_create_command, warn_only=True)
+            self._execute_standard(
+                "mkdir -p {model_repo}".format(model_repo=MODEL_REPO))
 
     def _execute_root(self, *args, **kwargs):
         if not self.sudo:
@@ -131,9 +254,9 @@ class Clipper:
             root_args = list(args)
             root_args[0] = "sudo %s" % root_args[0]
             args = tuple(root_args)
-        # local is not currently capable of simultaneously logging.infoing and
+        # local is not currently capable of simultaneously printing and
         # capturing output, as run/sudo do. The capture kwarg allows you to
-        # switch between logging.infoing and capturing as necessary, and defaults to
+        # switch between printing and capturing as necessary, and defaults to
         # False. In this case, we need to capture the output and return it.
         if "capture" not in kwargs:
             kwargs["capture"] = True
@@ -187,12 +310,21 @@ class Clipper:
         """Start a Clipper instance.
 
         """
-        self.clipper_k8s.start()
-        logging.info("Clipper is running")
+        with hide("output", "warnings", "running"):
+            self._execute_standard("rm -f docker-compose.yml")
+            self._execute_append("docker-compose.yml",
+                                 yaml.dump(
+                                     self.docker_compost_dict,
+                                     default_flow_style=False))
+            print(
+                "Note: Docker must download the Clipper Docker images if they are not already cached. This may take awhile."
+            )
+            self._execute_root("docker-compose up -d query_frontend")
+            print("Clipper is running")
 
     def register_application(self, name, model, input_type, default_output,
                              slo_micros):
-        """Register a new Clipper application.
+        """Register a new Clipper application and returns the response object.
 
         Parameters
         ----------
@@ -207,8 +339,8 @@ class Clipper:
             by the end of the latency objective.
         slo_micros : int
             The query latency objective for the application in microseconds.
-            This is the processing latency between Clipper receiving a request
-            and sending a response. It does not account for network latencies
+            This is the processing latency between Clipper receiving a request 
+            and sending a response. It does not account for network latencies 
             before a request is received or after a response is sent.
 
             If Clipper cannot process a query within the latency objective,
@@ -216,6 +348,12 @@ class Clipper:
             the objective not be set aggressively low unless absolutely necessary.
             40000 (40ms) is a good starting value, but the optimal latency objective
             will vary depending on the application.
+
+        Returns
+        -------
+        bool
+            Returns true iff the app registration request was successful
+
         """
         url = "http://%s:%d/admin/add_app" % (self.host,
                                               CLIPPER_MANAGEMENT_PORT)
@@ -228,7 +366,8 @@ class Clipper:
         })
         headers = {'Content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req_json)
-        logging.info(r.text)
+        print(r.text)
+        return r.status_code == requests.codes.ok
 
     def get_all_apps(self, verbose=False):
         """Gets information about all applications registered with Clipper.
@@ -255,7 +394,7 @@ class Clipper:
         if r.status_code == requests.codes.ok:
             return r.json()
         else:
-            logging.warn(r.text)
+            print(r.text)
             return None
 
     def get_app_info(self, name):
@@ -285,7 +424,7 @@ class Clipper:
                 return None
             return app_info
         else:
-            logging.warn(r.text)
+            print(r.text)
             return None
 
     def deploy_model(self,
@@ -302,7 +441,7 @@ class Clipper:
         ----------
         name : str
             The name to assign this model.
-        version : int
+        version : Any object with a string representation (with __str__ implementation)
             The version to assign this model.
         model_data : str or BaseEstimator
             The trained model to add to Clipper. This can either be a
@@ -326,8 +465,8 @@ class Clipper:
         with hide("warnings", "output", "running"):
             if isinstance(model_data, base.BaseEstimator):
                 fname = name.replace("/", "_")
+                pkl_path = '/tmp/%s/%s.pkl' % (fname, fname)
                 model_data_path = "/tmp/%s" % fname
-                pkl_path = '%s/%s.pkl' % (model_data_path, fname)
                 try:
                     os.mkdir(model_data_path)
                 except OSError:
@@ -336,48 +475,39 @@ class Clipper:
             elif isinstance(model_data, str):
                 # assume that model_data is a path to the serialized model
                 model_data_path = model_data
+                print("model_data_path is: %s" % model_data_path)
             else:
                 warn("%s is invalid model format" % str(type(model_data)))
                 return False
 
+            version = str(version)
             vol = "{model_repo}/{name}/{version}".format(
                 model_repo=MODEL_REPO, name=name, version=version)
-
-            # prepare docker image build dir
-            with open(model_data_path + '/Dockerfile', 'w') as f:
-                f.write("FROM {container_name}\nCOPY . /model/.\n".format(container_name=container_name))
-
-            # build, tag, and push docker image to registry
-            # NOTE: DOCKER_API_VERSION (set by `minikube docker-env`) must be same version as docker registry server
-            repo = '{docker_registry}/{name}:{version}'.format(
-                    docker_registry='localhost:5000', # TODO: make configurable
-                    name=name,
-                    version=version)
-            docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
-            logging.info("Building model Docker image at {}".format(model_data_path))
-            docker_client.images.build(
-                    path=model_data_path,
-                    tag=repo)
-            logging.info("Pushing model Docker image to {}".format(repo))
-            docker_client.images.push(repository=repo)
-
-            # TODO: call this in `add_container` once `repo` is available from redis
-            logging.info("Creating model deployment on k8s")
-            self.clipper_k8s.deploy_model(name, version, repo)
-
-            # TODO: replace `model_data_path` in `_publish_new_model` with the docker repo
             # publish model to Clipper and verify success before copying model
             # parameters to Clipper and starting containers
-            logging.info("Publishing model to Clipper query manager")
-            self._publish_new_model(name, version, labels, input_type, container_name, repo)
+            if not self._publish_new_model(
+                    name, version, labels, input_type, container_name,
+                    os.path.join(vol, os.path.basename(model_data_path))):
+                return False
+            print("Published model to Clipper")
 
-            logging.info("Done deploying!")
+            if (not self._put_container_on_host(container_name)):
+                return False
 
+            # Put model parameter data on host
+            with hide("warnings", "output", "running"):
+                self._execute_standard("mkdir -p {vol}".format(vol=vol))
+
+            with cd(vol):
+                with hide("warnings", "output", "running"):
+                    self._execute_put(model_data_path, vol)
+
+            print("Copied model data to host")
             # aggregate results of starting all containers
-            # return all([
-            #     self.add_container(name, version)
-            #     for r in range(num_containers)
-            # ])
+            return all([
+                self.add_container(name, version)
+                for r in range(num_containers)
+            ])
 
     def register_external_model(self,
                                 name,
@@ -390,14 +520,14 @@ class Clipper:
         ----------
         name : str
             The name to assign this model.
-        version : int
+        version : Any object with a string representation (with __str__ implementation)
             The version to assign this model.
         input_type : str
             One of "integers", "floats", "doubles", "bytes", or "strings".
         labels : list of str, optional
             A list of strings annotating the model.
         """
-        # TODO: this could be implemented by taking a docker repo and deploying a container with it
+        version = str(version)
         return self._publish_new_model(name, version, labels, input_type,
                                        EXTERNALLY_MANAGED_MODEL,
                                        EXTERNALLY_MANAGED_MODEL)
@@ -428,7 +558,7 @@ class Clipper:
         conda_env_exported = self._export_conda_env(environment_file_abs_path)
 
         if conda_env_exported:
-            logging.info("Anaconda environment found. Verifying packages.")
+            print("Anaconda environment found. Verifying packages.")
 
             # Confirm that packages installed through conda are solvable
             # Write out conda and pip dependency files to be supplied to container
@@ -437,9 +567,9 @@ class Clipper:
                     conda_dep_fname, pip_dep_fname)):
                 return False
 
-            logging.info("Supplied environment details")
+            print("Supplied environment details")
         else:
-            logging.info(
+            print(
                 "Warning: Anaconda environment was either not found or exporting the environment "
                 "failed. Your function will still be serialized and deployed, but may fail due to "
                 "missing dependencies. In this case, please re-run inside an Anaconda environment. "
@@ -450,7 +580,7 @@ class Clipper:
         func_file_path = os.path.join(serialization_dir, predict_fname)
         with open(func_file_path, "w") as serialized_function_file:
             serialized_function_file.write(serialized_prediction_function)
-        logging.info("Serialized and supplied predict function")
+        print("Serialized and supplied predict function")
         return serialization_dir
 
     def deploy_pyspark_model(self,
@@ -468,7 +598,7 @@ class Clipper:
         ----------
         name : str
             The name to assign this model.
-        version : int
+        version : Any object with a string representation (with __str__ implementation)
             The version to assign this model.
         predict_function : function
             A function that takes three arguments, a SparkContext, the ``model`` parameter and
@@ -520,7 +650,7 @@ class Clipper:
             else:
                 pyspark_model.save(sc, spark_model_save_loc)
         except Exception as e:
-            logging.warn("Error saving spark model: %s" % e)
+            print("Error saving spark model: %s" % e)
             raise e
 
         pyspark_container = "clipper/pyspark-container"
@@ -531,7 +661,7 @@ class Clipper:
                   "w") as metadata_file:
             json.dump({"model_class": model_class}, metadata_file)
 
-        logging.info("Spark model saved")
+        print("Spark model saved")
 
         # Deploy model
         deploy_result = self.deploy_model(name, version, serialization_dir,
@@ -561,7 +691,7 @@ class Clipper:
         ----------
         name : str
             The name to assign this model.
-        version : int
+        version : Any object with a string representation (with __str__ implementation)
             The version to assign this model.
         predict_function : function
             The prediction function. Any state associated with the function should be
@@ -569,7 +699,7 @@ class Clipper:
         input_type : str
             One of "integers", "floats", "doubles", "bytes", or "strings".
         labels : list of str, optional
-            A list of strings annotating the model
+            A list of strings annotating the model.
         num_containers : int, optional
             The number of replicas of the model to create. More replicas can be
             created later as well. Defaults to 1.
@@ -615,6 +745,121 @@ class Clipper:
 
         return deploy_result
 
+    def _register_app_and_check_success(self, name, input_type, default_output,
+                                        slo_micros):
+        if self.register_application(name, name, input_type, default_output,
+                                     slo_micros):
+            print("Application registration sucessful! Deploying model.")
+            return True
+        print("Application registration unsuccessful. Will not deploy model.")
+        return False
+
+    def register_app_and_deploy_predict_function(
+            self,
+            name,
+            predict_function,
+            input_type,
+            default_output=DEFAULT_DEFAULT_OUTPUT,
+            model_version=DEFAULT_MODEL_VERSION,
+            slo_micros=DEFAULT_SLO_MICROS,
+            labels=DEFAULT_LABEL,
+            num_containers=1):
+        """Registers an app and deploys provided predict function as a model.
+
+        Parameters
+        ----------
+        name : str
+            The to be assigned to the registered app and deployed model.
+        predict_function : function
+            The prediction function. Any state associated with the function should be
+            captured via closure capture.
+        input_type : str
+            The input_type to be associated with the registered app and deployed model.
+            One of "integers", "floats", "doubles", "bytes", or "strings".
+        default_output : string, optional
+            The default prediction to use if the model does not return a prediction
+            by the end of the latency objective.
+        model_version : Any object with a string representation (with __str__ implementation), optional
+            The version to assign the deployed model.
+        slo_micros : int
+            The query latency objective for the application in microseconds.
+            This is the processing latency between Clipper receiving a request 
+            and sending a response. It does not account for network latencies 
+            before a request is received or after a response is sent.
+        labels : list of str, optional
+            A list of strings annotating the model.
+        num_containers : int, optional
+            The number of replicas of the model to create. More replicas can be
+            created later as well.
+        """
+        if not self._register_app_and_check_success(
+                name, input_type, default_output, slo_micros):
+            return False
+
+        return self.deploy_predict_function(name, model_version,
+                                            predict_function, input_type,
+                                            labels, num_containers)
+
+    def register_app_and_deploy_pyspark_model(
+            self,
+            name,
+            predict_function,
+            pyspark_model,
+            sc,
+            input_type,
+            default_output=DEFAULT_DEFAULT_OUTPUT,
+            model_version=DEFAULT_MODEL_VERSION,
+            slo_micros=DEFAULT_SLO_MICROS,
+            labels=DEFAULT_LABEL,
+            num_containers=1):
+        """Registers an app and deploys provided spark model.
+
+        Parameters
+        ----------
+        name : str
+            The to be assigned to the registered app and deployed model.
+        predict_function : function
+            A function that takes three arguments, a SparkContext, the ``model`` parameter and
+            a list of inputs of the type specified by the ``input_type`` argument.
+            Any state associated with the function other than the Spark model should
+            be captured via closure capture. Note that the function must not capture
+            the SparkContext or the model implicitly, as these objects are not pickleable
+            and therefore will prevent the ``predict_function`` from being serialized.
+        pyspark_model : pyspark.mllib.util.Saveable
+            An object that mixes in the pyspark Saveable mixin. Generally this
+            is either an mllib model or transformer. This model will be loaded
+            into the Clipper model container and provided as an argument to the
+            predict function each time it is called.
+        sc : SparkContext
+            The SparkContext associated with the model. This is needed
+            to save the model for pyspark.mllib models.
+        input_type : str
+            The input_type to be associated with the registered app and deployed model.
+            One of "integers", "floats", "doubles", "bytes", or "strings".
+        default_output : string, optional
+            The default prediction to use if the model does not return a prediction
+            by the end of the latency objective.
+        model_version : Any object with a string representation (with __str__ implementation), optional
+            The version to assign the deployed model.
+        slo_micros : int, optional
+            The query latency objective for the application in microseconds.
+            This is the processing latency between Clipper receiving a request 
+            and sending a response. It does not account for network latencies 
+            before a request is received or after a response is sent.
+        labels : list of str, optional
+            A list of strings annotating the model.
+        num_containers : int, optional
+            The number of replicas of the model to create. More replicas can be
+            created later as well.
+        """
+        if not self._register_app_and_check_success(
+                name, input_type, default_output, slo_micros):
+            return False
+
+        return self.deploy_pyspark_model(name, model_version, predict_function,
+                                         pyspark_model, sc, input_type, labels,
+                                         num_containers)
+
     def get_all_models(self, verbose=False):
         """Gets information about all models registered with Clipper.
 
@@ -638,7 +883,7 @@ class Clipper:
         if r.status_code == requests.codes.ok:
             return r.json()
         else:
-            logging.info(r.text)
+            print(r.text)
             return None
 
     def get_model_info(self, model_name, model_version):
@@ -648,7 +893,7 @@ class Clipper:
         ----------
         model_name : str
             The name of the model to look up
-        model_version : int
+        model_version : Any object with a string representation (with __str__ implementation)
             The version of the model to look up
 
         Returns
@@ -658,6 +903,7 @@ class Clipper:
             If no model with name `model_name@model_version` is
             registered with Clipper, None is returned.
         """
+        model_version = str(model_version)
         url = "http://%s:1338/admin/get_model" % self.host
         req_json = json.dumps({
             "model_name": model_name,
@@ -672,7 +918,7 @@ class Clipper:
                 return None
             return app_info
         else:
-            logging.info(r.text)
+            print(r.text)
             return None
 
     def get_all_containers(self, verbose=False):
@@ -698,7 +944,7 @@ class Clipper:
         if r.status_code == requests.codes.ok:
             return r.json()
         else:
-            logging.info(r.text)
+            print(r.text)
             return None
 
     def get_container_info(self, model_name, model_version, replica_id):
@@ -708,7 +954,7 @@ class Clipper:
         ----------
         model_name : str
             The name of the container to look up
-        model_version : int
+        model_version : Any object with a string representation (with __str__ implementation)
             The version of the container to look up
         replica_id : int
             The container replica to look up
@@ -719,6 +965,7 @@ class Clipper:
             A dictionary with the specified container's info.
             If no corresponding container is registered with Clipper, None is returned.
         """
+        model_version = str(model_version)
         url = "http://%s:1338/admin/get_container" % self.host
         req_json = json.dumps({
             "model_name": model_name,
@@ -734,7 +981,7 @@ class Clipper:
                 return None
             return app_info
         else:
-            logging.info(r.text)
+            print(r.text)
             return None
 
     def _inspect_selection_policy(self, app_name, uid):
@@ -794,7 +1041,7 @@ class Clipper:
         If packages listed in specified conda environment file have conflicting dependencies,
         this function will warn the user and return False.
 
-        If there are no conflicting package dependencies, existence of the packages in the
+        If there are no conflicting package dependencies, existence of the packages in the 
         container conda channel is tested. The user is warned about any missing packages.
         All existing conda packages are written out to `conda_dep_fname` and pip packages
         to `pip_dep_fname` in the given `directory`. This function then returns True.
@@ -817,7 +1064,7 @@ class Clipper:
             on the container os. Otherwise returns False.
         """
         if "CONDA_PREFIX" not in os.environ:
-            logging.info("No Anaconda environment found")
+            print("No Anaconda environment found")
             return False
 
         root_prefix = os.environ["CONDA_PREFIX"].split("envs")[0]
@@ -836,8 +1083,8 @@ class Clipper:
             stderr=subprocess.PIPE,
             shell=True)
         out, err = process.communicate()
-        logging.info(out)
-        logging.info(err)
+        print(out)
+        print(err)
         return process.returncode == 0
 
     def add_container(self, model_name, model_version):
@@ -852,7 +1099,7 @@ class Clipper:
         ----------
         model_name : str
             The name of the model
-        model_version : int
+        model_version : Any object with a string representation (with __str__ implementation)
             The version of the model
 
         Returns
@@ -861,19 +1108,23 @@ class Clipper:
             True if the container was added successfully and False
             if the container could not be added.
         """
-        # TODO: this must abstract containers deployed on k8s vs those running on local docker, see ContainerManager
+        model_version = str(model_version)
         with hide("warnings", "output", "running"):
             # Look up model info in Redis
+            if self.redis_ip == DEFAULT_REDIS_IP:
+                redis_host = self.host
+            else:
+                redis_host = self.redis_ip
             model_key = "{mn}:{mv}".format(mn=model_name, mv=model_version)
             result = local(
                 "redis-cli -h {host} -p {redis_port} -n {db} hgetall {key}".
                 format(
-                    host=self.host,
-                    redis_port=DEFAULT_REDIS_PORT,
+                    host=redis_host,
+                    redis_port=self.redis_port,
                     key=model_key,
                     db=REDIS_MODEL_DB_NUM),
                 capture=True)
-            logging.info(result)
+            print(result)
 
             if "empty list or set" in result.stdout:
                 # Model not found
@@ -903,13 +1154,13 @@ class Clipper:
                         mv=model_version,
                         mip=model_input_type,
                         clipper_label=CLIPPER_DOCKER_LABEL,
-                        mv_label="%s=%s:%d" % (CLIPPER_MODEL_CONTAINER_LABEL,
+                        mv_label="%s=%s:%s" % (CLIPPER_MODEL_CONTAINER_LABEL,
                                                model_name, model_version),
                         restart_policy=restart_policy))
                 result = self._execute_root(add_container_cmd)
                 return result.return_code == 0
             else:
-                logging.info("Cannot start containers for externally managed model %s"
+                print("Cannot start containers for externally managed model %s"
                       % model_name)
                 return False
 
@@ -947,7 +1198,7 @@ class Clipper:
             "docker ps -aq --filter label={clipper_label}".format(
                 clipper_label=CLIPPER_DOCKER_LABEL))
         ids = [l.strip() for l in containers.split("\n")]
-        logging.info("Clipper container IDS found: %s" % str(ids))
+        print("Clipper container IDS found: %s" % str(ids))
         return ids
 
     def inspect_instance(self):
@@ -980,7 +1231,7 @@ class Clipper:
         ----------
         model_name : str
             The name of the model
-        model_version : int
+        model_version : Any object with a string representation (with __str__ implementation)
             The version of the model. Note that `model_version`
             must be a model version that has already been deployed.
         num_containers : int
@@ -988,7 +1239,8 @@ class Clipper:
             selected model version.
 
         """
-        # TODO: update to use k8s API
+        model_version = str(model_version)
+
         url = "http://%s:%d/admin/set_model_version" % (
             self.host, CLIPPER_MANAGEMENT_PORT)
         req_json = json.dumps({
@@ -997,7 +1249,7 @@ class Clipper:
         })
         headers = {'Content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req_json)
-        logging.info(r.text)
+        print(r.text)
         for r in range(num_containers):
             self.add_container(model_name, model_version)
 
@@ -1013,13 +1265,21 @@ class Clipper:
         # Get all Docker containers tagged as model containers
         num_containers_removed = 0
         with hide("output", "warnings", "running"):
-            container_ids = self._get_clipper_container_ids()
-            if len(container_ids) > 0:
+            containers = self._execute_root(
+                "docker ps -aq --filter label={model_container_label}".format(
+                    model_container_label=CLIPPER_MODEL_CONTAINER_LABEL))
+            if len(containers) > 0:
+                container_ids = [l.strip() for l in containers.split("\n")]
                 for container in container_ids:
                     # returns a string formatted as "<model_name>:<model_version>"
-                    container_model_name_and_version = self._execute_root(
-                        "docker inspect --format \"{{ index .Config.Labels \\\"%s\\\"}}\" %s"
-                        % (CLIPPER_MODEL_CONTAINER_LABEL, container))
+                    if self._host_is_local():
+                        container_model_name_and_version = self._execute_root(
+                            "docker inspect --format \"{{ index .Config.Labels \\\"%s\\\"}}\" %s"
+                            % (CLIPPER_MODEL_CONTAINER_LABEL, container))
+                    else:
+                        container_model_name_and_version = self._execute_root(
+                            "docker inspect --format \"{{ index .Config.Labels \\\\\"%s\\\\\"}}\" %s"
+                            % (CLIPPER_MODEL_CONTAINER_LABEL, container))
                     splits = container_model_name_and_version.split(":")
                     container_model_name = splits[0]
                     container_model_version = int(splits[1])
@@ -1033,33 +1293,169 @@ class Clipper:
                             self._execute_root("docker rm {container}".format(
                                 container=container))
                             num_containers_removed += 1
-        logging.info("Removed %d inactive containers for model %s" %
+        print("Removed %d inactive containers for model %s" %
               (num_containers_removed, model_name))
         return num_containers_removed
 
     def stop_all(self):
-        """Stops and removes all Clipper model deployments and Clipper resources."""
-        self.clipper_k8s.stop_all_model_deployments()
-        self.clipper_k8s.stop_clipper_resources()
+        """Stops and removes all Clipper Docker containers on the host.
 
-    # TODO: provide registry image for k8s service instead of container_name and model_data_path
+        """
+        print("Stopping Clipper and all running models...")
+        with hide("output", "warnings", "running"):
+            container_ids = self._get_clipper_container_ids()
+            container_id_str = " ".join(container_ids)
+            self._execute_root(
+                "docker stop {ids}".format(ids=container_id_str),
+                warn_only=True)
+            self._execute_root(
+                "docker rm {ids}".format(ids=container_id_str), warn_only=True)
+
     def _publish_new_model(self, name, version, labels, input_type,
                            container_name, model_data_path):
         url = "http://%s:%d/admin/add_model" % (self.host,
                                                 CLIPPER_MANAGEMENT_PORT)
         req_json = json.dumps({
             "model_name": name,
-            "model_version": str(version),
+            "model_version": version,
             "labels": labels,
             "input_type": input_type,
             "container_name": container_name,
             "model_data_path": model_data_path
         })
         headers = {'Content-type': 'application/json'}
-        logging.info(req_json)
         r = requests.post(url, headers=headers, data=req_json)
         if r.status_code == requests.codes.ok:
             return True
         else:
-            logging.warn("Error publishing model: %s" % r.text)
+            print("Error publishing model: %s" % r.text)
             return False
+
+    def _put_container_on_host(self, container_name):
+        """Puts the provided container on the host.
+
+        Parameters
+        __________
+        container_name : str
+            The name of the container.
+
+        Notes
+        -----
+        This method will first check the host, then Docker Hub, then the local
+        machine to find the container.
+
+        This method is safe to call multiple times with the same container name.
+        Subsequent calls will detect that the container is already present on
+        the host and do nothing.
+
+        """
+        with hide("output", "warnings", "running"):
+            # first see if container is already present on host
+            host_result = self._execute_root(
+                "docker images -q {cn}".format(cn=container_name))
+            if len(host_result.stdout) > 0:
+                print("Found %s on host" % container_name)
+                return True
+            # now try to pull from Docker Hub
+            hub_result = self._execute_root(
+                "docker pull {cn}".format(cn=container_name), warn_only=True)
+            if hub_result.return_code == 0:
+                print("Found %s in Docker hub" % container_name)
+                return True
+
+            # assume container_name refers to a local container and
+            # copy it to host
+            local_result = local(
+                "docker images -q {cn}".format(cn=container_name))
+
+            if len(local_result.stdout) > 0:
+                saved_fname = container_name.replace("/", "_")
+                subprocess.call("docker save -o /tmp/{fn}.tar {cn}".format(
+                    fn=saved_fname, cn=container_name))
+                tar_loc = "/tmp/{fn}.tar".format(fn=saved_fname)
+                self._execute_put(tar_loc, tar_loc)
+                self._execute_root("docker load -i {loc}".format(loc=tar_loc))
+                # self._execute_root("docker tag {image_id} {cn}".format(
+                #       image_id=image_id, cn=cn))
+                # now check to make sure we can access it
+                host_result = self._execute_root(
+                    "docker images -q {cn}".format(cn=container_name))
+                if len(host_result.stdout) > 0:
+                    print("Successfuly copied %s to host" % container_name)
+                    return True
+                else:
+                    warn("Problem copying container %s to host" %
+                         container_name)
+                    return False
+
+            # out of options
+            warn("Could not find %s, please try with a valid "
+                 "container docker image")
+            return False
+
+    def deploy_R_model(self,
+                       name,
+                       version,
+                       model_data,
+                       labels=DEFAULT_LABEL,
+                       num_containers=1):
+        """Registers a model with Clipper and deploys instances of it in containers.
+        Parameters
+        ----------
+        name : str
+            The name to assign this model.
+        version : int
+            The version to assign this model.
+        model_data : 
+            The trained model to add to Clipper.The type has to be rpy2.robjects.vectors.ListVector,
+            this is how python's rpy2 encapsulates any given R model.This model will be loaded
+            into the Clipper model container and provided as an argument to the
+            predict function each time it is called. 
+        labels : list of str, optional
+            A set of strings annotating the model 
+        num_containers : int, optional
+            The number of replicas of the model to create. More replicas can be
+            created later as well. Defaults to 1.
+        """
+
+        # importing some R specific dependencies
+        import rpy2.robjects as ro
+        from rpy2.robjects.packages import importr
+        base = importr('base')
+
+        input_type = "strings"
+        container_name = "clipper/r_python_container"
+
+        with hide("warnings", "output", "running"):
+            fname = name.replace("/", "_")
+            rds_path = '/tmp/%s/%s.rds' % (fname, fname)
+            model_data_path = "/tmp/%s" % fname
+            try:
+                os.mkdir(model_data_path)
+            except OSError:
+                pass
+            base.saveRDS(model_data, rds_path)
+
+            vol = "{model_repo}/{name}/{version}".format(
+                model_repo=MODEL_REPO, name=name, version=version)
+            # publish model to Clipper and verify success before copying model
+            # parameters to Clipper and starting containers
+            if not self._publish_new_model(
+                    name, version, labels, input_type, container_name,
+                    os.path.join(vol, os.path.basename(model_data_path))):
+                return False
+            print("Published model to Clipper")
+
+            # Put model parameter data on host
+            with hide("warnings", "output", "running"):
+                self._execute_standard("mkdir -p {vol}".format(vol=vol))
+
+            with hide("output", "running"):
+                self._execute_put(model_data_path, vol)
+
+            print("Copied model data to host")
+            # aggregate results of starting all containers
+            return all([
+                self.add_container(name, version)
+                for r in range(num_containers)
+            ])
