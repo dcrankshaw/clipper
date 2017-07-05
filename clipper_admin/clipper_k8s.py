@@ -11,6 +11,7 @@ import yaml
 
 import clipper_manager
 
+
 @contextmanager
 def _pass_conflicts():
     try:
@@ -18,8 +19,10 @@ def _pass_conflicts():
     except ApiException as e:
         body = json.loads(e.body)
         if body['reason'] == 'AlreadyExists':
-            logging.info("{} already exists, skipping!".format(body['details']))
+            logging.info(
+                "{} already exists, skipping!".format(body['details']))
             pass
+
 
 class ClipperK8s:
     # TODO: subclass ContainerManager interface
@@ -50,60 +53,59 @@ class ClipperK8s:
         with _pass_conflicts():
             # TODO: handle errors where `repo` is not accessible
             self._k8s_beta.create_namespaced_deployment(
-                    body={
-                        'apiVersion': 'extensions/v1beta1',
-                        'kind': 'Deployment',
-                        'metadata': {
-                            'name': name + '-deployment' # NOTE: must satisfy RFC 1123 pathname conventions
-                        },
-                        'spec': {
-                            'replicas': 1,
-                            'template': {
-                                'metadata': {
-                                    'labels': {
-                                        clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL: '',
-                                        'model': name,
-                                        'version': str(version)
-                                    }
-                                },
-                                'spec': {
-                                    'containers': [
-                                        {
-                                            'name': name,
-                                            'image': repo,
-                                            'ports': [
-                                                {
-                                                    'containerPort': 80
-                                                }
-                                            ],
-                                            'env': [
-                                                {
-                                                    'name': 'CLIPPER_MODEL_NAME',
-                                                    'value': name
-                                                },
-                                                {
-                                                    'name': 'CLIPPER_MODEL_VERSION',
-                                                    'value': str(version)
-                                                },
-                                                {
-                                                    'name': 'CLIPPER_IP',
-                                                    'value': 'query-frontend'
-                                                }
-                                            ]
-                                        }
-                                    ]
+                body={
+                    'apiVersion': 'extensions/v1beta1',
+                    'kind': 'Deployment',
+                    'metadata': {
+                        'name': name +
+                        '-deployment'  # NOTE: must satisfy RFC 1123 pathname conventions
+                    },
+                    'spec': {
+                        'replicas': 1,
+                        'template': {
+                            'metadata': {
+                                'labels': {
+                                    clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL:
+                                    '',
+                                    'model':
+                                    name,
+                                    'version':
+                                    str(version)
                                 }
+                            },
+                            'spec': {
+                                'containers': [{
+                                    'name':
+                                    name,
+                                    'image':
+                                    repo,
+                                    'ports': [{
+                                        'containerPort': 80
+                                    }],
+                                    'env': [{
+                                        'name': 'CLIPPER_MODEL_NAME',
+                                        'value': name
+                                    }, {
+                                        'name': 'CLIPPER_MODEL_VERSION',
+                                        'value': str(version)
+                                    }, {
+                                        'name': 'CLIPPER_IP',
+                                        'value': 'query-frontend'
+                                    }]
+                                }]
                             }
                         }
-                    }, namespace='default')
+                    }
+                },
+                namespace='default')
 
     def stop_all_model_deployments(self):
         """Stops all deployments of pods running Clipper models."""
         logging.info("Stopping all running Clipper model deployments")
         try:
             resp = self._k8s_beta.delete_collection_namespaced_deployment(
-                    namespace='default',
-                    label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
+                namespace='default',
+                label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
         except ApiException as e:
             logging.warn("Exception deleting k8s deployments: {}".format(e))
 
@@ -122,20 +124,19 @@ class ClipperK8s:
                 # TODO: use delete collection of services if API provides
                 service_name = service.metadata.name
                 self._k8s_v1.delete_namespaced_service(
-                        namespace='default',
-                        name=service_name)
+                    namespace='default', name=service_name)
 
             self._k8s_beta.delete_collection_namespaced_deployment(
-                    namespace='default',
-                    label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
+                namespace='default',
+                label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
 
             self._k8s_v1.delete_collection_namespaced_pod(
-                    namespace='default',
-                    label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
+                namespace='default',
+                label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
 
             self._k8s_v1.delete_collection_namespaced_pod(
-                    namespace='default',
-                    label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
+                namespace='default',
+                label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
         except ApiException as e:
             logging.warn("Exception deleting k8s resources: {}".format(e))
 
@@ -145,20 +146,32 @@ class ClipperK8s:
         for name in ['mgmt-frontend', 'query-frontend', 'redis']:
             with _pass_conflicts():
                 self._k8s_beta.create_namespaced_deployment(
-                        body=yaml.load(open('k8s/clipper/{}-deployment.yaml'.format(name))), namespace='default')
+                    body=yaml.load(
+                        open('k8s/clipper/{}-deployment.yaml'.format(name))),
+                    namespace='default')
             with _pass_conflicts():
                 self._k8s_v1.create_namespaced_service(
-                        body=yaml.load(open('k8s/clipper/{}-service.yaml'.format(name))), namespace='default')
+                    body=yaml.load(
+                        open('k8s/clipper/{}-service.yaml'.format(name))),
+                    namespace='default')
 
     def _start_registry(self):
         logging.info("Initializing Docker registry on k8s cluster")
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_replication_controller(
-                    body=yaml.load(open('k8s/minikube-registry/kube-registry-replication-controller.yaml')), namespace='kube-system')
+                body=yaml.load(
+                    open(
+                        'k8s/minikube-registry/kube-registry-replication-controller.yaml'
+                    )),
+                namespace='kube-system')
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_service(
-                    body=yaml.load(open('k8s/minikube-registry/kube-registry-service.yaml')), namespace='kube-system')
+                body=yaml.load(
+                    open('k8s/minikube-registry/kube-registry-service.yaml')),
+                namespace='kube-system')
         with _pass_conflicts():
             self._k8s_beta.create_namespaced_daemon_set(
-                    body=yaml.load(open('k8s/minikube-registry/kube-registry-daemon-set.yaml')), namespace='kube-system')
-
+                body=yaml.load(
+                    open('k8s/minikube-registry/kube-registry-daemon-set.yaml')
+                ),
+                namespace='kube-system')

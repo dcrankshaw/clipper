@@ -62,7 +62,6 @@ class ClipperManagerException(Exception):
     pass
 
 
-
 class Clipper:
     """
     Connection to a Clipper instance for administrative purposes.
@@ -345,19 +344,20 @@ class Clipper:
 
             # prepare docker image build dir
             with open(model_data_path + '/Dockerfile', 'w') as f:
-                f.write("FROM {container_name}\nCOPY . /model/.\n".format(container_name=container_name))
+                f.write("FROM {container_name}\nCOPY . /model/.\n".format(
+                    container_name=container_name))
 
             # build, tag, and push docker image to registry
             # NOTE: DOCKER_API_VERSION (set by `minikube docker-env`) must be same version as docker registry server
             repo = '{docker_registry}/{name}:{version}'.format(
-                    docker_registry='localhost:5000', # TODO: make configurable
-                    name=name,
-                    version=version)
-            docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
-            logging.info("Building model Docker image at {}".format(model_data_path))
-            docker_client.images.build(
-                    path=model_data_path,
-                    tag=repo)
+                docker_registry='localhost:5000',  # TODO: make configurable
+                name=name,
+                version=version)
+            docker_client = docker.from_env(
+                version=os.environ["DOCKER_API_VERSION"])
+            logging.info(
+                "Building model Docker image at {}".format(model_data_path))
+            docker_client.images.build(path=model_data_path, tag=repo)
             logging.info("Pushing model Docker image to {}".format(repo))
             docker_client.images.push(repository=repo)
 
@@ -369,7 +369,8 @@ class Clipper:
             # publish model to Clipper and verify success before copying model
             # parameters to Clipper and starting containers
             logging.info("Publishing model to Clipper query manager")
-            self._publish_new_model(name, version, labels, input_type, container_name, repo)
+            self._publish_new_model(name, version, labels, input_type,
+                                    container_name, repo)
 
             logging.info("Done deploying!")
 
@@ -909,8 +910,9 @@ class Clipper:
                 result = self._execute_root(add_container_cmd)
                 return result.return_code == 0
             else:
-                logging.info("Cannot start containers for externally managed model %s"
-                      % model_name)
+                logging.info(
+                    "Cannot start containers for externally managed model %s" %
+                    model_name)
                 return False
 
     def get_clipper_logs(self):
@@ -1034,7 +1036,7 @@ class Clipper:
                                 container=container))
                             num_containers_removed += 1
         logging.info("Removed %d inactive containers for model %s" %
-              (num_containers_removed, model_name))
+                     (num_containers_removed, model_name))
         return num_containers_removed
 
     def stop_all(self):

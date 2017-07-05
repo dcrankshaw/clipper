@@ -1,17 +1,21 @@
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 import os
 import sys
 import requests
 import json
 import numpy as np
-cur_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath("%s/.." % cur_dir))
-from clipper_admin import Clipper
 import time
-import subprocess32 as subprocess
+# import subprocess32 as subprocess
 import pprint
 import random
 import socket
+import docker
+import logging
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
+# from clipper_admin import Clipper
+import clipper_admin as cl
+from clipper_admin import DockerContainerManager
 
 headers = {'Content-type': 'application/json'}
 fake_model_data = "/tmp/test123456"
@@ -48,31 +52,37 @@ def find_unbound_port():
 
 
 def init_clipper():
-    clipper = Clipper("localhost", redis_port=find_unbound_port())
-    clipper.start()
+    # TODO: create registry
+
+    logging.info("Creating DockerContainerManager")
+    cm = DockerContainerManager("localhost", redis_port=find_unbound_port())
+    # clipper = Clipper("localhost", redis_port=find_unbound_port())
+    logging.info("Starting Clipper")
+    cl.start_clipper(cm)
     time.sleep(1)
-    return clipper
+    return cm
 
 
-def print_clipper_state(clipper):
+def print_clipper_state(cm):
     pp = pprint.PrettyPrinter(indent=4)
     print("APPLICATIONS")
-    pp.pprint(clipper.get_all_apps(verbose=True))
+    pp.pprint(cl.get_all_apps(cm, verbose=True))
     print("\nMODELS")
-    pp.pprint(clipper.get_all_models(verbose=True))
+    pp.pprint(cl.get_all_models(cm, verbose=True))
     print("\nCONTAINERS")
-    pp.pprint(clipper.get_all_containers(verbose=True))
+    pp.pprint(cl.get_all_containers(cm, verbose=True))
 
 
-def deploy_model(clipper, name, version):
+def deploy_model(cm, name, version):
     app_name = "%s_app" % name
     model_name = "%s_model" % name
-    clipper.deploy_model(
+    cl.deploy_model(
+        cm,
         model_name,
         version,
+        "doubles",
         fake_model_data,
         "clipper/noop-container",
-        "doubles",
         num_containers=1)
     time.sleep(10)
     num_preds = 25
@@ -85,7 +95,7 @@ def deploy_model(clipper, name, version):
                 'input': list(np.random.random(30))
             }))
         result = response.json()
-        if response.status_code == requests.codes.ok and result["default"] == True:
+        if response.status_code == requests.codes.ok and result["default"]:
             num_defaults += 1
     if num_defaults > 0:
         print("Error: %d/%d predictions were default" % (num_defaults,
@@ -95,11 +105,11 @@ def deploy_model(clipper, name, version):
                                  (app_name, model_name, version))
 
 
-def create_and_test_app(clipper, name, num_models):
+def create_and_test_app(cm, name, num_models):
     app_name = "%s_app" % name
     model_name = "%s_model" % name
-    clipper.register_application(app_name, model_name, "doubles",
-                                 "default_pred", 100000)
+    cl.register_application(cm, app_name, model_name, "doubles",
+                            "default_pred", 100000)
     time.sleep(1)
     response = requests.post(
         "http://localhost:1337/%s/predict" % app_name,
@@ -113,7 +123,7 @@ def create_and_test_app(clipper, name, num_models):
         raise BenchmarkException("Error creating app %s" % app_name)
 
     for i in range(num_models):
-        deploy_model(clipper, name, i)
+        deploy_model(cm, name, i)
         time.sleep(1)
 
 
@@ -130,22 +140,24 @@ if __name__ == "__main__":
         # for num_apps and num_models
         pass
     try:
-        clipper = init_clipper()
+        cm = init_clipper()
         try:
             print("Running integration test with %d apps and %d models" %
                   (num_apps, num_models))
             for a in range(num_apps):
-                create_and_test_app(clipper, "app_%s" % a, num_models)
-            print(clipper.get_clipper_logs())
+                create_and_test_app(cm, "app_%s" % a, num_models)
+            print(cl.get_clipper_logs(cm))
+            print_clipper_state(cm)
             print("SUCCESS")
         except BenchmarkException as e:
-            print_clipper_state(clipper)
+            print_clipper_state(cm)
             print(e)
-            clipper.stop_all()
+            cl.stop_all(cm)
             sys.exit(1)
         else:
-            clipper.stop_all()
-    except:
-        clipper = Clipper("localhost")
-        clipper.stop_all()
+            cl.stop_all(cm)
+    except Exception as e:
+        logging.error(e)
+        cm = DockerContainerManager("localhost")
+        cl.stop_all(cm)
         sys.exit(1)
