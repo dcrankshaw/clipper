@@ -51,7 +51,7 @@ class DockerContainerManager(ContainerManager):
         self.docker_client.networks.create(DOCKER_NETWORK_NAME)
         container_args = {
                 "network": DOCKER_NETWORK_NAME,
-                "labels" : [CLIPPER_DOCKER_LABEL],
+                "labels" : {CLIPPER_DOCKER_LABEL: ""},
                 "detach": True,
                 }
         self.extra_container_kwargs.update(container_args)
@@ -121,7 +121,7 @@ class DockerContainerManager(ContainerManager):
                 "CLIPPER_IP": self.query_frontend, 
                 "CLIPPER_INPUT_TYPE": input_type,
                 }
-        self.extra_container_kwargs["labels"].append(CLIPPER_MODEL_CONTAINER_LABEL)
+        self.extra_container_kwargs["labels"][CLIPPER_MODEL_CONTAINER_LABEL] = "{name}:{version}".format(name=name, version=version)
         self.docker_client.containers.run(
                 repo,
                 environment=env_vars,
@@ -141,10 +141,13 @@ class DockerContainerManager(ContainerManager):
             with open(log_file, "w") as lf:
                 f.write(c.logs(stdout=True, stderr=True))
 
-    def stop_models(self):
+    def stop_models(self, model_name=None, keep_version=None):
         containers = self.docker_client.containers.list(filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
         for c in containers:
-            c.stop()
+            c_name, c_version = c.labels[CLIPPER_MODEL_CONTAINER_LABEL].split(":")
+            if model_name is not None and model_name == c_name:
+                if keep_version is None or keep_version != c_version:
+                    c.stop()
 
     def stop_clipper(self):
         containers = self.docker_client.containers.list(filters={"label": CLIPPER_DOCKER_LABEL})

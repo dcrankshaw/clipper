@@ -9,7 +9,7 @@ import time
 import numpy as np
 
 
-def predict(host, uid, x):
+def predict(host, x):
     url = "http://%s:1337/example_app/predict" % host
     req_json = json.dumps({'input': list(x)})
     headers = {'Content-type': 'application/json'}
@@ -27,7 +27,6 @@ if __name__ == '__main__':
                                  "-1.0", 40000)
     clipper.register_external_model("example_model", 1, "doubles")
     time.sleep(1.0)
-    uid = 0
     while True:
-        predict(host, uid, np.random.random(200))
+        predict(host, np.random.random(200))
         time.sleep(0.2)

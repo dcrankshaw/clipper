@@ -39,7 +39,17 @@ class ContainerManager(object):
         return
 
     @abc.abstractmethod
-    def stop_models(self):
+    def stop_models(self, model_name=None, keep_version=None):
+        """Stops Docker containers serving models but leaves the core Clipper containers running.
+        Parameters
+        ----------
+        model_name : str(optional)
+            Only removes containers serving the specified the model with ``model_name``
+        keep_version : str(optional)
+            Leaves model containers with the specified name and version untouched. This argument
+            is ignored if model_name is empty. The typical use case for this argument is to remove
+            old versions of a model but keep the currently active version.
+        """
         return
 
     @abc.abstractmethod

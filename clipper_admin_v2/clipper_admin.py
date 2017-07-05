@@ -351,8 +351,21 @@ def set_model_version(cm, model_name, model_version, num_containers=0):
     for r in range(num_containers):
         add_container(cm, model_name, model_version)
 
-def stop_inactive_models(cm):
-    pass
+def stop_inactive_model_versions(cm, model_name):
+    """Removes all containers serving stale versions of the specified model.
+
+    Parameters
+    ----------
+    model_name : str
+        The name of the model whose old containers you want to clean.
+    """
+    model_info = get_all_models(verbose=True)
+    current_version = None
+    for m in model_info:
+        if m["is_current_version"]:
+            current_version = m["model_version"]
+    assert current_version is not None
+    cm.stop_models(model_name=model_name, keep_version=current_version)
 
 def stop_deployed_models(cm):
     cm.stop_models()

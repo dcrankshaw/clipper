@@ -112,7 +112,9 @@ class K8sContainerManager(ContainerManager):
         # TODO(feynman): Implement this
         pass
 
-    def stop_models(self):
+    def stop_models(self, model_name=None, keep_version=None):
+        # TODO(feynman): Account for model_name and keep_version.
+        # NOTE: the format of the value of CLIPPER_MODEL_CONTAINER_LABEL is "model_name:model_version"
         """Stops all deployments of pods running Clipper models."""
         logging.info("Stopping all running Clipper model deployments")
         try:
