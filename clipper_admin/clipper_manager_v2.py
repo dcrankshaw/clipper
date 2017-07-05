@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 import logging
 import abc
+import docker
 
 """
 subclasses of ContainerManager
@@ -43,18 +44,52 @@ def register_application(cm, name, model, input_type, default_output, slo_micros
         logging.warning("Received error status code: {code}".format(code=r.status_code))
         return False
 
+def _resolve_docker_repo(cm, image, registry):
+    if registry is None:
+        registry = cm.get_registry()
+    if registry is None:
+        repo = image
+    else:
+        repo = "{registry}/{image}".format(
+                registry=registry,
+                image=image)
+    return repo
 
-def deploy_model(cm, name, version, input_type, labels=None, image, repo="dockerhub"):
-    pass
+
+def deploy_model(cm, name, version, input_type, model_data_path, base_container_name, labels=None, registry=None, num_replicas=0):
 
 
-def publish_model(cm, name, version, input_type, labels=None):
+    with open(model_data_path + '/Dockerfile', 'w') as f:
+        f.write("FROM {container_name}\nCOPY . /model/.\n".format(container_name=base_container_name))
+
+    # build, tag, and push docker image to registry
+    # NOTE: DOCKER_API_VERSION (set by `minikube docker-env`) must be same version as docker registry server
+
+    image_name = "{name}:{version}".format(
+                name=name,
+                version=version)
+    repo = _resolve_docker_repo(cm, image, registry)
+    docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
+    logging.info("Building model Docker image at {}".format(model_data_path))
+    docker_client.images.build(
+            path=model_data_path,
+            tag=repo)
+    logging.info("Pushing model Docker image to {}".format(repo))
+    docker_client.images.push(repository=repo)
+    cm.deploy_model(name, version, input_type, repo, num_replicas = num_replicas)
+    logging.info("Publishing model to Clipper query manager")
+    publish_model(cm, name, version, input_type, repo=repo, labels=labels)
+    logging.info("Done deploying!")
+
+
+def publish_model(cm, name, version, input_type, repo=None, labels=None):
     url = "http://{host}/admin/add_model".format(host=cm.get_admin_addr())
     req_json = json.dumps({
         "model_name": name,
         "model_version": str(version),
         "labels": labels,
         "input_type": input_type,
+        "image": image,
     })
     headers = {'Content-type': 'application/json'}
     logging.info(req_json)
@@ -65,8 +100,23 @@ def publish_model(cm, name, version, input_type, labels=None):
         logging.warn("Error publishing model: %s" % r.text)
         return False
 
-def add_container(cm):
-    pass
+def add_replica(cm, name, version):
+    image_name = "{name}:{version}".format(
+                name=name,
+                version=version)
+    # repo = _resolve_docker_repo(cm, image, registry)
+    model_data = get_model_info(cm, name, version)
+    if model_data is not None:
+        input_type = model_data["input_type"]
+        image = model_data["image"]
+        if image != CONTAINERLESS_MODEL_IMAGE:
+            cm.add_replica(name, version, input_type, image)
+
+    else:
+        logging.error("Cannot add container for non-registered model {name}:{version}".format(name=name, version=version))
+
+
+    
 
 def get_all_apps(cm, verbose=False):
     """Gets information about all applications registered with Clipper.
@@ -248,8 +298,8 @@ def get_model_replica_info(cm, name, version, replica_id):
         logging.info(r.text)
         return None
 
-def get_clipper_logs(cm):
-    pass
+def get_clipper_logs(cm, logging_dir="clipper_logs/"):
+    cm.get_logs(logging_dir)
 
 def inspect_instance(cm):
     """Fetches metrics from the running Clipper instance.
@@ -305,13 +355,13 @@ def stop_inactive_models(cm):
     pass
 
 def stop_deployed_models(cm):
-    pass
+    cm.stop_models()
 
 def stop_clipper(cm):
-    pass
+    cm.stop_clipper()
 
 def stop_all(cm):
-    cm.stop_deployed_models()
+    cm.stop_models()
     cm.stop_clipper()
 
 

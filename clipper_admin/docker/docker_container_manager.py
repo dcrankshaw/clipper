@@ -1,5 +1,6 @@
 import docker
 import logging
+import os
 
 from container_manager import *
 
@@ -9,7 +10,7 @@ DOCKER_NETWORK_NAME = "clipper_network"
 
 class DockerContainerManager(ContainerManager):
 
-    def __init__(self, clipper_public_hostname, redis_ip=None, redis_port=6379, extra_container_kwargs={}):
+    def __init__(self, clipper_public_hostname, redis_ip=None, redis_port=6379, , registry=None, registry_username=None, registry_password=None, extra_container_kwargs={}):
         """
         Parameters
         ----------
@@ -24,11 +25,24 @@ class DockerContainerManager(ContainerManager):
             Any additional keyword arguments to pass to the call to
             :py:meth:`docker.client.containers.run`.
         """
-        self.docker_client = docker.from_env()
+        super.__init__(clipper_public_hostname)
+        self.docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
         self.redis_port = redis_port
         self.redis_ip = redis_ip
         self.extra_container_kwargs = extra_container_kwargs
         self.public_hostname = clipper_public_hostname
+        self.query_frontend_name = "query_frontend"
+        self.mgmt_frontend_name = "mgmt_frontend"
+        if registry is not None:
+            self.registry = registry
+            if registry_username is not None and registry_password is not None:
+                logging.info("Logging in to {registry} as {user}".format(registry=registry, user=registry_username))
+                login_response = self.docker_client.login(
+                        username=registry_username,
+                        password=registry_password,
+                        registry=registry
+                )
+                logging.info(login_response)
 
         #TODO: Deal with Redis persistence
     
@@ -59,35 +73,81 @@ class DockerContainerManager(ContainerManager):
         self.docker_client.containers.run(
                 'clipper/management_frontend:latest',
                 cmd,
-                name="mgmt_frontend",
+                name=self.mgmt_frontend_name,
                 ports={'%s/tcp' % CLIPPER_MANAGEMENT_PORT: CLIPPER_MANAGEMENT_PORT}
                 **self.extra_container_kwargs)
         self.docker_client.containers.run(
                 'clipper/query_frontend:latest',
                 cmd,
-                name="query_frontend",
-                ports={'%s/tcp' % CLIPPER_QUERY_PORT: CLIPPER_QUERY_PORT}
+                name=self.query_frontend_name,
+                ports={
+                    '%s/tcp' % CLIPPER_QUERY_PORT: CLIPPER_QUERY_PORT,
+                    '%s/tcp' % CLIPPER_RPC_PORT: CLIPPER_RPC_PORT,
+                    }
                 **self.extra_container_kwargs)
 
-    @abc.abstractmethod
-    def deploy_model():
-        pass
+    def deploy_model(self,
+            name,
+            version,
+            input_type,
+            repo):
+        """
+        Parameters
+        ----------
+        repo : str
+            The fully specified Docker repository to deploy. If using a custom
+            registry, the registry name must be prepended to the repo. For example,
+            "localhost:5000/my_model_name:my_model_version" or
+            "quay.io/my_namespace/my_model_name:my_model_version"
+        """
+        self.add_container(name, version, input_type, image, registry)
 
-    @abc.abstractmethod
-    def add_container():
-        pass
+    def add_replica(self, name, version, input_type, repo):
+        """
+        Parameters
+        ----------
+        repo : str
+            The fully specified Docker repository to deploy. If using a custom
+            registry, the registry name must be prepended to the repo. For example,
+            "localhost:5000/my_model_name:my_model_version" or
+            "quay.io/my_namespace/my_model_name:my_model_version"
+        """
 
-    @abc.abstractmethod
-    def get_container_logs(self):
-        pass
+        env_vars = {
+                "CLIPPER_MODEL_NAME": name,
+                "CLIPPER_MODEL_VERSION": version,
+                # NOTE: assumes this container being launched on same machine
+                # in same docker network as the query frontend
+                "CLIPPER_IP": self.query_frontend, 
+                "CLIPPER_INPUT_TYPE": input_type,
+                }
+        self.extra_container_kwargs["labels"].append(CLIPPER_MODEL_CONTAINER_LABEL)
+        self.docker_client.containers.run(
+                repo,
+                environment=env_vars,
+                **self.extra_container_kwargs)
 
-    @abc.abstractmethod
-    def stop_models():
-        pass
+    def get_logs(self, logging_dir):
+        containers = self.docker_client.containers.list(filters={"label": CLIPPER_DOCKER_LABEL})
+        logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
+        try:
+            os.mkdir(logging_dir)
+            logging.info("Created logging directory: %s" % logging_dir)
+        except OSError:
+            pass
+        for c in containers:
+            log_file_name = "{image}:{id}.log".format(image=c.image, id=c.short_id)
+            log_file = os.path.join(logging_dir, log_file_name)
+            with open(log_file, "w") as lf:
+                f.write(c.logs(stdout=True, stderr=True))
 
-    @abc.abstractmethod
-    def stop_clipper():
-        pass
+    def stop_models(self):
+        containers = self.docker_client.containers.list(filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
+        for c in containers:
+            c.stop()
 
-    def get_admin_addr():
-        return "{host}:{port}".format(host=self.public_hostname, port=CLIPPER_MANAGEMENT_PORT)
+    def stop_clipper(self):
+        containers = self.docker_client.containers.list(filters={"label": CLIPPER_DOCKER_LABEL})
+        for c in containers:
+            c.stop()
+

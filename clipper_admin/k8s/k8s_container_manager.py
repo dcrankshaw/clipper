@@ -2,15 +2,23 @@ from container_manager import ContainerManager
 
 class K8sContainerManager(ContainerManager):
 
-    def __init__(self, create_registry=False):
+    def __init__(self, clipper_public_hostname, create_registry=False):
+        super.__init__(clipper_public_hostname)
         config.load_kube_config()
         self._k8s_v1 = client.CoreV1Api()
         self._k8s_beta = client.ExtensionsV1beta1Api()
+        self.registry = None
         if create_registry:
-            self._start_registry()
-
+            self.registry = self._start_registry()
 
     def _start_registry(self):
+        """
+
+        Returns
+        -------
+        str
+            The address of the registry
+        """
         logging.info("Initializing Docker registry on k8s cluster")
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_replication_controller(
@@ -21,8 +29,9 @@ class K8sContainerManager(ContainerManager):
         with _pass_conflicts():
             self._k8s_beta.create_namespaced_daemon_set(
                     body=yaml.load(open('k8s/minikube-registry/kube-registry-daemon-set.yaml')), namespace='kube-system')
+        return "localhost:5000"
 
-    def start_clipper():
+    def start_clipper(self):
         """Deploys Clipper to the k8s cluster and exposes the frontends as services."""
         logging.info("Initializing Clipper services to k8s cluster")
         for name in ['mgmt-frontend', 'query-frontend', 'redis']:
@@ -33,8 +42,7 @@ class K8sContainerManager(ContainerManager):
                 self._k8s_v1.create_namespaced_service(
                         body=yaml.load(open('k8s/clipper/{}-service.yaml'.format(name))), namespace='default')
 
-    @abc.abstractmethod
-    def deploy_model(self, name, version, repo, registry=None):
+    def deploy_model(self, name, version, repo):
         """Deploys a versioned model to a k8s cluster.
 
         Parameters
@@ -96,16 +104,15 @@ class K8sContainerManager(ContainerManager):
                         }
                     }, namespace='default')
 
-    @abc.abstractmethod
-    def add_container():
+    def add_replica(self, name, version, input_type, repo):
+        # TODO(feynman): Implement this
         pass
 
-    @abc.abstractmethod
-    def get_container_logs(self):
+    def get_logs(self, logging_dir):
+        # TODO(feynman): Implement this
         pass
 
-    @abc.abstractmethod
-    def stop_models():
+    def stop_models(self):
         """Stops all deployments of pods running Clipper models."""
         logging.info("Stopping all running Clipper model deployments")
         try:
@@ -115,8 +122,7 @@ class K8sContainerManager(ContainerManager):
         except ApiException as e:
             logging.warn("Exception deleting k8s deployments: {}".format(e))
 
-    @abc.abstractmethod
-    def stop_clipper():
+    def stop_clipper(self):
         """Stops all Clipper resources.
 
         WARNING: Data stored on an in-cluster Redis deployment will be lost! This method does not delete
@@ -148,8 +154,7 @@ class K8sContainerManager(ContainerManager):
         except ApiException as e:
             logging.warn("Exception deleting k8s resources: {}".format(e))
 
-    @abc.abstractmethod
-    def get_admin_addr():
-        pass
+    def get_registry(self):
+        return self.registry
 
 
