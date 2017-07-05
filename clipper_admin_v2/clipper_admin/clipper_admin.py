@@ -3,19 +3,11 @@ import logging
 import docker
 import requests
 import json
-import os
 from .container_manager import CONTAINERLESS_MODEL_IMAGE
 
+DEFAULT_LABEL = ["DEFAULT"]
 
-"""
-subclasses of ContainerManager
-- Docker local (use Docker Python SDK)
-- Docker + SSH (raw string docker commands?)
-  - By default, deploy all containers to same machine, but allow a host arg
-- Kubernetes
-"""
-
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ClipperException(Exception):
@@ -25,10 +17,10 @@ class ClipperException(Exception):
 def start_clipper(cm):
     try:
         cm.start_clipper()
-        logging.info("Clipper is running")
+        logger.info("Clipper is running")
         return True
     except ClipperException as e:
-        logging.info(e.msg)
+        logger.info(e.msg)
         return False
 
 
@@ -43,11 +35,11 @@ def register_application(cm, name, model, input_type, default_output, slo_micros
     })
     headers = {'Content-type': 'application/json'}
     r = requests.post(url, headers=headers, data=req_json)
-    logging.info(r.text)
     if r.status_code == requests.codes.ok:
         return True
     else:
-        logging.warning("Received error status code: {code}".format(code=r.status_code))
+        logger.warning("Received error status code: {code} and message: {msg}".format(
+            code=r.status_code, msg=r.text))
         return False
 
 
@@ -85,38 +77,44 @@ def deploy_model(
                 name=name,
                 version=version)
     repo = _resolve_docker_repo(cm, image_name, registry)
-    docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
-    logging.info("Building model Docker image at {}".format(model_data_path))
+    # docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
+    docker_client = docker.from_env()
+    logger.info("Building model Docker image at {}".format(model_data_path))
     docker_client.images.build(
             path=model_data_path,
             tag=repo)
-    logging.info("Pushing model Docker image to {}".format(repo))
+
+    logger.info("Pushing model Docker image to {}".format(repo))
     docker_client.images.push(repository=repo)
     cm.deploy_model(name, version, input_type, repo, num_replicas=num_replicas)
-    logging.info("Publishing model to Clipper query manager")
+    logger.info("Publishing model to Clipper query manager")
     publish_model(cm, name, version, input_type, repo=repo, labels=labels)
-    logging.info("Done deploying!")
+    logger.info("Done deploying!")
 
 
 def publish_model(cm, name, version, input_type, repo=None, labels=None):
     url = "http://{host}/admin/add_model".format(host=cm.get_admin_addr())
     if repo is None:
         repo = CONTAINERLESS_MODEL_IMAGE
+    if labels is None:
+        labels = DEFAULT_LABEL
     req_json = json.dumps({
         "model_name": name,
         "model_version": str(version),
         "labels": labels,
         "input_type": input_type,
-        "image": repo,
+        "container_name": repo,
+        "model_data_path": "DEPRECATED",
     })
     headers = {'Content-type': 'application/json'}
-    logging.info(req_json)
+    logger.debug(req_json)
     r = requests.post(url, headers=headers, data=req_json)
     if r.status_code == requests.codes.ok:
         return True
     else:
-        logging.warn("Error publishing model: %s" % r.text)
-        return False
+        msg = "Error publishing model: %s" % r.text
+        logger.error(msg)
+        raise ClipperException(msg)
 
 
 def add_replica(cm, name, version):
@@ -127,12 +125,12 @@ def add_replica(cm, name, version):
     model_data = get_model_info(cm, name, version)
     if model_data is not None:
         input_type = model_data["input_type"]
-        image = model_data["image"]
+        image = model_data["container_name"]
         if image != CONTAINERLESS_MODEL_IMAGE:
             cm.add_replica(name, version, input_type, image)
 
     else:
-        logging.error(
+        logger.error(
             "Cannot add container for non-registered model {name}:{version}".format(
                 name=name, version=version))
 
@@ -162,7 +160,7 @@ def get_all_apps(cm, verbose=False):
     if r.status_code == requests.codes.ok:
         return r.json()
     else:
-        logging.warn(r.text)
+        logger.warn(r.text)
         return None
 
 
@@ -193,7 +191,7 @@ def get_app_info(cm, name):
             return None
         return app_info
     else:
-        logging.warn(r.text)
+        logger.warn(r.text)
         return None
 
 
@@ -220,7 +218,7 @@ def get_all_models(cm, verbose=False):
     if r.status_code == requests.codes.ok:
         return r.json()
     else:
-        logging.warning(r.text)
+        logger.warning(r.text)
         return None
 
 
@@ -255,7 +253,7 @@ def get_model_info(cm, name, version):
             return None
         return app_info
     else:
-        logging.info(r.text)
+        logger.info(r.text)
         return None
 
 
@@ -281,7 +279,7 @@ def get_all_model_replicas(cm, verbose=False):
     if r.status_code == requests.codes.ok:
         return r.json()
     else:
-        logging.info(r.text)
+        logger.info(r.text)
         return None
 
 
@@ -318,7 +316,7 @@ def get_model_replica_info(cm, name, version, replica_id):
             return None
         return app_info
     else:
-        logging.info(r.text)
+        logger.info(r.text)
         return None
 
 
@@ -373,7 +371,7 @@ def set_model_version(cm, model_name, model_version, num_containers=0):
     })
     headers = {'Content-type': 'application/json'}
     r = requests.post(url, headers=headers, data=req_json)
-    logging.info(r.text)
+    logger.info(r.text)
     for r in range(num_containers):
         add_replica(cm, model_name, model_version)
 

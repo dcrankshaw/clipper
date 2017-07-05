@@ -17,6 +17,12 @@ sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
 import clipper_admin as cl
 from clipper_admin import DockerContainerManager
 
+logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 headers = {'Content-type': 'application/json'}
 fake_model_data = "/tmp/test123456"
 try:
@@ -48,7 +54,7 @@ def find_unbound_port():
             sock.bind(("127.0.0.1", port))
             return port
         except socket.error:
-            print("randomly generated port %d is bound. Trying again." % port)
+            logger.debug("randomly generated port %d is bound. Trying again." % port)
 
 
 def init_clipper():
@@ -63,14 +69,14 @@ def init_clipper():
     return cm
 
 
-def print_clipper_state(cm):
+def log_clipper_state(cm):
     pp = pprint.PrettyPrinter(indent=4)
-    print("APPLICATIONS")
-    pp.pprint(cl.get_all_apps(cm, verbose=True))
-    print("\nMODELS")
-    pp.pprint(cl.get_all_models(cm, verbose=True))
-    print("\nCONTAINERS")
-    pp.pprint(cl.get_all_containers(cm, verbose=True))
+    logger.info("APPLICATIONS:\n{app_str}".format(
+        app_str=pp.pformat(cl.get_all_apps(cm, verbose=True))))
+    logger.info("MODELS:\n{model_str}".format(
+        model_str=pp.pformat(cl.get_all_models(cm, verbose=True))))
+    logger.info("CONTAINERS:\n{cont_str}".format(
+        cont_str=pp.pformat(cl.get_all_model_replicas(cm, verbose=True))))
 
 
 def deploy_model(cm, name, version):
@@ -83,7 +89,7 @@ def deploy_model(cm, name, version):
         "doubles",
         fake_model_data,
         "clipper/noop-container",
-        num_containers=1)
+        num_replicas=1)
     time.sleep(10)
     num_preds = 25
     num_defaults = 0
@@ -98,7 +104,7 @@ def deploy_model(cm, name, version):
         if response.status_code == requests.codes.ok and result["default"]:
             num_defaults += 1
     if num_defaults > 0:
-        print("Error: %d/%d predictions were default" % (num_defaults,
+        logger.error("Error: %d/%d predictions were default" % (num_defaults,
                                                          num_preds))
     if num_defaults > num_preds / 2:
         raise BenchmarkException("Error querying APP %s, MODEL %s:%d" %
@@ -119,7 +125,7 @@ def create_and_test_app(cm, name, num_models):
         }))
     result = response.json()
     if response.status_code != requests.codes.ok:
-        print("Error: %s" % response.text)
+        logger.error("Error: %s" % response.text)
         raise BenchmarkException("Error creating app %s" % app_name)
 
     for i in range(num_models):
@@ -142,22 +148,27 @@ if __name__ == "__main__":
     try:
         cm = init_clipper()
         try:
-            print("Running integration test with %d apps and %d models" %
+            logger.info("Running integration test with %d apps and %d models" %
                   (num_apps, num_models))
             for a in range(num_apps):
                 create_and_test_app(cm, "app_%s" % a, num_models)
-            print(cl.get_clipper_logs(cm))
-            print_clipper_state(cm)
-            print("SUCCESS")
+            logger.info(cl.get_clipper_logs(cm))
+            log_clipper_state(cm)
+            logger.info("SUCCESS")
         except BenchmarkException as e:
-            print_clipper_state(cm)
-            print(e)
-            cl.stop_all(cm)
+            log_clipper_state(cm)
+            logger.exception("BenchmarkException")
+            # TODO: uncomment
+            # cl.stop_all(cm)
             sys.exit(1)
         else:
             cl.stop_all(cm)
+            docker_client = docker.from_env()
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
     except Exception as e:
-        logging.error(e)
+        logger.exception("Exception")
         cm = DockerContainerManager("localhost")
-        cl.stop_all(cm)
+            # TODO: uncomment
+        # cl.stop_all(cm)
         sys.exit(1)

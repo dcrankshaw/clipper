@@ -8,7 +8,7 @@ from ..container_manager import (
 
 DOCKER_NETWORK_NAME = "clipper_network"
 
-REDIS_DEFAULT_PORT=6379
+logger = logging.getLogger(__name__)
 
 
 class DockerContainerManager(ContainerManager):
@@ -47,18 +47,21 @@ class DockerContainerManager(ContainerManager):
         if registry is not None:
             self.registry = registry
             if registry_username is not None and registry_password is not None:
-                logging.info("Logging in to {registry} as {user}".format(
+                logger.info("Logging in to {registry} as {user}".format(
                     registry=registry, user=registry_username))
                 login_response = self.docker_client.login(
                     username=registry_username,
                     password=registry_password,
                     registry=registry)
-                logging.info(login_response)
+                logger.info(login_response)
 
         # TODO: Deal with Redis persistence
 
     def start_clipper(self):
-        self.docker_client.networks.create(DOCKER_NETWORK_NAME)
+        try:
+            self.docker_client.networks.create(DOCKER_NETWORK_NAME, check_duplicate=True)
+        except docker.errors.APIError as e:
+            logger.info("{nw} network already exists".format(nw=DOCKER_NETWORK_NAME))
         container_args = {
             "network": DOCKER_NETWORK_NAME,
             "labels": {
@@ -69,11 +72,11 @@ class DockerContainerManager(ContainerManager):
         self.extra_container_kwargs.update(container_args)
 
         if self.redis_ip is None:
-            logging.info("Starting managed Redis instance in Docker")
+            logger.info("Starting managed Redis instance in Docker")
             self.redis_ip = "redis"
             self.docker_client.containers.run(
                 'redis:alpine',
-                # "redis-server --port %d" % self.redis_port,
+                "redis-server --port %d" % self.redis_port,
                 name="redis",
                 ports={'%s/tcp' % self.redis_port: self.redis_port},
                 **self.extra_container_kwargs)
@@ -107,7 +110,7 @@ class DockerContainerManager(ContainerManager):
             "quay.io/my_namespace/my_model_name:my_model_version"
         """
         for _ in range(num_replicas):
-            self.add_container(name, version, input_type, repo)
+            self.add_replica(name, version, input_type, repo)
 
     def add_replica(self, name, version, input_type, repo):
         """
@@ -125,7 +128,7 @@ class DockerContainerManager(ContainerManager):
             "CLIPPER_MODEL_VERSION": version,
             # NOTE: assumes this container being launched on same machine
             # in same docker network as the query frontend
-            "CLIPPER_IP": self.query_frontend,
+            "CLIPPER_IP": self.query_frontend_name,
             "CLIPPER_INPUT_TYPE": input_type,
         }
         self.extra_container_kwargs["labels"][
@@ -140,12 +143,12 @@ class DockerContainerManager(ContainerManager):
         logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
         try:
             os.mkdir(logging_dir)
-            logging.info("Created logging directory: %s" % logging_dir)
+            logger.info("Created logging directory: %s" % logging_dir)
         except OSError:
             pass
         for c in containers:
-            log_file_name = "{image}:{id}.log".format(
-                image=c.image, id=c.short_id)
+            log_file_name = "image_{image}:container_{id}.log".format(
+                image=c.image.short_id, id=c.short_id)
             log_file = os.path.join(logging_dir, log_file_name)
             with open(log_file, "w") as lf:
                 lf.write(c.logs(stdout=True, stderr=True))
