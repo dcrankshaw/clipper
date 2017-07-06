@@ -64,7 +64,7 @@ def deploy_model(
         base_image,
         labels=None,
         registry=None,
-        num_replicas=0):
+        num_replicas=1):
 
     with open(model_data_path + '/Dockerfile', 'w') as f:
         f.write("FROM {container_name}\nCOPY . /model/.\n".format(container_name=base_image))
@@ -87,12 +87,12 @@ def deploy_model(
     logger.info("Pushing model Docker image to {}".format(repo))
     docker_client.images.push(repository=repo)
     cm.deploy_model(name, version, input_type, repo, num_replicas=num_replicas)
-    logger.info("Publishing model to Clipper query manager")
-    publish_model(cm, name, version, input_type, repo=repo, labels=labels)
+    logger.info("Registering model with Clipper")
+    register_model(cm, name, version, input_type, repo=repo, labels=labels)
     logger.info("Done deploying!")
 
 
-def publish_model(cm, name, version, input_type, repo=None, labels=None):
+def register_model(cm, name, version, input_type, repo=None, labels=None):
     url = "http://{host}/admin/add_model".format(host=cm.get_admin_addr())
     if repo is None:
         repo = CONTAINERLESS_MODEL_IMAGE
@@ -112,7 +112,7 @@ def publish_model(cm, name, version, input_type, repo=None, labels=None):
     if r.status_code == requests.codes.ok:
         return True
     else:
-        msg = "Error publishing model: %s" % r.text
+        msg = "Error registering model: %s" % r.text
         logger.error(msg)
         raise ClipperException(msg)
 
@@ -321,7 +321,7 @@ def get_model_replica_info(cm, name, version, replica_id):
 
 
 def get_clipper_logs(cm, logging_dir="clipper_logs/"):
-    cm.get_logs(logging_dir)
+    return cm.get_logs(logging_dir)
 
 
 def inspect_instance(cm):

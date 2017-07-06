@@ -36,6 +36,23 @@ class ContainerManager(object):
 
     @abc.abstractmethod
     def get_logs(self, logging_dir):
+        """Get the container logs for all Docker containers launched by Clipper.
+
+            This will get the logs for both Clipper core containers and
+            any model containers deployed by Clipper admin.
+            Any previous log files from existing containers will be overwritten.
+
+        Parameters
+        ----------
+        logging_dir : str
+            The directory to write the log files to. If the directory
+            does not exist, it will be created.
+
+        Returns
+        -------
+        list(str)
+            The list of all log files created.
+        """
         return
 
     @abc.abstractmethod

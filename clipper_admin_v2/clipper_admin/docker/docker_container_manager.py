@@ -141,17 +141,19 @@ class DockerContainerManager(ContainerManager):
         containers = self.docker_client.containers.list(
             filters={"label": CLIPPER_DOCKER_LABEL})
         logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
-        try:
-            os.mkdir(logging_dir)
+
+        log_files = []
+        if not os.path.exists(logging_dir):
+            os.makedirs(logging_dir)
             logger.info("Created logging directory: %s" % logging_dir)
-        except OSError:
-            pass
         for c in containers:
             log_file_name = "image_{image}:container_{id}.log".format(
                 image=c.image.short_id, id=c.short_id)
             log_file = os.path.join(logging_dir, log_file_name)
             with open(log_file, "w") as lf:
                 lf.write(c.logs(stdout=True, stderr=True))
+            log_files.append(log_file)
+        return log_files
 
     def stop_models(self, model_name=None, keep_version=None):
         containers = self.docker_client.containers.list(
