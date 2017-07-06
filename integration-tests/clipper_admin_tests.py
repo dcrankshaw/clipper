@@ -207,7 +207,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
 
         docker_client = docker.from_env()
         containers = docker_client.containers.list(
-            filters={"ancestor": "clipper/python-container"})
+            filters={"ancestor": "clipper/python-closure-container"})
         self.assertGreaterEqual(len(containers), 1)
 
 
