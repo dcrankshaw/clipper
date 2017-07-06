@@ -14,7 +14,7 @@ def deploy_python_closure(cm,
                           version,
                           input_type,
                           func,
-                          base_image="clipper/python-container",
+                          base_image="clipper/python-closure-container",
                           labels=None,
                           registry=None,
                           num_replicas=1):
@@ -74,10 +74,10 @@ def deploy_python_closure(cm,
     """
 
     serialization_dir = save_python_function(name, func)
+    logger.info("Python closure saved")
     # Deploy function
     deploy_result = deploy_model(cm, name, version, input_type,
                                  serialization_dir, base_image, labels, registry, num_replicas)
-    logger.info("Python closure saved")
     # Remove temp files
     shutil.rmtree(serialization_dir)
     return deploy_result

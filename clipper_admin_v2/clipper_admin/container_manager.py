@@ -77,6 +77,10 @@ class ContainerManager(object):
         return "{host}:{port}".format(
             host=self.public_hostname, port=CLIPPER_MANAGEMENT_PORT)
 
+    def get_query_addr(self):
+        return "{host}:{port}".format(
+            host=self.public_hostname, port=CLIPPER_QUERY_PORT)
+
     def get_registry(self):
         """Return a reference to the Docker registry created by the ContainerManager
         """

@@ -5,10 +5,9 @@ import sys
 import json
 
 import numpy as np
-np.set_printoptions(threshold=np.nan)
 
-sys.path.append(os.path.abspath("/lib/"))
-from clipper_admin import cloudpickle
+# sys.path.append(os.path.abspath("/lib/"))
+from clipper_admin.deployers import cloudpickle
 
 import findspark
 findspark.init()
@@ -48,7 +47,7 @@ def load_pyspark_model(metadata_path, spark, model_path):
 class PySparkContainer(rpc.ModelContainerBase):
     def __init__(self, path, input_type):
         self.input_type = rpc.string_to_input_type(input_type)
-        predict_fname = "predict_func.pkl"
+        predict_fname = "func.pkl"
         predict_path = "{dir}/{predict_fname}".format(
             dir=path, predict_fname=predict_fname)
         self.predict_func = load_predict_func(predict_path)

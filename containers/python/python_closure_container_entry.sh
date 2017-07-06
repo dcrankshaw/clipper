@@ -4,7 +4,7 @@ IMPORT_ERROR_RETURN_CODE=3
 
 CONDA_DEPS_PATH="/model/conda_dependencies.txt"
 PIP_DEPS_PATH="/model/pip_dependencies.txt"
-CONTAINER_SCRIPT_PATH="/container/python_container.py"
+CONTAINER_SCRIPT_PATH="/container/python_closure_container.py"
 
 test -f $CONDA_DEPS_PATH
 dependency_check_returncode=$?

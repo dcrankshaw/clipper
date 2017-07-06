@@ -12,11 +12,10 @@ import os
 import json
 import time
 import requests
-from sklearn import svm
 from argparse import ArgumentParser
 import docker
 import logging
-from test_utils import init_clipper
+from test_utils import init_clipper, fake_model_data
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath('%s/../clipper_admin_v2' % cur_dir))
@@ -34,7 +33,8 @@ logger = logging.getLogger(__name__)
 class ClipperManagerTestCaseShort(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.cm = init_clipper(container_manager="docker")
+        self.cm_type = "docker"
+        self.cm = init_clipper(container_manager=self.cm_type)
         self.app_name = "app1"
         self.model_name = "m1"
         self.model_version_1 = 1
@@ -51,19 +51,19 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
 
     def test_register_model_correct(self):
         input_type = "doubles"
-        result = cl.register_model(self.cm,
-                                   self.model_name,
-                                   self.model_version_1,
-                                   input_type)
-        self.assertTrue(result)
+        cl.register_model(self.cm,
+                          self.model_name,
+                          self.model_version_1,
+                          input_type)
         registered_model_info = cl.get_model_info(self.cm,
                                                   self.model_name,
                                                   self.model_version_1)
         self.assertIsNotNone(registered_model_info)
 
-        result = cl.register_model(
-            self.model_name, self.model_version_2, input_type)
-        self.assertTrue(result)
+        cl.register_model(self.cm,
+                          self.model_name,
+                          self.model_version_2,
+                          input_type)
         registered_model_info = cl.get_model_info(self.cm,
                                                   self.model_name,
                                                   self.model_version_2)
@@ -92,11 +92,12 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         result = cl.get_app_info(self.cm, "fake_app")
         self.assertIsNone(result)
 
-    def test_add_container_for_external_model_fails(self):
-        result = cl.add_container(self.cm,
-                                  self.model_name,
-                                  self.model_version_1)
-        self.assertFalse(result)
+    def test_add_replica_for_external_model_fails(self):
+        with self.assertRaises(cl.ClipperException) as context:
+            cl.add_replica(self.cm,
+                           self.model_name,
+                           self.model_version_1)
+        self.assertTrue("containerless model" in str(context.exception))
 
     def test_model_version_sets_correctly(self):
         cl.set_model_version(self.cm,
@@ -106,7 +107,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         models_list_contains_correct_version = False
         for model_info in all_models:
             version = model_info["model_version"]
-            if version == self.model_version_1:
+            if version == str(self.model_version_1):
                 models_list_contains_correct_version = True
                 self.assertTrue(model_info["is_current_version"])
 
@@ -125,30 +126,27 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         self.assertGreaterEqual(len(metrics), 1)
 
     def test_model_deploys_successfully(self):
-        # Initialize a support vector classifier
-        # that will be deployed to a no-op container
-        model_data = svm.SVC()
         container_name = "clipper/noop-container"
         input_type = "doubles"
-        result = cl.deploy_model(self.cm,
-                                 self.deploy_model_name,
-                                 self.deploy_model_version,
-                                 input_type,
-                                 model_data,
-                                 container_name)
-        self.assertTrue(result)
+        cl.deploy_model(self.cm,
+                        self.deploy_model_name,
+                        self.deploy_model_version,
+                        input_type,
+                        fake_model_data,
+                        container_name)
         model_info = cl.get_model_info(self.cm, self.deploy_model_name, self.deploy_model_version)
         self.assertIsNotNone(model_info)
+        self.assertEqual(type(model_info), dict)
 
         docker_client = docker.from_env()
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertGreaterEqual(len(containers), 1)
 
-    def test_add_container_for_deployed_model_succeeds(self):
-        result = cl.add_container(self.deploy_model_name,
-                                  self.deploy_model_version)
-        self.assertTrue(result)
+    def test_add_replica_for_deployed_model_succeeds(self):
+        cl.add_replica(self.cm,
+                       self.deploy_model_name,
+                       self.deploy_model_version)
         container_name = "clipper/noop-container"
         docker_client = docker.from_env()
         containers = docker_client.containers.list(
@@ -156,35 +154,29 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         self.assertGreaterEqual(len(containers), 2)
 
     def test_remove_inactive_containers_succeeds(self):
-        # Initialize a support vector classifier
-        # that will be deployed to a no-op container
-        cl.stop_all(self.cm)
-        cl.start(self.cm)
-        model_data = svm.SVC()
+        self.cm = init_clipper(container_manager=self.cm_type)
         container_name = "clipper/noop-container"
         input_type = "doubles"
         model_name = "remove_inactive_test_model"
-        result = cl.deploy_model(self.cm,
-                                 model_name,
-                                 1,
-                                 input_type,
-                                 model_data,
-                                 container_name,
-                                 num_containers=2)
-        self.assertTrue(result)
+        cl.deploy_model(self.cm,
+                        model_name,
+                        1,
+                        input_type,
+                        fake_model_data,
+                        container_name,
+                        num_replicas=2)
         docker_client = docker.from_env()
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertEqual(len(containers), 2)
 
-        result = cl.deploy_model(self.cm,
-                                 model_name,
-                                 2,
-                                 input_type,
-                                 model_data,
-                                 container_name,
-                                 num_containers=3)
-        self.assertTrue(result)
+        cl.deploy_model(self.cm,
+                        model_name,
+                        2,
+                        input_type,
+                        fake_model_data,
+                        container_name,
+                        num_replicas=3)
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertEqual(len(containers), 5)
@@ -203,12 +195,11 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
             return ["0" for x in inputs]
 
         input_type = "doubles"
-        result = deploy_python_closure(self.cm,
-                                       model_name,
-                                       model_version,
-                                       input_type,
-                                       predict_func)
-        self.assertTrue(result)
+        deploy_python_closure(self.cm,
+                              model_name,
+                              model_version,
+                              input_type,
+                              predict_func)
         model_info = cl.get_model_info(self.cm,
                                        model_name,
                                        model_version)
@@ -255,17 +246,13 @@ class ClipperManagerTestCaseLong(unittest.TestCase):
 
     def test_deployed_model_queried_successfully(self):
         model_version = 1
-        # Initialize a support vector classifier
-        # that will be deployed to a no-op container
-        model_data = svm.SVC()
         container_name = "clipper/noop-container"
-        result = cl.deploy_model(self.cm,
-                                 self.model_name_2,
-                                 model_version,
-                                 self.input_type,
-                                 model_data,
-                                 container_name)
-        self.assertTrue(result)
+        cl.deploy_model(self.cm,
+                        self.model_name_2,
+                        model_version,
+                        self.input_type,
+                        fake_model_data,
+                        container_name)
 
         time.sleep(30)
 
@@ -286,12 +273,11 @@ class ClipperManagerTestCaseLong(unittest.TestCase):
             return [str(len(x)) for x in inputs]
 
         input_type = "doubles"
-        result = deploy_python_closure(self.cm,
-                                       self.model_name_1,
-                                       model_version,
-                                       input_type,
-                                       predict_func)
-        self.assertTrue(result)
+        deploy_python_closure(self.cm,
+                              self.model_name_1,
+                              model_version,
+                              input_type,
+                              predict_func)
 
         time.sleep(60)
 
@@ -320,11 +306,12 @@ SHORT_TEST_ORDERING = [
     'test_register_application_correct',
     'get_app_info_for_registered_app_returns_info_dictionary',
     'get_app_info_for_nonexistent_app_returns_none',
-    'test_add_container_for_external_model_fails',
-    'test_model_version_sets_correctly', 'test_get_logs_creates_log_files',
+    'test_add_replica_for_external_model_fails',
+    'test_model_version_sets_correctly',
+    'test_get_logs_creates_log_files',
     'test_inspect_instance_returns_json_dict',
     'test_model_deploys_successfully',
-    'test_add_container_for_deployed_model_succeeds',
+    'test_add_replica_for_deployed_model_succeeds',
     'test_remove_inactive_containers_succeeds',
     'test_python_closure_deploys_successfully'
 ]

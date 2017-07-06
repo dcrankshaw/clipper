@@ -8,7 +8,7 @@ with open('LICENSE.txt') as f:
 
 setup(
     name='clipper_admin',
-    version='0.2.0',
+    version='0.2.0-rc1',
     description='Admin commands for the Clipper prediction-serving system',
     long_description=readme,
     maintainer='Dan Crankshaw',
@@ -19,7 +19,7 @@ setup(
     keywords=['clipper', 'prediction', 'model', 'management'],
     install_requires=[
         'requests', 'pyparsing', 'appdirs', 'pprint', 'subprocess32',
-        'sklearn', 'numpy', 'scipy', 'pyyaml', 'abc', 'docker', 'kubernetes', 'six'
+        'sklearn', 'numpy', 'scipy', 'pyyaml', 'docker', 'kubernetes', 'six'
     ],
     extras_require={'TensorFlow': ['tensorflow'],
                     'RPython': ['rpy2']}
