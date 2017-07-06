@@ -46,8 +46,9 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
     def tearDownClass(self):
         cl.stop_all(self.cm)
         docker_client = docker.from_env()
-        docker_client.containers.prune(
-            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        if self.cm_type == "docker":
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
 
     def test_register_model_correct(self):
         input_type = "doubles"
