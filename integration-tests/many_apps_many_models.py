@@ -88,7 +88,7 @@ if __name__ == "__main__":
         # for num_apps and num_models
         pass
     try:
-        cm = init_clipper()
+        cm = init_clipper(container_manager="docker")
         try:
             logger.info("Running integration test with %d apps and %d models" %
                         (num_apps, num_models))

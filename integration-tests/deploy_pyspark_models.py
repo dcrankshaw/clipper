@@ -147,8 +147,8 @@ if __name__ == "__main__":
             logger.exception("BenchmarkException")
             cl.stop_all(cm)
             docker_client = docker.from_env()
-            # docker_client.containers.prune(
-            #     filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
             sys.exit(1)
         else:
             spark.stop()
@@ -162,6 +162,6 @@ if __name__ == "__main__":
         cm = DockerContainerManager("localhost")
         cl.stop_all(cm)
         docker_client = docker.from_env()
-        # docker_client.containers.prune(
-        #     filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        docker_client.containers.prune(
+            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
         sys.exit(1)

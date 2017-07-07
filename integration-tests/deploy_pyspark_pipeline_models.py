@@ -4,61 +4,35 @@ import sys
 import requests
 import json
 import numpy as np
-cur_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath("%s/.." % cur_dir))
-from clipper_admin import Clipper
 import time
-import subprocess32 as subprocess
-import pprint
-import random
-import socket
+import logging
+import docker
 
 import findspark
 findspark.init()
-import pyspark
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import HashingTF, Tokenizer
 from pyspark.sql import SparkSession
 
-headers = {'Content-type': 'application/json'}
+from test_utils import (init_clipper, BenchmarkException,
+                        headers, log_clipper_state)
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
+import clipper_admin as cl
+from clipper_admin import DockerContainerManager
+from clipper_admin.deployers.pyspark import deploy_pyspark_model
+
+logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+                    datefmt='%y-%m-%d:%H:%M:%S',
+                    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
 app_name = "pyspark_pipeline_test"
 model_name = "pyspark_pipeline"
 
-
-class BenchmarkException(Exception):
-    def __init__(self, value):
-        self.parameter = value
-
-    def __str__(self):
-        return repr(self.parameter)
-
-
-# range of ports where available ports can be found
-PORT_RANGE = [34256, 40000]
-
-
-def find_unbound_port():
-    """
-    Returns an unbound port number on 127.0.0.1.
-    """
-    while True:
-        port = random.randint(*PORT_RANGE)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(("127.0.0.1", port))
-            return port
-        except socket.error:
-            print("randomly generated port %d is bound. Trying again." % port)
-
-
-def init_clipper():
-    clipper = Clipper("localhost", redis_port=find_unbound_port())
-    clipper.stop_all()
-    clipper.start()
-    time.sleep(1)
-    return clipper
-
+container_manager_type = "docker"
 
 columns = ["id", "text"]
 
@@ -84,7 +58,7 @@ def predict(spark, pipeline, xs):
     return outputs
 
 
-if __name__ == "__main__":
+def run_test():
     spark = SparkSession\
         .builder\
         .appName("clipper-pyspark")\
@@ -121,11 +95,11 @@ if __name__ == "__main__":
                   [json.dumps((np.random.randint(1000), "spark abcd"))]))
 
     try:
-        clipper = init_clipper()
+        cm = init_clipper(container_manager=container_manager_type)
 
         try:
-            clipper.register_application(app_name, model_name, "strings",
-                                         "default_pred", 10000000)
+            cl.register_application(cm, app_name, model_name, "strings",
+                                    "default_pred", 10000000)
             time.sleep(1)
             response = requests.post(
                 "http://localhost:1337/%s/predict" % app_name,
@@ -140,9 +114,9 @@ if __name__ == "__main__":
                 raise BenchmarkException("Error creating app %s" % app_name)
 
             version = 1
-            clipper.deploy_pyspark_model(model_name, version, predict, model,
-                                         spark.sparkContext, "strings")
-            time.sleep(10)
+            deploy_pyspark_model(cm, model_name, version, "strings", predict, model,
+                                 spark.sparkContext)
+            time.sleep(30)
             num_preds = 25
             num_defaults = 0
             for i in range(num_preds):
@@ -154,7 +128,7 @@ if __name__ == "__main__":
                         json.dumps((np.random.randint(1000), "spark abcd"))
                     }))
                 result = response.json()
-                if response.status_code == requests.codes.ok and result["default"] == True:
+                if response.status_code == requests.codes.ok and result["default"]:
                     num_defaults += 1
             if num_defaults > 0:
                 print("Error: %d/%d predictions were default" % (num_defaults,
@@ -164,9 +138,9 @@ if __name__ == "__main__":
                                          (app_name, model_name, version))
 
             version += 1
-            clipper.deploy_pyspark_model(model_name, version, predict, model,
-                                         spark.sparkContext, "strings")
-            time.sleep(10)
+            deploy_pyspark_model(cm, model_name, version, "strings", predict, model,
+                                 spark.sparkContext)
+            time.sleep(30)
             num_preds = 25
             num_defaults = 0
             for i in range(num_preds):
@@ -178,7 +152,7 @@ if __name__ == "__main__":
                         json.dumps((np.random.randint(1000), "spark abcd"))
                     }))
                 result = response.json()
-                if response.status_code == requests.codes.ok and result["default"] == True:
+                if response.status_code == requests.codes.ok and result["default"]:
                     num_defaults += 1
             if num_defaults > 0:
                 print("Error: %d/%d predictions were default" % (num_defaults,
@@ -186,20 +160,30 @@ if __name__ == "__main__":
             if num_defaults > num_preds / 2:
                 raise BenchmarkException("Error querying APP %s, MODEL %s:%d" %
                                          (app_name, model_name, version))
-
         except BenchmarkException as e:
-            print(e)
-            clipper.stop_all()
-            spark.stop()
+            log_clipper_state(cm)
+            logger.exception("BenchmarkException")
+            cl.stop_all(cm)
+            docker_client = docker.from_env()
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
             sys.exit(1)
         else:
             spark.stop()
-            clipper.stop_all()
-            print("ALL TESTS PASSED")
-
+            cl.stop_all(cm)
+            docker_client = docker.from_env()
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            logger.info("ALL TESTS PASSED")
     except Exception as e:
-        print(e)
-        clipper = Clipper("localhost")
-        clipper.stop_all()
-        spark.stop()
+        logger.exception("Exception")
+        cm = DockerContainerManager("localhost")
+        cl.stop_all(cm)
+        docker_client = docker.from_env()
+        docker_client.containers.prune(
+            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    run_test()
