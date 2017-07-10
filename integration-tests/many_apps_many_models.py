@@ -6,13 +6,11 @@ import json
 import numpy as np
 import time
 import logging
-import docker
-from test_utils import (init_clipper, BenchmarkException, fake_model_data,
+from test_utils import (create_container_manager, BenchmarkException, fake_model_data,
                         headers, log_clipper_state)
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
 import clipper_admin as cl
-from clipper_admin import DockerContainerManager, K8sContainerManager
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
                     datefmt='%y-%m-%d:%H:%M:%S',
@@ -20,7 +18,8 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d
 
 logger = logging.getLogger(__name__)
 
-container_manager = "docker"
+service = "docker"
+
 
 def deploy_model(cm, name, version):
     app_name = "%s_app" % name
@@ -84,12 +83,12 @@ if __name__ == "__main__":
             num_apps = int(sys.argv[1])
         if len(sys.argv) > 2:
             num_models = int(sys.argv[2])
-    except:
+    except IndexError:
         # it's okay to pass here, just use the default values
         # for num_apps and num_models
         pass
     try:
-        cm = init_clipper(container_manager=container_manager)
+        cm = create_container_manager(service, cleanup=True, start_clipper=True)
         try:
             logger.info("Running integration test with %d apps and %d models" %
                         (num_apps, num_models))
@@ -101,24 +100,11 @@ if __name__ == "__main__":
         except BenchmarkException as e:
             log_clipper_state(cm)
             logger.exception("BenchmarkException")
-            cl.stop_all(cm)
-            if container_manager == "docker":
-                docker_client = docker.from_env()
-                docker_client.containers.prune(
-                    filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            create_container_manager(service, cleanup=True, start_clipper=False)
             sys.exit(1)
         else:
-            cl.stop_all(cm)
-            docker_client = docker.from_env()
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            create_container_manager(service, cleanup=True, start_clipper=False)
     except Exception as e:
         logger.exception("Exception")
-        if container_manager == "docker":
-            cm = DoContainerManager("localhost")
-            cl.stop_all(cm)
-            docker_client = docker.from_env()
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
-        elif
+        create_container_manager(service, cleanup=True, start_clipper=False)
         sys.exit(1)

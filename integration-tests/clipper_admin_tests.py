@@ -15,7 +15,7 @@ import requests
 from argparse import ArgumentParser
 import docker
 import logging
-from test_utils import init_clipper, fake_model_data
+from test_utils import create_container_manager, fake_model_data
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath('%s/../clipper_admin_v2' % cur_dir))
@@ -34,7 +34,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.cm_type = "docker"
-        self.cm = init_clipper(container_manager=self.cm_type)
+        self.cm = create_container_manager(self.cm_type, cleanup=True, start_clipper=True)
         self.app_name = "app1"
         self.model_name = "m1"
         self.model_version_1 = 1
@@ -44,11 +44,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
 
     @classmethod
     def tearDownClass(self):
-        cl.stop_all(self.cm)
-        docker_client = docker.from_env()
-        if self.cm_type == "docker":
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        self.cm = create_container_manager(self.cm_type, cleanup=True, start_clipper=False)
 
     def test_register_model_correct(self):
         input_type = "doubles"
@@ -155,7 +151,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         self.assertGreaterEqual(len(containers), 2)
 
     def test_remove_inactive_containers_succeeds(self):
-        self.cm = init_clipper(container_manager=self.cm_type)
+        self.cm = create_container_manager(self.cm_type, cleanup=True, start_clipper=True)
         container_name = "clipper/noop-container"
         input_type = "doubles"
         model_name = "remove_inactive_test_model"
@@ -215,7 +211,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
 class ClipperManagerTestCaseLong(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.cm = init_clipper(container_manager="docker")
+        self.cm = create_container_manager(self.cm_type, cleanup=True, start_clipper=True)
         self.app_name_1 = "app3"
         self.app_name_2 = "app4"
         self.model_name_1 = "m4"
@@ -240,10 +236,7 @@ class ClipperManagerTestCaseLong(unittest.TestCase):
 
     @classmethod
     def tearDownClass(self):
-        cl.stop_all(self.cm)
-        docker_client = docker.from_env()
-        docker_client.containers.prune(
-            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        self.cm = create_container_manager(self.cm_type, cleanup=True, start_clipper=False)
 
     def test_deployed_model_queried_successfully(self):
         model_version = 1

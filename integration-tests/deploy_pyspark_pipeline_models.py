@@ -6,7 +6,6 @@ import json
 import numpy as np
 import time
 import logging
-import docker
 
 import findspark
 findspark.init()
@@ -15,12 +14,11 @@ from pyspark.ml.classification import LogisticRegression
 from pyspark.ml.feature import HashingTF, Tokenizer
 from pyspark.sql import SparkSession
 
-from test_utils import (init_clipper, BenchmarkException,
+from test_utils import (create_container_manager, BenchmarkException,
                         headers, log_clipper_state)
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
 import clipper_admin as cl
-from clipper_admin import DockerContainerManager
 from clipper_admin.deployers.pyspark import deploy_pyspark_model
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 app_name = "pyspark_pipeline_test"
 model_name = "pyspark_pipeline"
 
-container_manager_type = "docker"
+service = "docker"
 
 columns = ["id", "text"]
 
@@ -95,7 +93,7 @@ def run_test():
                   [json.dumps((np.random.randint(1000), "spark abcd"))]))
 
     try:
-        cm = init_clipper(container_manager=container_manager_type)
+        cm = create_container_manager(service, cleanup=True, start_clipper=True)
 
         try:
             cl.register_application(cm, app_name, model_name, "strings",
@@ -163,25 +161,15 @@ def run_test():
         except BenchmarkException as e:
             log_clipper_state(cm)
             logger.exception("BenchmarkException")
-            cl.stop_all(cm)
-            docker_client = docker.from_env()
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            cm = create_container_manager(service, cleanup=True, start_clipper=False)
             sys.exit(1)
         else:
             spark.stop()
-            cl.stop_all(cm)
-            docker_client = docker.from_env()
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            cm = create_container_manager(service, cleanup=True, start_clipper=False)
             logger.info("ALL TESTS PASSED")
     except Exception as e:
         logger.exception("Exception")
-        cm = DockerContainerManager("localhost")
-        cl.stop_all(cm)
-        docker_client = docker.from_env()
-        docker_client.containers.prune(
-            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        cm = create_container_manager(service, cleanup=True, start_clipper=False)
         sys.exit(1)
 
 

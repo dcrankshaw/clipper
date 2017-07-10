@@ -55,36 +55,32 @@ def find_unbound_port():
             logger.debug("randomly generated port %d is bound. Trying again." % port)
 
 
-
-def init_clipper(container_manager, no_start=False):
-    if container_manager == "docker":
+def create_container_manager(service, cleanup=True, start_clipper=True):
+    if service == "docker":
         # TODO: create registry
         logging.info("Creating DockerContainerManager")
         cm = DockerContainerManager("localhost", redis_port=find_unbound_port())
-        cl.stop_all(cm)
-        docker_client = docker.from_env()
-        docker_client.containers.prune(
-            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
-        logging.info("Starting Clipper")
-        # cl.start_clipper(cm)
-        # time.sleep(1)
-        # return cm
-    elif container_manager == "k8s":
+        if cleanup:
+            cl.stop_all(cm)
+            docker_client = docker.from_env()
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+    elif service == "k8s":
         logging.info("Creating K8sContainerManager")
         k8s_ip = subprocess.Popen(['minikube', 'ip'],
                                   stdout=subprocess.PIPE).communicate()[0].strip()
         logging.info("K8s IP: %s" % k8s_ip)
         cm = K8sContainerManager(k8s_ip, redis_port=find_unbound_port())
-        cl.stop_all(cm)
+        if cleanup:
+            cl.stop_all(cm)
     else:
-        msg = "{cm} is a currently unsupported container manager".format(cm=container_manager)
+        msg = "{cm} is a currently unsupported container manager".format(cm=service)
         logging.error(msg)
         raise BenchmarkException(msg)
-    if no_start:
-        return cm
-    logging.info("Starting Clipper")
-    cl.start_clipper(cm)
-    time.sleep(1)
+    if start_clipper:
+        logging.info("Starting Clipper")
+        cl.start_clipper(cm)
+        time.sleep(1)
     return cm
 
 
