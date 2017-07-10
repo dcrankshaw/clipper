@@ -73,6 +73,11 @@ class ContainerManager(object):
     def stop_clipper(self):
         pass
 
+    def get_registry(self):
+        """Return a reference to the Docker registry created by the ContainerManager
+        """
+        return None
+
     def get_admin_addr(self):
         return "{host}:{port}".format(
             host=self.public_hostname, port=CLIPPER_MANAGEMENT_PORT)
@@ -80,8 +85,3 @@ class ContainerManager(object):
     def get_query_addr(self):
         return "{host}:{port}".format(
             host=self.public_hostname, port=CLIPPER_QUERY_PORT)
-
-    def get_registry(self):
-        """Return a reference to the Docker registry created by the ContainerManager
-        """
-        return None

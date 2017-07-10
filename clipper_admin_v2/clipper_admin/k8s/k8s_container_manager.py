@@ -1,5 +1,25 @@
 from __future__ import absolute_import, division, print_function
-from ..container_manager import ContainerManager
+from ..container_manager import (ContainerManager, CLIPPER_DOCKER_LABEL,
+                                 CLIPPER_MODEL_CONTAINER_LABEL)
+
+from contextlib import contextmanager
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
+import logging
+import json
+import yaml
+
+
+@contextmanager
+def _pass_conflicts():
+    try:
+        yield
+    except ApiException as e:
+        body = json.loads(e.body)
+        if body['reason'] == 'AlreadyExists':
+            logging.info(
+                "{} already exists, skipping!".format(body['details']))
+            pass
 
 
 class K8sContainerManager(ContainerManager):
@@ -25,18 +45,18 @@ class K8sContainerManager(ContainerManager):
             self._k8s_v1.create_namespaced_replication_controller(
                 body=yaml.load(
                     open(
-                        'k8s/minikube-registry/kube-registry-replication-controller.yaml'
+                        'kube-registry-replication-controller.yaml'
                     )),
                 namespace='kube-system')
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_service(
                 body=yaml.load(
-                    open('k8s/minikube-registry/kube-registry-service.yaml')),
+                    open('kube-registry-service.yaml')),
                 namespace='kube-system')
         with _pass_conflicts():
             self._k8s_beta.create_namespaced_daemon_set(
                 body=yaml.load(
-                    open('k8s/minikube-registry/kube-registry-daemon-set.yaml')
+                    open('kube-registry-daemon-set.yaml')
                 ),
                 namespace='kube-system')
         return "localhost:5000"
@@ -48,15 +68,15 @@ class K8sContainerManager(ContainerManager):
             with _pass_conflicts():
                 self._k8s_beta.create_namespaced_deployment(
                     body=yaml.load(
-                        open('k8s/clipper/{}-deployment.yaml'.format(name))),
+                        open('clipper/{}-deployment.yaml'.format(name))),
                     namespace='default')
             with _pass_conflicts():
                 self._k8s_v1.create_namespaced_service(
                     body=yaml.load(
-                        open('k8s/clipper/{}-service.yaml'.format(name))),
+                        open('clipper/{}-service.yaml'.format(name))),
                     namespace='default')
 
-    def deploy_model(self, name, version, repo):
+    def deploy_model(self, name, version, input_type, repo):
         """Deploys a versioned model to a k8s cluster.
 
         Parameters
@@ -83,7 +103,7 @@ class K8sContainerManager(ContainerManager):
                         'template': {
                             'metadata': {
                                 'labels': {
-                                    clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL:
+                                    CLIPPER_MODEL_CONTAINER_LABEL:
                                     '',
                                     'model':
                                     name,
@@ -127,28 +147,29 @@ class K8sContainerManager(ContainerManager):
 
     def stop_models(self, model_name=None, keep_version=None):
         # TODO(feynman): Account for model_name and keep_version.
-        # NOTE: the format of the value of CLIPPER_MODEL_CONTAINER_LABEL is "model_name:model_version"
+        # NOTE: the format of the value of CLIPPER_MODEL_CONTAINER_LABEL
+        # is "model_name:model_version"
         """Stops all deployments of pods running Clipper models."""
         logging.info("Stopping all running Clipper model deployments")
         try:
-            resp = self._k8s_beta.delete_collection_namespaced_deployment(
+            self._k8s_beta.delete_collection_namespaced_deployment(
                 namespace='default',
-                label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
+                label_selector=CLIPPER_MODEL_CONTAINER_LABEL)
         except ApiException as e:
             logging.warn("Exception deleting k8s deployments: {}".format(e))
 
     def stop_clipper(self):
         """Stops all Clipper resources.
 
-        WARNING: Data stored on an in-cluster Redis deployment will be lost! This method does not delete
-        any existing in-cluster Docker registry.
+        WARNING: Data stored on an in-cluster Redis deployment will be lost!
+        This method does not delete any existing in-cluster Docker registry.
         """
         logging.info("Stopping all running Clipper resources")
 
         try:
             for service in self._k8s_v1.list_namespaced_service(
                     namespace='default',
-                    label_selector=clipper_manager.CLIPPER_DOCKER_LABEL).items:
+                    label_selector=CLIPPER_DOCKER_LABEL).items:
                 # TODO: use delete collection of services if API provides
                 service_name = service.metadata.name
                 self._k8s_v1.delete_namespaced_service(
@@ -156,15 +177,15 @@ class K8sContainerManager(ContainerManager):
 
             self._k8s_beta.delete_collection_namespaced_deployment(
                 namespace='default',
-                label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
+                label_selector=CLIPPER_DOCKER_LABEL)
 
             self._k8s_v1.delete_collection_namespaced_pod(
                 namespace='default',
-                label_selector=clipper_manager.CLIPPER_DOCKER_LABEL)
+                label_selector=CLIPPER_DOCKER_LABEL)
 
             self._k8s_v1.delete_collection_namespaced_pod(
                 namespace='default',
-                label_selector=clipper_manager.CLIPPER_MODEL_CONTAINER_LABEL)
+                label_selector=CLIPPER_MODEL_CONTAINER_LABEL)
         except ApiException as e:
             logging.warn("Exception deleting k8s resources: {}".format(e))
 

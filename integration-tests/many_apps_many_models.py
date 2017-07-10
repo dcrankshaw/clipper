@@ -12,7 +12,7 @@ from test_utils import (init_clipper, BenchmarkException, fake_model_data,
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath("%s/../clipper_admin_v2" % cur_dir))
 import clipper_admin as cl
-from clipper_admin import DockerContainerManager
+from clipper_admin import DockerContainerManager, K8sContainerManager
 
 logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
                     datefmt='%y-%m-%d:%H:%M:%S',
@@ -20,6 +20,7 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d
 
 logger = logging.getLogger(__name__)
 
+container_manager = "docker"
 
 def deploy_model(cm, name, version):
     app_name = "%s_app" % name
@@ -88,7 +89,7 @@ if __name__ == "__main__":
         # for num_apps and num_models
         pass
     try:
-        cm = init_clipper(container_manager="docker")
+        cm = init_clipper(container_manager=container_manager)
         try:
             logger.info("Running integration test with %d apps and %d models" %
                         (num_apps, num_models))
@@ -101,9 +102,10 @@ if __name__ == "__main__":
             log_clipper_state(cm)
             logger.exception("BenchmarkException")
             cl.stop_all(cm)
-            docker_client = docker.from_env()
-            docker_client.containers.prune(
-                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+            if container_manager == "docker":
+                docker_client = docker.from_env()
+                docker_client.containers.prune(
+                    filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
             sys.exit(1)
         else:
             cl.stop_all(cm)
@@ -112,9 +114,11 @@ if __name__ == "__main__":
                 filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
     except Exception as e:
         logger.exception("Exception")
-        cm = DockerContainerManager("localhost")
-        cl.stop_all(cm)
-        docker_client = docker.from_env()
-        docker_client.containers.prune(
-            filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        if container_manager == "docker":
+            cm = DoContainerManager("localhost")
+            cl.stop_all(cm)
+            docker_client = docker.from_env()
+            docker_client.containers.prune(
+                filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
+        elif
         sys.exit(1)
