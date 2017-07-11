@@ -18,7 +18,7 @@ logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d
 
 logger = logging.getLogger(__name__)
 
-service = "docker"
+service = "k8s"
 
 
 def deploy_model(cm, name, version):

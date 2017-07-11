@@ -35,9 +35,11 @@ class DockerContainerManager(ContainerManager):
             :py:meth:`docker.client.containers.run`.
         """
         super(DockerContainerManager, self).__init__(clipper_public_hostname)
-        # self.docker_client = docker.from_env(
-        #     version=os.environ["DOCKER_API_VERSION"])
-        self.docker_client = docker.from_env()
+        if "DOCKER_API_VERSION" in os.environ:
+            self.docker_client = docker.from_env(
+                version=os.environ["DOCKER_API_VERSION"])
+        else:
+            self.docker_client = docker.from_env()
         self.redis_port = redis_port
         self.redis_ip = redis_ip
         self.extra_container_kwargs = extra_container_kwargs
@@ -45,6 +47,7 @@ class DockerContainerManager(ContainerManager):
         self.query_frontend_name = "query_frontend"
         self.mgmt_frontend_name = "mgmt_frontend"
         if registry is not None:
+            # TODO: test with provided registry
             self.registry = registry
             if registry_username is not None and registry_password is not None:
                 logger.info("Logging in to {registry} as {user}".format(

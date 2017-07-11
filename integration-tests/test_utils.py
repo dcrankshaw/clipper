@@ -41,6 +41,14 @@ class BenchmarkException(Exception):
 PORT_RANGE = [34256, 40000]
 
 
+def get_docker_client():
+    if "DOCKER_API_VERSION" in os.environ:
+        return docker.from_env(
+            version=os.environ["DOCKER_API_VERSION"])
+    else:
+        return docker.from_env()
+
+
 def find_unbound_port():
     """
     Returns an unbound port number on 127.0.0.1.
@@ -62,7 +70,7 @@ def create_container_manager(service, cleanup=True, start_clipper=True):
         cm = DockerContainerManager("localhost", redis_port=find_unbound_port())
         if cleanup:
             cl.stop_all(cm)
-            docker_client = docker.from_env()
+            docker_client = get_docker_client()
             docker_client.containers.prune(
                 filters={"label": cl.container_manager.CLIPPER_DOCKER_LABEL})
     elif service == "k8s":

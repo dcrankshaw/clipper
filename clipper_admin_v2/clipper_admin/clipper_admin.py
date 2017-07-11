@@ -3,6 +3,7 @@ import logging
 import docker
 import requests
 import json
+import os
 from .container_manager import CONTAINERLESS_MODEL_IMAGE
 
 DEFAULT_LABEL = ["DEFAULT"]
@@ -77,8 +78,11 @@ def deploy_model(
                 name=name,
                 version=version)
     repo = _resolve_docker_repo(cm, image_name, registry)
-    # docker_client = docker.from_env(version=os.environ["DOCKER_API_VERSION"])
-    docker_client = docker.from_env()
+    if "DOCKER_API_VERSION" in os.environ:
+        docker_client = docker.from_env(
+            version=os.environ["DOCKER_API_VERSION"])
+    else:
+        docker_client = docker.from_env()
     logger.info("Building model Docker image at {}".format(model_data_path))
     docker_client.images.build(
             path=model_data_path,

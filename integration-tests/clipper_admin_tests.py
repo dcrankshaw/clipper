@@ -13,9 +13,8 @@ import json
 import time
 import requests
 from argparse import ArgumentParser
-import docker
 import logging
-from test_utils import create_container_manager, fake_model_data
+from test_utils import get_docker_client, create_container_manager, fake_model_data
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath('%s/../clipper_admin_v2' % cur_dir))
@@ -134,8 +133,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
         model_info = cl.get_model_info(self.cm, self.deploy_model_name, self.deploy_model_version)
         self.assertIsNotNone(model_info)
         self.assertEqual(type(model_info), dict)
-
-        docker_client = docker.from_env()
+        docker_client = get_docker_client()
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertGreaterEqual(len(containers), 1)
@@ -145,7 +143,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
                        self.deploy_model_name,
                        self.deploy_model_version)
         container_name = "clipper/noop-container"
-        docker_client = docker.from_env()
+        docker_client = get_docker_client()
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertGreaterEqual(len(containers), 2)
@@ -162,7 +160,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
                         fake_model_data,
                         container_name,
                         num_replicas=2)
-        docker_client = docker.from_env()
+        docker_client = get_docker_client()
         containers = docker_client.containers.list(
             filters={"ancestor": container_name})
         self.assertEqual(len(containers), 2)
@@ -202,7 +200,7 @@ class ClipperManagerTestCaseShort(unittest.TestCase):
                                        model_version)
         self.assertIsNotNone(model_info)
 
-        docker_client = docker.from_env()
+        docker_client = get_docker_client()
         containers = docker_client.containers.list(
             filters={"ancestor": "clipper/python-closure-container"})
         self.assertGreaterEqual(len(containers), 1)

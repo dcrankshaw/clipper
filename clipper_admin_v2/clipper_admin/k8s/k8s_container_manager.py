@@ -8,6 +8,11 @@ from kubernetes.client.rest import ApiException
 import logging
 import json
 import yaml
+import docker
+import os
+
+logger = logging.getLogger(__name__)
+cur_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 @contextmanager
@@ -17,20 +22,44 @@ def _pass_conflicts():
     except ApiException as e:
         body = json.loads(e.body)
         if body['reason'] == 'AlreadyExists':
-            logging.info(
+            logger.info(
                 "{} already exists, skipping!".format(body['details']))
             pass
 
 
 class K8sContainerManager(ContainerManager):
-    def __init__(self, clipper_public_hostname, create_registry=False):
-        super.__init__(clipper_public_hostname)
+    def __init__(self,
+                 clipper_public_hostname,
+                 redis_ip=None,
+                 redis_port=6379,
+                 registry=None,
+                 registry_username=None,
+                 registry_password=None):
+        super(K8sContainerManager, self).__init__(clipper_public_hostname)
         config.load_kube_config()
         self._k8s_v1 = client.CoreV1Api()
         self._k8s_beta = client.ExtensionsV1beta1Api()
+        self.redis_port = redis_port
+        self.redis_ip = redis_ip
         self.registry = None
-        if create_registry:
+        if registry is None:
             self.registry = self._start_registry()
+        else:
+            # TODO: test with provided registry
+            self.registry = registry
+            if registry_username is not None and registry_password is not None:
+                if "DOCKER_API_VERSION" in os.environ:
+                    self.docker_client = docker.from_env(
+                        version=os.environ["DOCKER_API_VERSION"])
+                else:
+                    self.docker_client = docker.from_env()
+                logger.info("Logging in to {registry} as {user}".format(
+                    registry=registry, user=registry_username))
+                login_response = self.docker_client.login(
+                    username=registry_username,
+                    password=registry_password,
+                    registry=registry)
+                logger.info(login_response)
 
     def _start_registry(self):
         """
@@ -40,40 +69,58 @@ class K8sContainerManager(ContainerManager):
         str
             The address of the registry
         """
-        logging.info("Initializing Docker registry on k8s cluster")
+        logger.info("Initializing Docker registry on k8s cluster")
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_replication_controller(
                 body=yaml.load(
-                    open(
-                        'kube-registry-replication-controller.yaml'
-                    )),
+                    open(os.path.join(cur_dir, 'kube-registry-replication-controller.yaml'))),
                 namespace='kube-system')
         with _pass_conflicts():
             self._k8s_v1.create_namespaced_service(
                 body=yaml.load(
-                    open('kube-registry-service.yaml')),
+                    open(os.path.join(cur_dir, 'kube-registry-service.yaml'))),
                 namespace='kube-system')
         with _pass_conflicts():
             self._k8s_beta.create_namespaced_daemon_set(
                 body=yaml.load(
-                    open('kube-registry-daemon-set.yaml')
-                ),
+                    open(os.path.join(cur_dir, 'kube-registry-daemon-set.yaml'))),
                 namespace='kube-system')
         return "localhost:5000"
 
     def start_clipper(self):
         """Deploys Clipper to the k8s cluster and exposes the frontends as services."""
-        logging.info("Initializing Clipper services to k8s cluster")
-        for name in ['mgmt-frontend', 'query-frontend', 'redis']:
+        logger.info("Initializing Clipper services to k8s cluster")
+        # if an existing Redis service isn't provided, start one
+        if self.redis_ip is None:
+            name = 'redis'
             with _pass_conflicts():
                 self._k8s_beta.create_namespaced_deployment(
                     body=yaml.load(
-                        open('clipper/{}-deployment.yaml'.format(name))),
+                        open(os.path.join(cur_dir, '{}-deployment.yaml'.format(name)))),
                     namespace='default')
             with _pass_conflicts():
+                body = yaml.load(
+                    open(os.path.join(cur_dir, '{}-service.yaml'.format(name))))
+                body["spec"]["ports"][0]["port"] = self.redis_port
                 self._k8s_v1.create_namespaced_service(
-                    body=yaml.load(
-                        open('clipper/{}-service.yaml'.format(name))),
+                    body=body,
+                    namespace='default')
+        for name in ['mgmt-frontend', 'query-frontend']:
+            with _pass_conflicts():
+                body = yaml.load(
+                    open(os.path.join(cur_dir, '{}-deployment.yaml'.format(name))))
+                if self.redis_ip is not None:
+                    args = ["--redis_ip={}".format(self.redis_ip),
+                            "--redis_port={}".format(self.redis_port)]
+                    body["spec"]["template"]["spec"]["containers"][0]["args"] = args
+                self._k8s_beta.create_namespaced_deployment(
+                    body=body,
+                    namespace='default')
+            with _pass_conflicts():
+                body = yaml.load(
+                    open(os.path.join(cur_dir, '{}-service.yaml'.format(name))))
+                self._k8s_v1.create_namespaced_service(
+                    body=body,
                     namespace='default')
 
     def deploy_model(self, name, version, input_type, repo):
@@ -139,24 +186,24 @@ class K8sContainerManager(ContainerManager):
 
     def add_replica(self, name, version, input_type, repo):
         # TODO(feynman): Implement this
-        pass
+        raise NotImplementedError
 
     def get_logs(self, logging_dir):
         # TODO(feynman): Implement this
-        pass
+        raise NotImplementedError
 
     def stop_models(self, model_name=None, keep_version=None):
         # TODO(feynman): Account for model_name and keep_version.
         # NOTE: the format of the value of CLIPPER_MODEL_CONTAINER_LABEL
         # is "model_name:model_version"
         """Stops all deployments of pods running Clipper models."""
-        logging.info("Stopping all running Clipper model deployments")
+        logger.info("Stopping all running Clipper model deployments")
         try:
             self._k8s_beta.delete_collection_namespaced_deployment(
                 namespace='default',
                 label_selector=CLIPPER_MODEL_CONTAINER_LABEL)
         except ApiException as e:
-            logging.warn("Exception deleting k8s deployments: {}".format(e))
+            logger.warn("Exception deleting k8s deployments: {}".format(e))
 
     def stop_clipper(self):
         """Stops all Clipper resources.
@@ -164,7 +211,7 @@ class K8sContainerManager(ContainerManager):
         WARNING: Data stored on an in-cluster Redis deployment will be lost!
         This method does not delete any existing in-cluster Docker registry.
         """
-        logging.info("Stopping all running Clipper resources")
+        logger.info("Stopping all running Clipper resources")
 
         try:
             for service in self._k8s_v1.list_namespaced_service(
