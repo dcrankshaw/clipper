@@ -1,0 +1,31 @@
+// option java_multiple_files = true;
+// option java_package = "io.grpc.examples.helloworld";
+// option java_outer_classname = "HelloWorldProto";
+// option objc_class_prefix = "HLW";
+
+syntax = "proto3";
+
+package clipper.grpc;
+
+service Predict {
+  rpc predictFloats(FloatsInput) returns (PredictResponse) {
+  }
+
+  rpc predictStrings(StringInput) returns (PredictResponse) {
+  }
+}
+
+// The request message containing the user's name.
+message StringInput {
+  string input = 1;
+}
+
+// The response message containing the greetings
+message FloatsInput {
+  repeated float input = 1;
+}
+
+// The request message containing the user's name.
+message PredictResponse {
+  string input = 1;
+}

@@ -49,6 +49,6 @@ sleep 5
 # echo $(jobs -p)
 
 # start the query processor frontend
-./src/frontends/query_frontend
+./src/rest_frontend/query_frontend
 
 clean_up

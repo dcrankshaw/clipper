@@ -120,7 +120,7 @@ function run_management_tests {
 function run_frontend_tests {
   cd $DIR/../debug
   echo -e "\nRunning frontend tests\n\n"
-  ./src/frontends/frontendtests --redis_port $REDIS_PORT
+  ./src/rest_frontend/frontendtests --redis_port $REDIS_PORT
 }
 
 function run_integration_tests {

@@ -3,7 +3,8 @@ project("Clipper")
 
 # Targets that we develop
 add_subdirectory(libclipper)
-add_subdirectory(frontends)
+add_subdirectory(rest_frontend)
+add_subdirectory(rpc_frontend)
 add_subdirectory(management)
 add_subdirectory(libs)
 add_subdirectory(benchmarks)

@@ -10,3 +10,6 @@
 [submodule "bin/yapf"]
 	path = bin/yapf
 	url = https://github.com/google/yapf.git
+[submodule "src/libs/grpc"]
+	path = src/libs/grpc
+	url = https://github.com/grpc/grpc.git

@@ -52,12 +52,14 @@ export(TARGETS spdlog FILE SpdlogConfig.cmake)
 ### Base64
 ##########################################
 
-add_library(base64 INTERFACE)
-target_include_directories(base64 INTERFACE
+add_library(base64json INTERFACE)
+target_include_directories(base64json INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/base64>
-        $<INSTALL_INTERFACE:base64>)
-export(TARGETS base64 FILE Base64Config.cmake)
+        $<INSTALL_INTERFACE:base64json>)
+export(TARGETS base64json FILE Base64JsonConfig.cmake)
 
 add_subdirectory(redox)
 
 add_subdirectory(rapidjson)
+
+add_subdirectory(grpc)

@@ -89,4 +89,9 @@ UseTab:          Never
 ---
 Language:        Java
 BasedOnStyle:  Google
+---
+Language: Proto
+BasedOnStyle:  Google
+# # Don't format .proto files.
+# DisableFormat: true
 ...
