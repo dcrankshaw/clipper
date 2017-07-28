@@ -493,7 +493,8 @@ class Clipper:
                      container_name,
                      input_type,
                      labels=DEFAULT_LABEL,
-                     num_containers=1):
+                     num_containers=1,
+                     gpu_num=-1):
         """Registers a model with Clipper and deploys instances of it in containers.
 
         Parameters
@@ -564,7 +565,7 @@ class Clipper:
             print("Copied model data to host")
             # aggregate results of starting all containers
             return all([
-                self.add_container(name, version)
+                self.add_container(name, version, gpu_num)
                 for r in range(num_containers)
             ])
 
@@ -1295,7 +1296,7 @@ class Clipper:
         print(err)
         return process.returncode == 0
 
-    def add_container(self, model_name, model_version):
+    def add_container(self, model_name, model_version, gpu_num=-1):
         """Create a new container for an existing model.
 
         Starts a new container for a model that has already been added to
@@ -1331,11 +1332,15 @@ class Clipper:
 
         if image_name != EXTERNALLY_MANAGED_MODEL:
             # Start container
+            docker_cmd = "docker"
+            if gpu_num >= 0:
+                docker_cmd = "NV_GPU={} nvidia-docker".format(gpu_num)
             add_container_cmd = (
-                "docker run -d --network={nw} --restart={restart_policy} -v {path}:/model:ro "
+                "{docker_cmd} run -d --network={nw} --restart={restart_policy} -v {path}:/model:ro "
                 "-e \"CLIPPER_MODEL_NAME={mn}\" -e \"CLIPPER_MODEL_VERSION={mv}\" "
                 "-e \"CLIPPER_IP=query_frontend\" -e \"CLIPPER_INPUT_TYPE={mip}\" -l \"{clipper_label}\" -l \"{mv_label}\" "
                 "{image}".format(
+                    docker_cmd=docker_cmd,
                     path=model_data_path,
                     nw=DOCKER_NW,
                     image=image_name,
@@ -1349,8 +1354,8 @@ class Clipper:
             result = self._execute_root(add_container_cmd)
             return result.return_code == 0
         else:
-            print("Cannot start containers for externally managed model %s" %
-                  model_name)
+            print("Cannot start containers for externally managed model %s"
+                  % model_name)
             return False
 
     def get_clipper_logs(self):
