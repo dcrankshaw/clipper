@@ -17,6 +17,11 @@
 #include <clipper/query_processor.hpp>
 #include <clipper/redis.hpp>
 
+#include <grpc++/server.h>
+#include <grpc/grpc.h>
+
+#include "clipper_frontend.grpc.pb.h"
+
 #include <server_http.hpp>
 
 using clipper::Response;
@@ -32,6 +37,7 @@ using clipper::json::json_parse_error;
 using clipper::json::json_semantic_error;
 using clipper::redis::labels_to_str;
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
+using namespace clipper::grpc;
 
 namespace query_frontend {
 
@@ -113,6 +119,9 @@ class AppMetrics {
   std::shared_ptr<clipper::metrics::Counter> num_predictions_;
   std::shared_ptr<clipper::metrics::RatioCounter> default_pred_ratio_;
 };
+
+class PredictServerImpl final : public Predict::Service {
+}
 
 template <class QP>
 class RequestHandler {
