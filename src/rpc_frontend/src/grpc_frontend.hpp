@@ -120,8 +120,7 @@ class AppMetrics {
   std::shared_ptr<clipper::metrics::RatioCounter> default_pred_ratio_;
 };
 
-class PredictServerImpl final : public Predict::Service {
-}
+class PredictServerImpl final : public Predict::Service {};
 
 template <class QP>
 class RequestHandler {
