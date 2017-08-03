@@ -117,9 +117,14 @@ class Clipper:
                  redis_ip=DEFAULT_REDIS_IP,
                  redis_port=DEFAULT_REDIS_PORT,
                  redis_persistence_path=None,
-                 restart_containers=False):
+                 restart_containers=False,
+                 rpc_frontend=False):
         self.redis_ip = redis_ip
         self.redis_port = redis_port
+        if rpc_frontend:
+            frontend_container = "grpc_frontend"
+        else:
+            frontend_container = "query_frontend"
         self.docker_compost_dict = {
             'networks': {
                 'default': {
@@ -151,7 +156,7 @@ class Clipper:
                     ],
                     'depends_on': ['mgmt_frontend'],
                     'image':
-                    'clipper/query_frontend:{}'.format(code_version),
+                    'clipper/{image}:{version}'.format(image=frontend_container, version=code_version),
                     'ports': [
                         '%d:%d' % (CLIPPER_RPC_PORT, CLIPPER_RPC_PORT),
                         '%d:%d' % (CLIPPER_QUERY_PORT, CLIPPER_QUERY_PORT)
