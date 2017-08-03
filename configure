@@ -123,7 +123,7 @@ DEPS_PREFIX=$PWD/deps/local
 while [ $# -gt 0 ]
   do case $1 in
     --help)                 print_help=1 ;;
-    --cleanup)              run_cleanup=1 ;;
+    --cleanup)              run_cleanup_quiet=1 ;;
     --cleanup-quiet)        run_cleanup_quiet=1 ;;
     --no_tcmalloc)          no_tcmalloc=1 ;;
     --release)              release=1 ;;
@@ -166,9 +166,6 @@ if [[ -z $CXX ]]; then
   CXX=g++
 fi
 
-## Begin logging in config.log
-LOG_FILE=config.log
-date | tee $LOG_FILE
 
 ## ===================================================================
 ## Setup CMake
@@ -231,16 +228,16 @@ fi
 mkdir -p deps/local/lib
 
 echo "======================= BUILD CONFIGURATION ========================"
-echo "System Information: " | tee -a $LOG_FILE
-uname -v | tee -a $LOG_FILE
-echo "Compiler Information: " | tee -a $LOG_FILE
-$CC --version      | tee -a $LOG_FILE
-$CXX --version     | tee -a $LOG_FILE
-$CMAKE --version   | tee -a $LOG_FILE
+echo "System Information: "
+uname -v
+echo "Compiler Information: "
+$CC --version      
+$CXX --version     
+$CMAKE --version   
 
 echo "======================= Config File ================================"
 
-# cat configure.deps | tee -a $LOG_FILE
+# cat configure.deps 
 
 ### Add addition config flags =================================================
 # CFLAGS="$CFLAGS -D NO_TCMALLOC:BOOL=$NO_TCMALLOC"
@@ -266,8 +263,8 @@ cd -
 if [ $release ];
 then
 
-echo -e "\n\n\n======================= Release ========================" \
-    | tee -a $LOG_FILE
+echo -e "\n\n\n======================= Release ========================"
+    
 
 if [ ! -d $RELEASE_DIR ]; then
     mkdir $RELEASE_DIR
@@ -276,17 +273,17 @@ cd $RELEASE_DIR
 rm -f CMakeCache.txt
 build_cmd="$CMAKE \
     $GENERATOR \
-    -D CMAKE_BUILD_TYPE=Release \
+    -D CMAKE_BUILD_TYPE=RelWithDebInfo \
     $CFLAGS \
     ../"
-echo $build_cmd | tee -a "../$LOG_FILE"
-eval $build_cmd | tee -a "../$LOG_FILE"
+echo $build_cmd
+eval $build_cmd
 cd $CLIPPER_HOME
 
 else
 
-echo -e "\n\n\n======================= Debug =========================" \
-    | tee -a $LOG_FILE
+echo -e "\n\n\n======================= Debug ========================="
+    
 
 if [ ! -d $DEBUG_DIR ]; then
     mkdir $DEBUG_DIR
@@ -298,8 +295,8 @@ build_cmd="$CMAKE \
     -D CMAKE_BUILD_TYPE=Debug \
     $CFLAGS \
     ../"
-echo $build_cmd | tee -a ../$LOG_FILE
-eval $build_cmd | tee -a ../$LOG_FILE
+echo $build_cmd
+eval $build_cmd
 cd $CLIPPER_HOME
 
 fi

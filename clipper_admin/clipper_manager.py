@@ -494,7 +494,8 @@ class Clipper:
                      input_type,
                      labels=DEFAULT_LABEL,
                      num_containers=1,
-                     gpu_num=-1):
+                     gpu_num=-1,
+                     clipper_ip="query_frontend"):
         """Registers a model with Clipper and deploys instances of it in containers.
 
         Parameters
@@ -565,7 +566,7 @@ class Clipper:
             print("Copied model data to host")
             # aggregate results of starting all containers
             return all([
-                self.add_container(name, version, gpu_num)
+                self.add_container(name, version, gpu_num, clipper_ip)
                 for r in range(num_containers)
             ])
 
@@ -1296,7 +1297,7 @@ class Clipper:
         print(err)
         return process.returncode == 0
 
-    def add_container(self, model_name, model_version, gpu_num=-1):
+    def add_container(self, model_name, model_version, gpu_num=-1, clipper_ip="query_frontend"):
         """Create a new container for an existing model.
 
         Starts a new container for a model that has already been added to
@@ -1338,12 +1339,13 @@ class Clipper:
             add_container_cmd = (
                 "{docker_cmd} run -d --network={nw} --restart={restart_policy} -v {path}:/model:ro "
                 "-e \"CLIPPER_MODEL_NAME={mn}\" -e \"CLIPPER_MODEL_VERSION={mv}\" "
-                "-e \"CLIPPER_IP=query_frontend\" -e \"CLIPPER_INPUT_TYPE={mip}\" -l \"{clipper_label}\" -l \"{mv_label}\" "
+                "-e \"CLIPPER_IP={clipper_ip}\" -e \"CLIPPER_INPUT_TYPE={mip}\" -l \"{clipper_label}\" -l \"{mv_label}\" "
                 "{image}".format(
                     docker_cmd=docker_cmd,
                     path=model_data_path,
                     nw=DOCKER_NW,
                     image=image_name,
+                    clipper_ip=clipper_ip,
                     mn=model_name,
                     mv=model_version,
                     mip=model_input_type,
