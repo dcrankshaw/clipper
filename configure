@@ -258,7 +258,7 @@ set -o pipefail
 BORING_SSL_DIR=src/libs/grpc/third_party/boringssl/
 cp patches/boringssl.patch $BORING_SSL_DIR
 cd $BORING_SSL_DIR
-git apply boringssl.patch
+# git apply boringssl.patch
 cd -
 
 
