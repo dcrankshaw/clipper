@@ -9,15 +9,16 @@ RUN curl -LO https://github.com/google/protobuf/archive/v3.3.0.zip \
         && cd protobuf-3.3.0 \
         && ./autogen.sh \
         && ./configure \
-        && make \
-        && sudo make install \
-        && sudo lfconfig
+        && make
+
+
+RUN cd /protobuf-3.3.0 && make install
 
 COPY ./ /clipper
 
 RUN cd /clipper \
     && ./configure --cleanup-quiet \
-    && git submodule foreach --recursive git clean -xfdf \ # From https://gist.github.com/nicktoumpelis/11214362
+    && git submodule foreach --recursive git clean -xfdf \
     && git submodule foreach --recursive git reset --hard \
     && cd /clipper/src/libs/spdlog \
     && git apply ../patches/make_spdlog_compile_linux.patch \
