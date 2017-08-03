@@ -1,0 +1,19 @@
+FROM frolvlad/alpine-gxx
+
+COPY ./ /clipper
+
+RUN apk add --no-cache git bash make boost-dev cmake libev-dev hiredis-dev zeromq-dev \
+    && cd /clipper \
+    && ./configure --cleanup-quiet \
+    && git submodule foreach --recursive git clean -xfdf \
+    && git submodule foreach --recursive git reset --hard \
+    && cd /clipper/src/libs/spdlog \
+    && git apply ../patches/make_spdlog_compile_linux.patch \
+    && cd /clipper \
+    && ./configure --release \
+    && cd release \
+    && make clipper_grpc_frontend
+
+ENTRYPOINT ["/clipper/release/src/rpc_frontend/clipper_grpc_frontend"]
+
+# vim: set filetype=dockerfile:
