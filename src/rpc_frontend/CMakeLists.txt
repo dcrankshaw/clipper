@@ -30,7 +30,7 @@ include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # TODO: need to add a custom target to make sure grpc_cpp_plugin gets
 # built first?
-find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
+set(GRPC_CPP_PLUGIN ${CMAKE_CURRENT_BINARY_DIR}/../libs/grpc/grpc_cpp_plugin)
 
 # Proto file
 get_filename_component(predict_proto "src/protos/clipper_frontend.proto" ABSOLUTE)

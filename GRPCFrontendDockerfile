@@ -84,7 +84,9 @@ RUN cd /clipper \
     && cd /clipper \
     && ./configure --release \
     && cd release \
-    && make clipper_grpc_frontend
+    && make grpc_cpp_plugin
+
+RUN cd /clipper/release && make clipper_grpc_frontend
 
 ENTRYPOINT ["/clipper/release/src/rpc_frontend/clipper_grpc_frontend"]
 

@@ -18,7 +18,7 @@ tag=$(<VERSION.txt)
 
 # Build the Clipper Docker images
 time docker build -t clipper/grpc_frontend:$tag -f GRPCFrontendDockerfile ./
-time docker build -t clipper/query_frontend:$tag -f QueryFrontendDockerfile ./
+# time docker build -t clipper/query_frontend:$tag -f QueryFrontendDockerfile ./
 time docker build -t clipper/management_frontend:$tag -f ManagementFrontendDockerfile ./
 cd -
 
