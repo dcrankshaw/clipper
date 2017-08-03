@@ -23,7 +23,7 @@
 
 #include "clipper_frontend.grpc.pb.h"
 
-#include <server_http.hpp>
+// #include <server_http.hpp>
 
 using clipper::Response;
 using clipper::FeedbackAck;
@@ -37,12 +37,12 @@ using clipper::FeedbackQuery;
 using clipper::json::json_parse_error;
 using clipper::json::json_semantic_error;
 using clipper::redis::labels_to_str;
-using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
+// using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 using namespace clipper::grpc;
 
 namespace rpc_frontend {
 
-const std::string LOGGING_TAG_QUERY_FRONTEND = "QUERYFRONTEND";
+const std::string LOGGING_TAG_RPC_FRONTEND = "RPC FRONTEND";
 const std::string GET_METRICS = "^/metrics$";
 
 const char* PREDICTION_RESPONSE_KEY_QUERY_ID = "query_id";
@@ -181,14 +181,14 @@ class RequestHandler {
     clipper::Config& conf = clipper::get_config();
     while (!redis_connection_.connect(conf.get_redis_address(),
                                       conf.get_redis_port())) {
-      clipper::log_error(LOGGING_TAG_QUERY_FRONTEND,
+      clipper::log_error(LOGGING_TAG_RPC_FRONTEND,
                          "Query frontend failed to connect to Redis",
                          "Retrying in 1 second...");
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     while (!redis_subscriber_.connect(conf.get_redis_address(),
                                       conf.get_redis_port())) {
-      clipper::log_error(LOGGING_TAG_QUERY_FRONTEND,
+      clipper::log_error(LOGGING_TAG_RPC_FRONTEND,
                          "Query frontend subscriber failed to connect to Redis",
                          "Retrying in 1 second...");
       std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -202,7 +202,7 @@ class RequestHandler {
     //                            clipper::metrics::MetricsRegistry::get_metrics();
     //                        std::string metrics_report =
     //                            registry.report_metrics();
-    //                        clipper::log_info(LOGGING_TAG_QUERY_FRONTEND,
+    //                        clipper::log_info(LOGGING_TAG_RPC_FRONTEND,
     //                                          "METRICS", metrics_report);
     //                        respond_http(metrics_report, "200 OK", response);
     //                      });
@@ -211,12 +211,12 @@ class RequestHandler {
         redis_subscriber_,
         [this](const std::string& key, const std::string& event_type) {
           clipper::log_info_formatted(
-              LOGGING_TAG_QUERY_FRONTEND,
+              LOGGING_TAG_RPC_FRONTEND,
               "APPLICATION EVENT DETECTED. Key: {}, event_type: {}", key,
               event_type);
           if (event_type == "hset") {
             std::string name = key;
-            clipper::log_info_formatted(LOGGING_TAG_QUERY_FRONTEND,
+            clipper::log_info_formatted(LOGGING_TAG_RPC_FRONTEND,
                                         "New application detected: {}", key);
             auto app_info =
                 clipper::redis::get_application_by_key(redis_connection_, key);
@@ -235,11 +235,11 @@ class RequestHandler {
         [this](const std::string& key, const std::string& event_type) {
           std::string app_name = key;
           clipper::log_info_formatted(
-              LOGGING_TAG_QUERY_FRONTEND,
+              LOGGING_TAG_RPC_FRONTEND,
               "APP LINKS EVENT DETECTED. App name: {}, event_type: {}",
               app_name, event_type);
           if (event_type == "sadd") {
-            clipper::log_info_formatted(LOGGING_TAG_QUERY_FRONTEND,
+            clipper::log_info_formatted(LOGGING_TAG_RPC_FRONTEND,
                                         "New model link detected for app: {}",
                                         app_name);
             auto linked_model_names =
@@ -252,7 +252,7 @@ class RequestHandler {
         redis_subscriber_,
         [this](const std::string& key, const std::string& event_type) {
           clipper::log_info_formatted(
-              LOGGING_TAG_QUERY_FRONTEND,
+              LOGGING_TAG_RPC_FRONTEND,
               "MODEL VERSION CHANGE DETECTED. Key: {}, event_type: {}", key,
               event_type);
           if (event_type == "set") {
@@ -265,7 +265,7 @@ class RequestHandler {
               current_model_versions_[key] = *new_version;
             } else {
               clipper::log_error_formatted(
-                  LOGGING_TAG_QUERY_FRONTEND,
+                  LOGGING_TAG_RPC_FRONTEND,
                   "Model version change for model {} was invalid.", key);
             }
           }
@@ -293,7 +293,7 @@ class RequestHandler {
     }
     if (app_names.size() > 0) {
       clipper::log_info_formatted(
-          LOGGING_TAG_QUERY_FRONTEND,
+          LOGGING_TAG_RPC_FRONTEND,
           "Found {} existing applications registered in Clipper: {}.",
           app_names.size(), labels_to_str(app_names));
     }
@@ -311,16 +311,15 @@ class RequestHandler {
         model_names_with_version.push_back(model_name + "@" + *model_version);
       } else {
         clipper::log_error_formatted(
-            LOGGING_TAG_QUERY_FRONTEND,
+            LOGGING_TAG_RPC_FRONTEND,
             "Found model {} with missing current version.", model_name);
         throw std::runtime_error("Invalid model version");
       }
     }
     if (model_names.size() > 0) {
-      clipper::log_info_formatted(LOGGING_TAG_QUERY_FRONTEND,
-                                  "Found {} models deployed to Clipper: {}.",
-                                  model_names.size(),
-                                  labels_to_str(model_names_with_version));
+      clipper::log_info_formatted(
+          LOGGING_TAG_RPC_FRONTEND, "Found {} models deployed to Clipper: {}.",
+          model_names.size(), labels_to_str(model_names_with_version));
     }
   }
 
@@ -551,7 +550,7 @@ class ServerImpl {
  public:
   ServerImpl(std::string address, int portno, int num_threads)
       : handler_(new RequestHandler{}) {
-    std::string server_address = address + std::to_string(portno);
+    std::string server_address = address + ":" + std::to_string(portno);
 
     grpc::ServerBuilder builder;
     // Listen on the given address without any authentication mechanism.
@@ -608,6 +607,14 @@ class ServerImpl {
         ;
     }
     shutdown_thread.join();
+  }
+
+  std::string get_metrics() const {
+    clipper::metrics::MetricsRegistry& registry =
+        clipper::metrics::MetricsRegistry::get_metrics();
+    std::string metrics_report = registry.report_metrics();
+    // clipper::log_info(LOGGING_TAG_RPC_FRONTEND, "METRICS", metrics_report);
+    return metrics_report;
   }
 
  private:
