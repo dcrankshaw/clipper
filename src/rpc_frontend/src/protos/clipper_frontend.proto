@@ -8,24 +8,29 @@ syntax = "proto3";
 package clipper.grpc;
 
 service Predict {
-  rpc predictFloats(FloatsInput) returns (PredictResponse) {
+  rpc PredictFloats(PredictRequest) returns (PredictResponse) {
   }
 
-  rpc predictStrings(StringInput) returns (PredictResponse) {
-  }
+  // rpc PredictStrings(StringInput) returns (PredictResponse) {
+  // }
 }
 
-// The request message containing the user's name.
-message StringInput {
-  string input = 1;
-}
+// // The request message containing the user's name.
+// message StringInput {
+//   string input = 1;
+// }
 
 // The response message containing the greetings
 message FloatsInput {
   repeated float input = 1;
 }
 
+message PredictRequest {
+  string application = 1;
+  FloatsInput input = 2;
+}
+
 // The request message containing the user's name.
 message PredictResponse {
-  string input = 1;
+  string output = 1;
 }

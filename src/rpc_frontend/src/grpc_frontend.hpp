@@ -17,6 +17,7 @@
 #include <clipper/query_processor.hpp>
 #include <clipper/redis.hpp>
 
+#include <grpc++/grpc++.h>
 #include <grpc++/server.h>
 #include <grpc/grpc.h>
 
@@ -39,7 +40,7 @@ using clipper::redis::labels_to_str;
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 using namespace clipper::grpc;
 
-namespace query_frontend {
+namespace rpc_frontend {
 
 const std::string LOGGING_TAG_QUERY_FRONTEND = "QUERYFRONTEND";
 const std::string GET_METRICS = "^/metrics$";
@@ -54,27 +55,6 @@ const char* PREDICTION_ERROR_RESPONSE_KEY_CAUSE = "cause";
 const std::string PREDICTION_ERROR_NAME_JSON = "Json error";
 const std::string PREDICTION_ERROR_NAME_QUERY_PROCESSING =
     "Query processing error";
-
-const std::string PREDICTION_JSON_SCHEMA = R"(
-  {
-   "input" := [double] | [int] | [string] | [byte] | [float],
-  }
-)";
-
-const std::string UPDATE_JSON_SCHEMA = R"(
-  {
-   "uid" := string,
-   "input" := [double] | [int] | [string] | [byte] | [float],
-   "label" := double
-  }
-)";
-
-void respond_http(std::string content, std::string message,
-                  std::shared_ptr<HttpServer::Response> response) {
-  *response << "HTTP/1.1 " << message << "\r\nContent-Type: application/json"
-            << "\r\nContent-Length: " << content.length() << "\r\n\r\n"
-            << content << "\n";
-}
 
 /* Generate a user-facing error message containing the exception
  * content and the expected JSON schema. */
@@ -120,13 +100,84 @@ class AppMetrics {
   std::shared_ptr<clipper::metrics::RatioCounter> default_pred_ratio_;
 };
 
-class PredictServerImpl final : public Predict::Service {};
+class ServerRpcContext {
+ public:
+  ServerRpcContext(
+      std::function<void(grpc::ServerContext*, PredictRequest*,
+                         grpc::ServerAsyncResponseWriter<PredictResponse>*,
+                         void*)>
+          request_method,
+      std::function<void(std::string, ServerRpcContext*)> invoke_method)
+      : status_(grpc::Status::OK),
+        srv_ctx_(new grpc::ServerContext),
+        next_state_(&ServerRpcContext::invoker),
+        request_method_(request_method),
+        invoke_method_(invoke_method),
+        response_writer_(srv_ctx_.get()) {
+    request_method_(srv_ctx_.get(), &req_, &response_writer_,
+                    ServerRpcContext::tag(this));
+  }
+  ~ServerRpcContext() {}
 
-template <class QP>
+  bool RunNextState(bool ok) { return (this->*next_state_)(ok); }
+
+  void Reset() {
+    srv_ctx_.reset(new grpc::ServerContext);
+    req_ = PredictRequest();
+    response_writer_ =
+        grpc::ServerAsyncResponseWriter<PredictResponse>(srv_ctx_.get());
+
+    status_ = grpc::Status::OK;
+    // Then request the method
+    next_state_ = &ServerRpcContext::invoker;
+    request_method_(srv_ctx_.get(), &req_, &response_writer_,
+                    ServerRpcContext::tag(this));
+  }
+
+  static void* tag(ServerRpcContext* func) {
+    return reinterpret_cast<void*>(func);
+  }
+  static ServerRpcContext* detag(void* tag) {
+    return reinterpret_cast<ServerRpcContext*>(tag);
+  }
+
+  void send_response() {
+    // Have the response writer work and invoke on_finish when done
+    next_state_ = &ServerRpcContext::finisher;
+    response_writer_.Finish(response_, status_, ServerRpcContext::tag(this));
+  }
+
+  PredictRequest req_;
+  PredictResponse response_;
+  grpc::Status status_;
+
+ private:
+  bool finisher(bool) { return false; }
+
+  bool invoker(bool ok) {
+    if (!ok) {
+      return false;
+    }
+    // Call the RPC processing function
+    invoke_method_(req_.application(), this);
+    return true;
+  }
+
+  std::unique_ptr<grpc::ServerContext> srv_ctx_;
+  bool (ServerRpcContext::*next_state_)(bool);
+  std::function<void(grpc::ServerContext*, PredictRequest*,
+                     grpc::ServerAsyncResponseWriter<PredictResponse>*, void*)>
+      request_method_;
+  std::function<void(std::string, ServerRpcContext*)> invoke_method_;
+  grpc::ServerAsyncResponseWriter<PredictResponse> response_writer_;
+};
+
 class RequestHandler {
  public:
-  RequestHandler(std::string address, int portno, int num_threads)
-      : server_(address, portno, num_threads), query_processor_() {
+  RequestHandler() : query_processor_() {
+    // Init Clipper stuff
+
+    // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
     while (!redis_connection_.connect(conf.get_redis_address(),
                                       conf.get_redis_port())) {
@@ -143,17 +194,18 @@ class RequestHandler {
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    server_.add_endpoint(GET_METRICS, "GET",
-                         [](std::shared_ptr<HttpServer::Response> response,
-                            std::shared_ptr<HttpServer::Request> /*request*/) {
-                           clipper::metrics::MetricsRegistry& registry =
-                               clipper::metrics::MetricsRegistry::get_metrics();
-                           std::string metrics_report =
-                               registry.report_metrics();
-                           clipper::log_info(LOGGING_TAG_QUERY_FRONTEND,
-                                             "METRICS", metrics_report);
-                           respond_http(metrics_report, "200 OK", response);
-                         });
+    // server_.add_endpoint(GET_METRICS, "GET",
+    //                      [](std::shared_ptr<HttpServer::Response> response,
+    //                         std::shared_ptr<HttpServer::Request>
+    //                         #<{(|request|)}>#) {
+    //                        clipper::metrics::MetricsRegistry& registry =
+    //                            clipper::metrics::MetricsRegistry::get_metrics();
+    //                        std::string metrics_report =
+    //                            registry.report_metrics();
+    //                        clipper::log_info(LOGGING_TAG_QUERY_FRONTEND,
+    //                                          "METRICS", metrics_report);
+    //                        respond_http(metrics_report, "200 OK", response);
+    //                      });
 
     clipper::redis::subscribe_to_application_changes(
         redis_subscriber_,
@@ -308,9 +360,7 @@ class RequestHandler {
     AppMetrics app_metrics(name);
 
     auto predict_fn = [this, name, input_type, policy, latency_slo_micros,
-                       app_metrics](
-        std::shared_ptr<HttpServer::Response> response,
-        std::shared_ptr<HttpServer::Request> request) {
+                       app_metrics](ServerRpcContext* rpc_context) {
       try {
         std::vector<std::string> models = get_linked_models_for_app(name);
         std::vector<VersionedModelId> versioned_models;
@@ -324,10 +374,23 @@ class RequestHandler {
           }
         }
 
-        auto prediction = decode_and_handle_predict(
-            request->content.string(), name, versioned_models, policy,
-            latency_slo_micros, input_type);
-        prediction.then([response, app_metrics](boost::future<Response> f) {
+        // std::string app_name = request.application();
+
+        std::vector<float> data;
+        data.reserve(rpc_context->req_.input().input_size());
+        for (auto& x : rpc_context->req_.input().input()) {
+          data.push_back(x);
+        }
+
+        std::shared_ptr<Input> input =
+            std::make_shared<clipper::FloatVector>(std::move(data));
+
+        long uid = 0;
+        boost::future<clipper::Response> prediction =
+            query_processor_.predict(Query{name, uid, input, latency_slo_micros,
+                                           policy, versioned_models});
+
+        prediction.then([app_metrics, rpc_context](boost::future<Response> f) {
           if (f.has_exception()) {
             try {
               boost::rethrow_exception(f.get_exception_ptr());
@@ -335,8 +398,10 @@ class RequestHandler {
               clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
                                            "Unexpected error: {}", e.what());
             }
-            respond_http("An unexpected error occurred!",
-                         "500 Internal Server Error", response);
+            // TODO: Use grpc status
+            rpc_context->response_.set_output("An unexpected error occurred!");
+            rpc_context->send_response();
+            // responder.Finish(rpc_response, Status::OK,
             return;
           }
 
@@ -353,74 +418,42 @@ class RequestHandler {
           app_metrics.throughput_->mark(1);
 
           std::string content = get_prediction_response_content(r);
-          respond_http(content, "200 OK", response);
+          rpc_context->response_.set_output(content);
+          rpc_context->send_response();
+
         });
-      } catch (const json_parse_error& e) {
-        std::string error_msg =
-            json_error_msg(e.what(), PREDICTION_JSON_SCHEMA);
-        std::string json_error_response = get_prediction_error_response_content(
-            PREDICTION_ERROR_NAME_JSON, error_msg);
-        respond_http(json_error_response, "400 Bad Request", response);
-      } catch (const json_semantic_error& e) {
-        std::string error_msg =
-            json_error_msg(e.what(), PREDICTION_JSON_SCHEMA);
-        std::string json_error_response = get_prediction_error_response_content(
-            PREDICTION_ERROR_NAME_JSON, error_msg);
-        respond_http(json_error_response, "400 Bad Request", response);
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
         // when Rapidjson attempts to parse an invalid json schema
         std::string json_error_response = get_prediction_error_response_content(
             PREDICTION_ERROR_NAME_JSON, e.what());
-        respond_http(json_error_response, "400 Bad Request", response);
+        rpc_context->response_.set_output(json_error_response);
+        rpc_context->send_response();
       } catch (const clipper::PredictError& e) {
         std::string error_msg = e.what();
         std::string json_error_response = get_prediction_error_response_content(
             PREDICTION_ERROR_NAME_QUERY_PROCESSING, error_msg);
-        respond_http(json_error_response, "400 Bad Request", response);
+        rpc_context->response_.set_output(json_error_response);
+        rpc_context->send_response();
       }
     };
-    std::string predict_endpoint = "^/" + name + "/predict$";
-    server_.add_endpoint(predict_endpoint, "POST", predict_fn);
 
-    auto update_fn = [this, name, input_type, policy](
-        std::shared_ptr<HttpServer::Response> response,
-        std::shared_ptr<HttpServer::Request> request) {
-      try {
-        std::vector<std::string> models = get_linked_models_for_app(name);
-        std::vector<VersionedModelId> versioned_models;
-        {
-          std::unique_lock<std::mutex> l(current_model_versions_mutex_);
-          for (auto m : models) {
-            auto version = current_model_versions_.find(m);
-            if (version != current_model_versions_.end()) {
-              versioned_models.emplace_back(m, version->second);
-            }
-          }
-        }
-        auto update =
-            decode_and_handle_update(request->content.string(), name,
-                                     versioned_models, policy, input_type);
-        update.then([response](boost::future<FeedbackAck> f) {
-          FeedbackAck ack = f.get();
-          std::stringstream ss;
-          ss << "Feedback received? " << ack;
-          std::string content = ss.str();
-          respond_http(content, "200 OK", response);
-        });
-      } catch (const json_parse_error& e) {
-        std::string error_msg = json_error_msg(e.what(), UPDATE_JSON_SCHEMA);
-        respond_http(error_msg, "400 Bad Request", response);
-      } catch (const json_semantic_error& e) {
-        std::string error_msg = json_error_msg(e.what(), UPDATE_JSON_SCHEMA);
-        respond_http(error_msg, "400 Bad Request", response);
-      } catch (const std::invalid_argument& e) {
-        respond_http(e.what(), "400 Bad Request", response);
-      }
-    };
-    std::string update_endpoint = "^/" + name + "/update$";
-    server_.add_endpoint(update_endpoint, "POST", update_fn);
+    std::unique_lock<std::mutex> l(app_predict_functions_mutex_);
+    app_predict_functions_.emplace(name, predict_fn);
+  }
+
+  void predict(std::string app_name, ServerRpcContext* rpc_context) {
+    std::unique_lock<std::mutex> l(app_predict_functions_mutex_);
+    auto search = app_predict_functions_.find(app_name);
+    if (search != app_predict_functions_.end()) {
+      search->second(rpc_context);
+    } else {
+      std::string json_error_response = get_prediction_error_response_content(
+          "Request Error", "No registered application with name: " + app_name);
+      rpc_context->response_.set_output(json_error_response);
+      rpc_context->send_response();
+    }
   }
 
   /**
@@ -487,65 +520,6 @@ class RequestHandler {
     return clipper::json::to_json_string(error_response);
   }
 
-  /*
-   * JSON format for prediction query request:
-   * {
-   *  "input" := [double] | [int] | [string] | [byte] | [float]
-   * }
-   */
-  boost::future<Response> decode_and_handle_predict(
-      std::string json_content, std::string name,
-      std::vector<VersionedModelId> models, std::string policy,
-      long latency_slo_micros, InputType input_type) {
-    rapidjson::Document d;
-    clipper::json::parse_json(json_content, d);
-    long uid = 0;
-    // NOTE: We will eventually support personalization again so this commented
-    // out code is intentionally left in as a placeholder.
-    // long uid = clipper::json::get_long(d, "uid");
-    std::shared_ptr<Input> input = clipper::json::parse_input(input_type, d);
-    auto prediction = query_processor_.predict(
-        Query{name, uid, input, latency_slo_micros, policy, models});
-    return prediction;
-  }
-
-  /*
-   * JSON format for feedback query request:
-   * {
-   *  "uid" := string,
-   *  "input" := [double] | [int] | [string] | [byte] | [float],
-   *  "label" := double
-   * }
-   */
-  boost::future<FeedbackAck> decode_and_handle_update(
-      std::string json_content, std::string name,
-      std::vector<VersionedModelId> models, std::string policy,
-      InputType input_type) {
-    rapidjson::Document d;
-    clipper::json::parse_json(json_content, d);
-    long uid = clipper::json::get_long(d, "uid");
-    std::shared_ptr<Input> input = clipper::json::parse_input(input_type, d);
-    double y_hat = clipper::json::get_double(d, "label");
-    auto update = query_processor_.update(
-        FeedbackQuery{name, uid, {Feedback(input, y_hat)}, policy, models});
-    return update;
-  }
-
-  void start_listening() { server_.start(); }
-
-  /**
-   * Returns the number of applications that have been registered
-   * with Clipper. This is equivalent to the number of /predict,/update
-   * REST endpoint pairs that have been registered with the server.
-   * We don't count the /metrics endpoint as it does not serve predictions.
-   */
-  size_t num_applications() {
-    // Subtract one to account for the /metrics endpoint
-    size_t count = server_.num_endpoints() - 1;
-    assert(count % 2 == 0);
-    return count / 2;
-  }
-
   /**
    * Returns a copy of the map containing current model names and versions.
    */
@@ -554,8 +528,8 @@ class RequestHandler {
   }
 
  private:
-  HttpServer server_;
-  QP query_processor_;
+  // HttpServer http_server_;
+  clipper::QueryProcessor query_processor_;
   redox::Redox redis_connection_;
   redox::Subscriber redis_subscriber_;
   std::mutex current_model_versions_mutex_;
@@ -564,6 +538,121 @@ class RequestHandler {
   std::mutex linked_models_for_apps_mutex_;
   std::unordered_map<std::string, std::vector<std::string>>
       linked_models_for_apps_;
+
+  std::unique_ptr<grpc::ServerCompletionQueue> cq_;
+  Predict::AsyncService service_;
+  std::unique_ptr<grpc::Server> rpc_server_;
+  std::mutex app_predict_functions_mutex_;
+  std::unordered_map<std::string, std::function<void(ServerRpcContext*)>>
+      app_predict_functions_;
+};
+
+class ServerImpl {
+ public:
+  ServerImpl(std::string address, int portno, int num_threads)
+      : handler_(new RequestHandler{}) {
+    std::string server_address = address + std::to_string(portno);
+
+    grpc::ServerBuilder builder;
+    // Listen on the given address without any authentication mechanism.
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service_);
+    for (int i = 0; i < num_threads; ++i) {
+      srv_cqs_.emplace_back(builder.AddCompletionQueue());
+    }
+
+    server_ = builder.BuildAndStart();
+
+    auto process_func = [this](std::string app_name,
+                               ServerRpcContext* context) {
+      handler_->predict(app_name, context);
+    };
+
+    for (int i = 0; i < 1000; ++i) {
+      for (int j = 0; j < num_threads; j++) {
+        auto request_func = [j, this](
+            grpc::ServerContext* ctx, PredictRequest* request,
+            grpc::ServerAsyncResponseWriter<PredictResponse>* responder,
+            void* tag) {
+          service_.RequestPredictFloats(ctx, request, responder,
+                                        srv_cqs_[j].get(), srv_cqs_[j].get(),
+                                        tag);
+        };
+        contexts_.emplace_back(
+            new ServerRpcContext(request_func, process_func));
+      }
+    }
+
+    for (int i = 0; i < num_threads; i++) {
+      shutdown_state_.emplace_back(new PerThreadShutdownState());
+      threads_.emplace_back(&ServerImpl::ThreadFunc, this, i);
+    }
+  }
+
+  ~ServerImpl() {
+    for (auto ss = shutdown_state_.begin(); ss != shutdown_state_.end(); ++ss) {
+      std::lock_guard<std::mutex> lock((*ss)->mutex);
+      (*ss)->shutdown = true;
+    }
+    std::thread shutdown_thread(&ServerImpl::ShutdownThreadFunc, this);
+    for (auto cq = srv_cqs_.begin(); cq != srv_cqs_.end(); ++cq) {
+      (*cq)->Shutdown();
+    }
+    for (auto thr = threads_.begin(); thr != threads_.end(); thr++) {
+      thr->join();
+    }
+    for (auto cq = srv_cqs_.begin(); cq != srv_cqs_.end(); ++cq) {
+      bool ok;
+      void* got_tag;
+      while ((*cq)->Next(&got_tag, &ok))
+        ;
+    }
+    shutdown_thread.join();
+  }
+
+ private:
+  void ShutdownThreadFunc() {
+    // TODO (vpai): Remove this deadline and allow Shutdown to finish properly
+    auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(5);
+    server_->Shutdown(deadline);
+  }
+
+  void ThreadFunc(int thread_idx) {
+    // Wait until work is available or we are shutting down
+    bool ok;
+    void* got_tag;
+    while (srv_cqs_[thread_idx]->Next(&got_tag, &ok)) {
+      ServerRpcContext* ctx = ServerRpcContext::detag(got_tag);
+      // The tag is a pointer to an RPC context to invoke
+      // Proceed while holding a lock to make sure that
+      // this thread isn't supposed to shut down
+      std::lock_guard<std::mutex> l(shutdown_state_[thread_idx]->mutex);
+      if (shutdown_state_[thread_idx]->shutdown) {
+        return;
+      }
+      const bool still_going = ctx->RunNextState(ok);
+      // if this RPC context is done, refresh it
+      if (!still_going) {
+        ctx->Reset();
+      }
+    }
+    return;
+  }
+
+  std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> srv_cqs_;
+  Predict::AsyncService service_;
+  std::unique_ptr<grpc::Server> server_;
+  std::vector<std::thread> threads_;
+  std::vector<std::unique_ptr<ServerRpcContext>> contexts_;
+  std::unique_ptr<RequestHandler> handler_;
+
+  struct PerThreadShutdownState {
+    mutable std::mutex mutex;
+    bool shutdown;
+    PerThreadShutdownState() : shutdown(false) {}
+  };
+
+  std::vector<std::unique_ptr<PerThreadShutdownState>> shutdown_state_;
 };
 
 }  // namespace query_frontend
