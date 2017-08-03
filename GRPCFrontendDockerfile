@@ -82,6 +82,7 @@ RUN cd /clipper \
     && cd /clipper/src/libs/spdlog \
     && git apply ../patches/make_spdlog_compile_linux.patch \
     && cd /clipper \
+    && git apply patches/include_grpc.patch \
     && ./configure --release \
     && cd release \
     && make grpc_cpp_plugin
