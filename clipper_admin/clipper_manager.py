@@ -121,6 +121,7 @@ class Clipper:
                  rpc_frontend=False):
         self.redis_ip = redis_ip
         self.redis_port = redis_port
+        threads_cmd = '--num_rpc_threads_size=4'
         if rpc_frontend:
             frontend_container = "grpc_frontend"
         else:
@@ -152,7 +153,8 @@ class Clipper:
                 'query_frontend': {
                     'command': [
                         '--redis_ip=%s' % self.redis_ip,
-                        '--redis_port=%d' % self.redis_port
+                        '--redis_port=%d' % self.redis_port,
+                        threads_cmd
                     ],
                     'depends_on': ['mgmt_frontend'],
                     'image':

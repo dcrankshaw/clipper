@@ -14,6 +14,8 @@ int main(int argc, char* argv[]) {
         cxxopts::value<std::string>()->default_value("localhost"))
     ("redis_port", "Redis port",
         cxxopts::value<int>()->default_value("6379"))
+    ("num_rpc_threads_size", "Number of threads for the query frontend (IGNORE THE NAME)",
+        cxxopts::value<int>()->default_value("2"))
     ("threadpool_size", "Number of threads for the task execution threadpool",
         cxxopts::value<int>()->default_value("4"));
   // clang-format on
@@ -26,6 +28,6 @@ int main(int argc, char* argv[]) {
   conf.ready();
 
   query_frontend::RequestHandler<clipper::QueryProcessor> rh(
-      "0.0.0.0", clipper::QUERY_FRONTEND_PORT, 4);
+      "0.0.0.0", clipper::QUERY_FRONTEND_PORT, options["num_rpc_threads_size"].as<int>());
   rh.start_listening();
 }
