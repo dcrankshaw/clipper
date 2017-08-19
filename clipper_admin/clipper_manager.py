@@ -1337,8 +1337,10 @@ class Clipper:
                 docker_cmd = "NV_GPU={} nvidia-docker".format(gpu_num)
             add_container_cmd = (
                 "{docker_cmd} run -d --network={nw} --restart={restart_policy} -v {path}:/model:ro "
+                # "{docker_cmd} run -d --network=host --restart={restart_policy} -v {path}:/model:ro "
                 "-e \"CLIPPER_MODEL_NAME={mn}\" -e \"CLIPPER_MODEL_VERSION={mv}\" "
                 "-e \"CLIPPER_IP=query_frontend\" -e \"CLIPPER_INPUT_TYPE={mip}\" -l \"{clipper_label}\" -l \"{mv_label}\" "
+                # "-e \"CLIPPER_IP=localhost\" -e \"CLIPPER_INPUT_TYPE={mip}\" -l \"{clipper_label}\" -l \"{mv_label}\" "
                 "{image}".format(
                     docker_cmd=docker_cmd,
                     path=model_data_path,

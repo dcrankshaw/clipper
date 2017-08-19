@@ -6,7 +6,8 @@
 #include <unordered_map>
 
 #include <boost/circular_buffer.hpp>
-#include <boost/thread.hpp>
+// #include <boost/thread.hpp>
+#include <folly/SharedMutex.h>
 
 #include <clipper/datatypes.hpp>
 #include <clipper/metrics.hpp>
@@ -44,7 +45,7 @@ class ModelContainer {
  private:
   bool connected_{true};
   Queue<FeedbackTask> feedback_queue_;
-  boost::shared_mutex throughput_mutex_;
+  folly::SharedMutex throughput_mutex_;
   double avg_throughput_per_milli_;
   boost::circular_buffer<double> throughput_buffer_;
   static const size_t THROUGHPUT_BUFFER_CAPACITY = 100;
@@ -82,7 +83,7 @@ class ActiveContainers {
   // Protects the models-replicas map. Must acquire an exclusive
   // lock to modify the map and a shared_lock when accessing
   // replicas. The replica ModelContainer entries are independently threadsafe.
-  boost::shared_mutex m_;
+  folly::SharedMutex m_;
 
   // A mapping of models to their replicas. The replicas
   // for each model are represented as a map keyed on replica id.

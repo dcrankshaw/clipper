@@ -8,10 +8,11 @@
 #include <unordered_map>
 
 #include <boost/optional.hpp>
-#include <boost/thread.hpp>
+// #include <boost/thread.hpp>
 #include <redox.hpp>
 
 #include <folly/futures/Future.h>
+#include <folly/SharedMutex.h>
 
 #include <clipper/config.hpp>
 #include <clipper/containers.hpp>
@@ -323,7 +324,7 @@ class TaskExecutor {
     std::vector<folly::Future<Output>> output_futures;
     for (auto &t : tasks) {
       // add each task to the queue corresponding to its associated model
-      boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
+      folly::SharedMutex::ReadHolder lock(model_queues_mutex_);
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
         output_futures.push_back(cache_.fetch(t.model_, t.query_id_));
@@ -334,7 +335,7 @@ class TaskExecutor {
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
-          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
+          folly::SharedMutex::ReadHolder model_metrics_lock(
               model_metrics_mutex_);
           auto cur_model_metric_entry = model_metrics_.find(t.model_);
           if (cur_model_metric_entry != model_metrics_.end()) {
@@ -342,7 +343,7 @@ class TaskExecutor {
             cur_model_metric.cache_hit_ratio_->increment(0, 1);
           }
         } else {
-          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
+          folly::SharedMutex::ReadHolder model_metrics_lock(
               model_metrics_mutex_);
           auto cur_model_metric_entry = model_metrics_.find(t.model_);
           if (cur_model_metric_entry != model_metrics_.end()) {
@@ -380,22 +381,22 @@ class TaskExecutor {
   std::unordered_map<int, std::vector<InflightMessage>> inflight_messages_;
   std::shared_ptr<metrics::Counter> predictions_counter_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
-  boost::shared_mutex model_queues_mutex_;
+  folly::SharedMutex model_queues_mutex_;
   std::unordered_map<VersionedModelId, std::shared_ptr<ModelQueue>>
       model_queues_;
-  boost::shared_mutex model_metrics_mutex_;
+  folly::SharedMutex model_metrics_mutex_;
   std::unordered_map<VersionedModelId, ModelMetrics> model_metrics_;
   static constexpr int INITIAL_MODEL_QUEUES_MAP_SIZE = 100;
 
   bool create_model_queue_if_necessary(const VersionedModelId &model_id) {
     // Adds a new <model_id, task_queue> entry to the queues map, if one
     // does not already exist
-    boost::unique_lock<boost::shared_mutex> l(model_queues_mutex_);
+    folly::SharedMutex::WriteHolder l(model_queues_mutex_);
     auto queue_added = model_queues_.emplace(
         std::make_pair(model_id, std::make_shared<ModelQueue>()));
     bool queue_created = queue_added.second;
     if (queue_created) {
-      boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
+      folly::SharedMutex::WriteHolder l(model_metrics_mutex_);
       model_metrics_.insert(std::make_pair(model_id, ModelMetrics(model_id)));
       // model_metrics_.emplace(std::piecewise_construct,
       //                        std::forward_as_tuple(model_id),
@@ -412,7 +413,7 @@ class TaskExecutor {
           "TaskExecutor failed to find previously registered active "
           "container!");
     }
-    boost::shared_lock<boost::shared_mutex> l(model_queues_mutex_);
+    folly::SharedMutex::ReadHolder l(model_queues_mutex_);
     auto model_queue_entry = model_queues_.find(container->model_);
     if (model_queue_entry == model_queues_.end()) {
       throw std::runtime_error(
@@ -466,7 +467,7 @@ class TaskExecutor {
   void on_response_recv(rpc::RPCResponse response) {
     std::unique_lock<std::mutex> l(inflight_messages_mutex_);
     auto keys = inflight_messages_[response.first];
-    boost::shared_lock<boost::shared_mutex> metrics_lock(model_metrics_mutex_);
+    folly::SharedMutex::ReadHolder metrics_lock(model_metrics_mutex_);
 
     inflight_messages_.erase(response.first);
     l.unlock();

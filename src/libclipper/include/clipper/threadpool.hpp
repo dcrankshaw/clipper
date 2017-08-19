@@ -6,7 +6,7 @@
 #include <thread>
 #include <unordered_map>
 
-#include <boost/thread.hpp>
+#include <folly/SharedMutex.h>
 
 #include "datatypes.hpp"
 #include "logging.hpp"
@@ -177,7 +177,7 @@ class ThreadPool {
   ~ThreadPool(void) { destroy(); }
 
   bool create_queue(VersionedModelId vm, int replica_id) {
-    boost::unique_lock<boost::shared_mutex> l(queues_mutex_);
+    folly::SharedMutex::WriteHolder l(queues_mutex_);
     size_t queue_id = get_queue_id(vm, replica_id);
     auto queue = queues_.find(queue_id);
     if (queue != queues_.end()) {
@@ -213,7 +213,7 @@ class ThreadPool {
     auto result_future = task.get_future();
 
     size_t queue_id = get_queue_id(vm, replica_id);
-    boost::shared_lock<boost::shared_mutex> l(queues_mutex_);
+    folly::SharedMutex::ReadHolder l(queues_mutex_);
     auto queue = queues_.find(queue_id);
     if (queue != queues_.end()) {
       queue->second.push(std::make_unique<TaskType>(std::move(task)));
@@ -245,7 +245,7 @@ class ThreadPool {
       std::unique_ptr<IThreadTask> pTask{nullptr};
       bool work_to_do = false;
       {
-        boost::shared_lock<boost::shared_mutex> l(queues_mutex_);
+        folly::SharedMutex::ReadHolder l(queues_mutex_);
         // NOTE: The use of try_pop here means the worker will spin instead of
         // block while waiting for work. This is intentional. We defer to the
         // submitted tasks to block when no work is available.
@@ -281,7 +281,7 @@ class ThreadPool {
 
  private:
   std::atomic_bool done_;
-  boost::shared_mutex queues_mutex_;
+  folly::SharedMutex queues_mutex_;
   std::unordered_map<size_t, ThreadSafeQueue<std::unique_ptr<IThreadTask>>>
       queues_;
   std::unordered_map<size_t, std::thread> threads_;

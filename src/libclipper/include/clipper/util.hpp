@@ -3,12 +3,14 @@
 
 #include <condition_variable>
 #include <queue>
-// uncomment to disable assert()
-// #define NDEBUG
 #include <cassert>
+// #include <shared_mutex>
+#include <mutex>
 
-#include "boost/optional.hpp"
-#include "boost/thread.hpp"
+#include <boost/optional.hpp>
+// #include <folly/SharedMutex.h>
+
+
 
 #define UNUSED(expr) \
   do {               \
@@ -32,20 +34,21 @@ class Queue {
   Queue& operator=(Queue&&) = delete;
 
   void push(const T& x) {
-    boost::unique_lock<boost::shared_mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     xs_.push(x);
     data_available_.notify_one();
   }
 
   int size() {
-    boost::shared_lock<boost::shared_mutex> l(m_);
+    // std::shared_lock<std::mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     return xs_.size();
   }
 
   /// Block until the queue contains at least one element, then return the
   /// first element in the queue.
   T pop() {
-    boost::unique_lock<boost::shared_mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     while (xs_.size() == 0) {
       data_available_.wait(l);
     }
@@ -55,7 +58,7 @@ class Queue {
   }
 
   boost::optional<T> try_pop() {
-    boost::unique_lock<boost::shared_mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     if (xs_.size() > 0) {
       const T x = xs_.front();
       xs_.pop();
@@ -66,7 +69,7 @@ class Queue {
   }
 
   std::vector<T> try_pop_batch(size_t batch_size) {
-    boost::unique_lock<boost::shared_mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     std::vector<T> batch;
     while (xs_.size() > 0 && batch.size() < batch_size) {
       batch.push_back(xs_.front());
@@ -76,12 +79,13 @@ class Queue {
   }
 
   void clear() {
-    boost::unique_lock<boost::shared_mutex> l(m_);
+    std::unique_lock<std::mutex> l(m_);
     xs_.clear();
   }
 
  private:
-  boost::shared_mutex m_;
+  // folly::SharedMutex m_;
+  std::mutex m_;
   std::condition_variable_any data_available_;
   std::queue<T> xs_;
 };
