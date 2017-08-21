@@ -152,7 +152,8 @@ class Clipper:
                 'query_frontend': {
                     'command': [
                         '--redis_ip=%s' % self.redis_ip,
-                        '--redis_port=%d' % self.redis_port
+                        '--redis_port=%d' % self.redis_port,
+                        '--num_rpc_threads_size=4'
                     ],
                     'depends_on': ['mgmt_frontend'],
                     'image':
