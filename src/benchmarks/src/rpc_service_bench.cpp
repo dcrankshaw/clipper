@@ -251,9 +251,11 @@ class SerialBenchmarker {
 
 class ParallelBenchmarker {
  public:
-  ParallelBenchmarker(int message_size, DataType input_type)
+  ParallelBenchmarker(int message_size_inputs, DataType input_type)
     : rpc_(std::make_unique<rpc::RPCService>()),
-      serialized_request_(create_request(input_type, message_size).serialize()) {}
+      message_size_inputs_(message_size_inputs),
+      serialized_request_(create_request(input_type, message_size_inputs).serialize()),
+      active_(true) {}
 
   void start() {
     rpc_->start("*", RPC_SERVICE_PORT, [](VersionedModelId, int) {},
@@ -317,7 +319,7 @@ class ParallelBenchmarker {
       if(responses.empty()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       } else {
-        throughput_meter_->mark(responses.size());
+        throughput_meter_->mark(responses.size() * message_size_inputs_);
       }
     }
   }
@@ -325,17 +327,17 @@ class ParallelBenchmarker {
   void send_messages() {
     while(active_) {
       rpc_->send_message(serialized_request_, benchmark_container_id_);
-      log_info_formatted(LOGGING_TAG_RPC_BENCH, "SIZE?: {}", serialized_request_.size());
     }
   }
 
   redox::Redox redis_connection_;
   redox::Subscriber redis_subscriber_;
   std::unique_ptr<rpc::RPCService> rpc_;
+  int message_size_inputs_;
   std::vector<ByteBuffer> serialized_request_;
   std::shared_ptr<metrics::Histogram> msg_latency_hist_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
-  std::atomic_bool active_ = true;
+  std::atomic_bool active_;
   std::atomic_int benchmark_container_id_;
   std::thread send_thread_;
   std::thread recv_thread_;

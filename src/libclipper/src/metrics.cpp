@@ -502,8 +502,7 @@ const HistogramStats Histogram::compute_stats() {
   double p50 = percentile(snapshot, .5);
   double p95 = percentile(snapshot, .95);
   double p99 = percentile(snapshot, .99);
-  double mean = static_cast<double>(
-                    std::accumulate(snapshot.begin(), snapshot.end(), 0)) /
+  double mean = std::accumulate(snapshot.begin(), snapshot.end(), static_cast<long long>(0)) /
                 static_cast<double>(snapshot_size);
   double var = 0;
   if (snapshot_size > 1) {
