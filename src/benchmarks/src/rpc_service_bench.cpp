@@ -132,9 +132,9 @@ rpc::PredictionRequest create_request(DataType input_type, int message_size) {
   }
 }
 
-class Benchmarker {
+class SerialBenchmarker {
  public:
-  Benchmarker(int num_messages, int message_size, DataType input_type)
+  SerialBenchmarker(int num_messages, int message_size, DataType input_type)
       : num_messages_(num_messages),
         rpc_(std::make_unique<rpc::RPCService>()),
         request_(create_request(input_type, message_size)) {}
@@ -185,12 +185,12 @@ class Benchmarker {
         });
   }
 
-  Benchmarker(const Benchmarker &other) = delete;
-  Benchmarker &operator=(const Benchmarker &other) = delete;
+  SerialBenchmarker(const SerialBenchmarker &other) = delete;
+  SerialBenchmarker &operator=(const SerialBenchmarker &other) = delete;
 
-  Benchmarker(Benchmarker &&other) = default;
-  Benchmarker &operator=(Benchmarker &&other) = default;
-  ~Benchmarker() {
+  SerialBenchmarker(SerialBenchmarker &&other) = default;
+  SerialBenchmarker &operator=(SerialBenchmarker &&other) = default;
+  ~SerialBenchmarker() {
     std::unique_lock<std::mutex> l(bench_completed_cv_mutex_);
     bench_completed_cv_.wait(l, [this]() { return bench_completed_ == true; });
   }
@@ -209,10 +209,10 @@ class Benchmarker {
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch())
             .count();
-    if (response.first != cur_message_id_) {
+    if (std::get<0>(response) != cur_message_id_) {
       std::stringstream ss;
       ss << "Response message ID ";
-      ss << response.first;
+      ss << std::get<0>(response);
       ss << " did not match in flight message ID ";
       ss << cur_message_id_;
       throw std::logic_error(ss.str());
@@ -249,6 +249,19 @@ class Benchmarker {
   int cur_message_id_;
 };
 
+class ParallelBenchmarker {
+ public:
+  ParallelBenchmarker(int num_messages, int message_size, DataType input_type)
+    : num_messages_(num_messages),
+      rpc_(std::make_unique<rpc::RPCService>()),
+      request_(create_request(input_type, message_size)) {}
+
+ private:
+  int num_messages;
+  std::unique_ptr<rpc::RPCService> rpc_;
+  rpc::PredictionRequest request_;
+}
+
 int main(int argc, char *argv[]) {
   cxxopts::Options options("rpc_bench", "Clipper RPC Benchmark");
   // clang-format off
@@ -272,13 +285,13 @@ int main(int argc, char *argv[]) {
   conf.ready();
   DataType input_type =
       clipper::parse_input_type(options["input_type"].as<std::string>());
-  Benchmarker benchmarker(options["num_messages"].as<int>(),
+  SerialBenchmarker SerialBenchmarker(options["num_messages"].as<int>(),
                           options["message_size"].as<int>(), input_type);
-  benchmarker.start();
+  SerialBenchmarker.start();
 
-  std::unique_lock<std::mutex> l(benchmarker.bench_completed_cv_mutex_);
-  benchmarker.bench_completed_cv_.wait(
-      l, [&benchmarker]() { return benchmarker.bench_completed_ == true; });
+  std::unique_lock<std::mutex> l(SerialBenchmarker.bench_completed_cv_mutex_);
+  SerialBenchmarker.bench_completed_cv_.wait(
+      l, [&SerialBenchmarker]() { return SerialBenchmarker.bench_completed_ == true; });
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
   std::string metrics_report = registry.report_metrics();
   log_info(LOGGING_TAG_RPC_BENCH, "METRICS", metrics_report);
