@@ -9,6 +9,7 @@
 #include <boost/bimap.hpp>
 #include <redox.hpp>
 #include <zmq.hpp>
+#include <concurrentqueue.h>
 
 #include <clipper/containers.hpp>
 #include <clipper/datatypes.hpp>
@@ -28,11 +29,11 @@ namespace rpc {
 const std::string LOGGING_TAG_RPC = "RPC";
 
 // Tuple of msg_id, data_type, binary data
-using RPCResponse = std::tuple<const int, DataType, std::shared_ptr<void>>;
+using RPCResponse = std::tuple<int, DataType, std::shared_ptr<void>>;
 
 /// Tuple of zmq_connection_id, message_id, vector of messages, creation time
 using RPCRequest =
-    std::tuple<const int, const int, const std::vector<ByteBuffer>, const long>;
+    std::tuple<int, int, std::vector<ByteBuffer>, long>;
 
 enum class RPCEvent {
   SentHeartbeat = 1,
@@ -88,7 +89,7 @@ class RPCService {
   void manage_service(const string address);
   void send_messages(socket_t &socket,
                      boost::bimap<int, vector<uint8_t>> &connections,
-                     int num_messages);
+                     int max_num_messages);
 
   void receive_message(
       socket_t &socket, boost::bimap<int, vector<uint8_t>> &connections,
@@ -107,8 +108,8 @@ class RPCService {
 
   void shutdown_service(socket_t &socket);
   std::thread rpc_thread_;
-  shared_ptr<Queue<RPCRequest>> request_queue_;
-  shared_ptr<Queue<RPCResponse>> response_queue_;
+  shared_ptr<moodycamel::ConcurrentQueue<RPCRequest>> request_queue_;
+  shared_ptr<moodycamel::ConcurrentQueue<RPCResponse>> response_queue_;
   // Flag indicating whether rpc service is active
   std::atomic_bool active_;
   // The next available message id

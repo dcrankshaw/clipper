@@ -327,6 +327,7 @@ class ParallelBenchmarker {
   void send_messages() {
     while(active_) {
       rpc_->send_message(serialized_request_, benchmark_container_id_);
+      std::this_thread::sleep_for(std::chrono::microseconds(250));
     }
   }
 

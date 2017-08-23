@@ -58,6 +58,16 @@ target_include_directories(base64json INTERFACE
         $<INSTALL_INTERFACE:base64json>)
 export(TARGETS base64json FILE Base64JsonConfig.cmake)
 
+##########################################
+### Concurrent Queue
+##########################################
+
+add_library(cqueue INTERFACE)
+target_include_directories(cqueue INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/concurrent_queue>
+        $<INSTALL_INTERFACE:cqueue>)
+export(TARGETS cqueue FILE ConcurrentQueueConfig.cmake)
+
 add_subdirectory(redox)
 
 add_subdirectory(rapidjson)
