@@ -251,15 +251,121 @@ class SerialBenchmarker {
 
 class ParallelBenchmarker {
  public:
-  ParallelBenchmarker(int num_messages, int message_size, DataType input_type)
-    : num_messages_(num_messages),
-      rpc_(std::make_unique<rpc::RPCService>()),
-      request_(create_request(input_type, message_size)) {}
+  ParallelBenchmarker(int message_size, DataType input_type)
+    : rpc_(std::make_unique<rpc::RPCService>()),
+      serialized_request_(create_request(input_type, message_size).serialize()) {}
+
+  void start() {
+    rpc_->start("*", RPC_SERVICE_PORT, [](VersionedModelId, int) {},
+                [](rpc::RPCResponse response) {});
+
+    msg_latency_hist_ =
+        metrics::MetricsRegistry::get_metrics().create_histogram(
+            "rpc_bench_msg_latency", "milliseconds", 8260);
+    throughput_meter_ = metrics::MetricsRegistry::get_metrics().create_meter(
+        "rpc_bench_throughput");
+
+    recv_thread_ = std::thread([this]() {
+      recv_messages();
+    });
+
+    Config &conf = get_config();
+    while (!redis_connection_.connect(conf.get_redis_address(),
+                                      conf.get_redis_port())) {
+      log_error(LOGGING_TAG_RPC_BENCH, "RPCBench failed to connect to redis",
+                "Retrying in 1 second...");
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    while (!redis_subscriber_.connect(conf.get_redis_address(),
+                                      conf.get_redis_port())) {
+      log_error(LOGGING_TAG_RPC_BENCH,
+                "RPCBench subscriber failed to connect to redis",
+                "Retrying in 1 second...");
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    redis::send_cmd_no_reply<std::string>(
+        redis_connection_, {"CONFIG", "SET", "notify-keyspace-events", "AKE"});
+    redis::subscribe_to_container_changes(
+        redis_subscriber_,
+        // event_type corresponds to one of the Redis event types
+        // documented in https://redis.io/topics/notifications.
+        [this](const std::string &key, const std::string &event_type) {
+          if (event_type == "hset") {
+            auto container_info =
+                redis::get_container_by_key(redis_connection_, key);
+            benchmark_container_id_ =
+                std::stoi(container_info["zmq_connection_id"]);
+
+            send_thread_ = std::thread([this]() {
+              send_messages();
+            });
+          }
+        });
+  }
+
+  void stop() {
+    active_ = false;
+    send_thread_.join();
+    recv_thread_.join();
+
+  }
 
  private:
-  int num_messages;
+  void recv_messages() {
+    while(active_) {
+      std::vector<rpc::RPCResponse> responses = rpc_->try_get_responses(10000);
+      if(responses.empty()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      } else {
+        throughput_meter_->mark(responses.size());
+      }
+    }
+  }
+
+  void send_messages() {
+    while(active_) {
+      rpc_->send_message(serialized_request_, benchmark_container_id_);
+      log_info_formatted(LOGGING_TAG_RPC_BENCH, "SIZE?: {}", serialized_request_.size());
+    }
+  }
+
+  redox::Redox redis_connection_;
+  redox::Subscriber redis_subscriber_;
   std::unique_ptr<rpc::RPCService> rpc_;
-  rpc::PredictionRequest request_;
+  std::vector<ByteBuffer> serialized_request_;
+  std::shared_ptr<metrics::Histogram> msg_latency_hist_;
+  std::shared_ptr<metrics::Meter> throughput_meter_;
+  std::atomic_bool active_ = true;
+  std::atomic_int benchmark_container_id_;
+  std::thread send_thread_;
+  std::thread recv_thread_;
+};
+
+void run_serial_benchmarker(cxxopts::Options& options) {
+  DataType input_type =
+      clipper::parse_input_type(options["input_type"].as<std::string>());
+  SerialBenchmarker SerialBenchmarker(options["num_messages"].as<int>(),
+                                      options["message_size"].as<int>(), input_type);
+  SerialBenchmarker.start();
+  std::unique_lock<std::mutex> l(SerialBenchmarker.bench_completed_cv_mutex_);
+  SerialBenchmarker.bench_completed_cv_.wait(
+      l, [&SerialBenchmarker]() { return SerialBenchmarker.bench_completed_ == true; });
+  metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
+  std::string metrics_report = registry.report_metrics();
+  log_info(LOGGING_TAG_RPC_BENCH, "METRICS", metrics_report);
+}
+
+void run_parallel_benchmarker(cxxopts::Options& options) {
+  DataType input_type =
+      clipper::parse_input_type(options["input_type"].as<std::string>());
+  ParallelBenchmarker parallel_benchmarker(options["message_size"].as<int>(), input_type);
+  parallel_benchmarker.start();
+  std::this_thread::sleep_for(std::chrono::seconds(20));
+  parallel_benchmarker.stop();
+  std::this_thread::sleep_for(std::chrono::seconds(3));
+  metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
+  std::string metrics_report = registry.report_metrics();
+  log_info(LOGGING_TAG_RPC_BENCH, "METRICS", metrics_report);
 }
 
 int main(int argc, char *argv[]) {
@@ -283,17 +389,8 @@ int main(int argc, char *argv[]) {
   conf.set_redis_address(options["redis_ip"].as<std::string>());
   conf.set_redis_port(options["redis_port"].as<int>());
   conf.ready();
-  DataType input_type =
-      clipper::parse_input_type(options["input_type"].as<std::string>());
-  SerialBenchmarker SerialBenchmarker(options["num_messages"].as<int>(),
-                          options["message_size"].as<int>(), input_type);
-  SerialBenchmarker.start();
 
-  std::unique_lock<std::mutex> l(SerialBenchmarker.bench_completed_cv_mutex_);
-  SerialBenchmarker.bench_completed_cv_.wait(
-      l, [&SerialBenchmarker]() { return SerialBenchmarker.bench_completed_ == true; });
-  metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
-  std::string metrics_report = registry.report_metrics();
-  log_info(LOGGING_TAG_RPC_BENCH, "METRICS", metrics_report);
+  //run_serial_benchmarker(options);
+  run_parallel_benchmarker(options);
   return 0;
 }

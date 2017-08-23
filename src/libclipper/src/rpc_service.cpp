@@ -89,15 +89,7 @@ int RPCService::send_message(const vector<ByteBuffer> &msg,
 }
 
 vector<RPCResponse> RPCService::try_get_responses(const int max_num_responses) {
-  vector<RPCResponse> responses;
-  for (int i = 0; i < max_num_responses; i++) {
-    if (auto response = response_queue_->try_pop()) {
-      responses.push_back(*response);
-    } else {
-      break;
-    }
-  }
-  return responses;
+  return response_queue_->try_pop_batch(static_cast<size_t>(max_num_responses));
 }
 
 void RPCService::manage_service(const string address) {
