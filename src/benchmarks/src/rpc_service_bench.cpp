@@ -2,6 +2,7 @@
 #include <iostream>
 #include <thread>
 #include <unordered_map>
+#include <algorithm>
 
 #include <cxxopts.hpp>
 
@@ -251,9 +252,10 @@ class SerialBenchmarker {
 
 class ParallelBenchmarker {
  public:
-  ParallelBenchmarker(int message_size_inputs, DataType input_type)
+  ParallelBenchmarker(int message_size_inputs, int num_containers, DataType input_type)
     : rpc_(std::make_unique<rpc::RPCService>()),
       message_size_inputs_(message_size_inputs),
+      num_containers_(num_containers),
       serialized_request_(create_request(input_type, message_size_inputs).serialize()),
       active_(true) {}
 
@@ -295,12 +297,24 @@ class ParallelBenchmarker {
           if (event_type == "hset") {
             auto container_info =
                 redis::get_container_by_key(redis_connection_, key);
-            benchmark_container_id_ =
+            int benchmark_container_id =
                 std::stoi(container_info["zmq_connection_id"]);
 
-            send_thread_ = std::thread([this]() {
-              send_messages();
-            });
+            if(benchmark_container_ids.size() >= num_containers_) {
+              return;
+            }
+
+            auto container_id_search =
+                std::find(benchmark_container_ids.begin(), benchmark_container_ids.end(), benchmark_container_id);
+            if(container_id_search == benchmark_container_ids.end()) {
+              benchmark_container_ids.push_back(benchmark_container_id);
+            }
+
+            if(benchmark_container_ids.size() == num_containers_) {
+              send_thread_ = std::thread([this]() {
+                send_messages();
+              });
+            }
           }
         });
   }
@@ -326,7 +340,8 @@ class ParallelBenchmarker {
 
   void send_messages() {
     while(active_) {
-      rpc_->send_message(serialized_request_, benchmark_container_id_);
+      rpc_->send_message(serialized_request_, benchmark_container_ids[last_sent_container_index]);
+      last_sent_container_index = (last_sent_container_index + 1) % num_containers_;
       std::this_thread::sleep_for(std::chrono::microseconds(250));
     }
   }
@@ -335,11 +350,13 @@ class ParallelBenchmarker {
   redox::Subscriber redis_subscriber_;
   std::unique_ptr<rpc::RPCService> rpc_;
   int message_size_inputs_;
+  int num_containers_;
+  int last_sent_container_index = 0;
   std::vector<ByteBuffer> serialized_request_;
   std::shared_ptr<metrics::Histogram> msg_latency_hist_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
   std::atomic_bool active_;
-  std::atomic_int benchmark_container_id_;
+  std::vector<int> benchmark_container_ids;
   std::thread send_thread_;
   std::thread recv_thread_;
 };
@@ -361,7 +378,10 @@ void run_serial_benchmarker(cxxopts::Options& options) {
 void run_parallel_benchmarker(cxxopts::Options& options) {
   DataType input_type =
       clipper::parse_input_type(options["input_type"].as<std::string>());
-  ParallelBenchmarker parallel_benchmarker(options["message_size"].as<int>(), input_type);
+  ParallelBenchmarker parallel_benchmarker(
+      options["message_size"].as<int>(),
+      options["num_containers"].as<int>(),
+      input_type);
   parallel_benchmarker.start();
   std::this_thread::sleep_for(std::chrono::seconds(20));
   parallel_benchmarker.stop();
@@ -383,6 +403,8 @@ int main(int argc, char *argv[]) {
         cxxopts::value<int>()->default_value("100"))
     ("s,message_size", "Number of inputs per message",
         cxxopts::value<int>()->default_value("500"))
+    ("c,num_containers", "Expected number of containers",
+        cxxopts::value<int>()->default_value("1"))
     ("input_type", "Can be bytes, ints, floats, doubles, or strings",
         cxxopts::value<std::string>()->default_value("doubles"));
   // clang-format on
@@ -392,7 +414,7 @@ int main(int argc, char *argv[]) {
   conf.set_redis_address(options["redis_ip"].as<std::string>());
   conf.set_redis_port(options["redis_port"].as<int>());
   conf.set_rpc_max_send(10);
-  conf.set_rpc_max_recv(10);
+  conf.set_rpc_max_recv(100);
   conf.ready();
 
   //run_serial_benchmarker(options);
