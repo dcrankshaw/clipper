@@ -188,8 +188,9 @@ void run_benchmark(std::unordered_map<std::string, std::string> &config) {
       static_cast<char *>(malloc(DEFAULT_OUTPUT.size())), free);
   memcpy(default_output_content.get(), DEFAULT_OUTPUT.data(),
          DEFAULT_OUTPUT.size());
+
   clipper::Output parsed_default_output(
-      std::make_tuple(default_output_content, 0, DEFAULT_OUTPUT.size()), {});
+      std::make_shared<StringOutput>(default_output_content, 0, DEFAULT_OUTPUT.size()), {});
   auto init_state = p.init_state(parsed_default_output);
   clipper::StateKey state_key{TEST_APPLICATION_LABEL, clipper::DEFAULT_USER_ID,
                               0};
