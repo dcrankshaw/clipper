@@ -31,8 +31,8 @@ namespace rpc {
 constexpr int INITIAL_REPLICA_ID_SIZE = 100;
 
 RPCService::RPCService()
-    : request_queue_(std::make_shared<moodycamel::ConcurrentQueue<RPCRequest>>(sizeof(RPCRequest) * 100)),
-      response_queue_(std::make_shared<moodycamel::ConcurrentQueue<RPCResponse>>(sizeof(RPCResponse) * 100)),
+    : request_queue_(std::make_shared<moodycamel::ConcurrentQueue<RPCRequest>>(sizeof(RPCRequest) * 10000)),
+      response_queue_(std::make_shared<moodycamel::ConcurrentQueue<RPCResponse>>(sizeof(RPCResponse) * 10000)),
       active_(false),
       // The version of the unordered_map constructor that allows
       // you to specify your own hash function also requires you
@@ -90,8 +90,8 @@ int RPCService::send_message(const vector<ByteBuffer> &msg,
 }
 
 vector<RPCResponse> RPCService::try_get_responses(const int max_num_responses) {
-  std::vector<RPCResponse> vec(max_num_responses);
-  size_t num_dequeued = response_queue_->try_dequeue_bulk(vec.begin(), max_num_responses);
+  std::vector<RPCResponse> vec(response_queue_->size_approx());
+  size_t num_dequeued = response_queue_->try_dequeue_bulk(vec.begin(), vec.size());
   vec.resize(num_dequeued);
   return vec;
 }

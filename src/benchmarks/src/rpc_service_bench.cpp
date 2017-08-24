@@ -391,6 +391,8 @@ int main(int argc, char *argv[]) {
   clipper::Config &conf = clipper::get_config();
   conf.set_redis_address(options["redis_ip"].as<std::string>());
   conf.set_redis_port(options["redis_port"].as<int>());
+  conf.set_rpc_max_send(10);
+  conf.set_rpc_max_recv(10);
   conf.ready();
 
   //run_serial_benchmarker(options);
