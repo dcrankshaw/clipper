@@ -182,6 +182,8 @@ class RequestHandler {
   RequestHandler() : query_processor_() {
     // Init Clipper stuff
 
+    request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("request_throughput");
+
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
     while (!redis_connection_.connect(conf.get_redis_address(),
@@ -481,6 +483,8 @@ class RequestHandler {
 
           rpc_context->send_response();
 
+          request_throughput_->mark(1);
+
           })
         .onError([rpc_context](const std::exception& e) {
             clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
@@ -558,6 +562,8 @@ class RequestHandler {
   std::mutex linked_models_for_apps_mutex_;
   std::unordered_map<std::string, std::vector<std::string>>
       linked_models_for_apps_;
+
+  std::shared_ptr<clipper::metrics::Meter> request_throughput_;
 
   std::unique_ptr<grpc::ServerCompletionQueue> cq_;
   Predict::AsyncService service_;
