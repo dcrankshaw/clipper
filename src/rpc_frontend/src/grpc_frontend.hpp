@@ -185,7 +185,7 @@ class RequestHandler {
     request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
     frontend_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_frontend_throughput");
 
-    queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
+    qp_latency_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
       "qp predict latency", "microseconds", 4096);
 
     metrics_thread_ = std::thread([this]() {
