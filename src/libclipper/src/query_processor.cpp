@@ -142,38 +142,52 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
 
-  response_ready_future.then([
-    outputs_ptr, outputs_mutex, num_tasks, query, query_id,
-    selection_state = selection_state_, current_policy,
-    response_promise = std::move(response_promise), default_explanation
-  ](const std::pair<size_t,
-                    folly::Try<folly::Unit>>& /* completed_future */) mutable {
-    std::lock_guard<std::mutex> outputs_lock(*outputs_mutex);
-    if (outputs_ptr->empty() && num_tasks > 0 && !default_explanation) {
-      default_explanation =
-          "Failed to retrieve a prediction response within the specified "
-          "latency SLO";
-    }
+//  response_ready_future.then([
+//    outputs_ptr, outputs_mutex, num_tasks, query, query_id,
+//    selection_state = selection_state_, current_policy,
+//    response_promise = std::move(response_promise), default_explanation
+//  ](const std::pair<size_t,
+//                    folly::Try<folly::Unit>>& /* completed_future */) mutable {
+//    std::lock_guard<std::mutex> outputs_lock(*outputs_mutex);
+//    if (outputs_ptr->empty() && num_tasks > 0 && !default_explanation) {
+//      default_explanation =
+//          "Failed to retrieve a prediction response within the specified "
+//          "latency SLO";
+//    }
+//
+//    std::pair<Output, bool> final_output = current_policy->combine_predictions(
+//        selection_state, query, *outputs_ptr);
+//
+//    std::chrono::time_point<std::chrono::high_resolution_clock> end =
+//        std::chrono::high_resolution_clock::now();
+//    long duration_micros =
+//        std::chrono::duration_cast<std::chrono::microseconds>(
+//            end - query.create_time_)
+//            .count();
+//
+//    Response response{query,
+//                      query_id,
+//                      duration_micros,
+//                      std::move(final_output.first),
+//                      final_output.second,
+//                      std::move(default_explanation)};
+//    response_promise.setValue(response);
+//  });
+//  return response_future;
 
-    std::pair<Output, bool> final_output = current_policy->combine_predictions(
-        selection_state, query, *outputs_ptr);
 
-    std::chrono::time_point<std::chrono::high_resolution_clock> end =
-        std::chrono::high_resolution_clock::now();
-    long duration_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            end - query.create_time_)
-            .count();
+  Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
 
-    Response response{query,
-                      query_id,
-                      duration_micros,
-                      std::move(final_output.first),
-                      final_output.second,
-                      std::move(default_explanation)};
-    response_promise.setValue(response);
-  });
-  return response_future;
+  Response response{
+      query,
+      query_id,
+      1000,
+      output,
+      true,
+      boost::optional<std::string>("BAD")
+  };
+
+  return folly::makeFuture(std::move(response));
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {
