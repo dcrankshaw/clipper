@@ -92,6 +92,7 @@ size_t ModelContainer::get_batch_size(Deadline deadline) {
   if (batch_size < 1) {
     batch_size = 1;
   }
+  log_error_formatted(LOGGING_TAG_CLIPPER, "BATCH SIZE: {}", batch_size);
   return batch_size;
 }
 
