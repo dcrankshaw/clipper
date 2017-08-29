@@ -183,6 +183,7 @@ class RequestHandler {
     // Init Clipper stuff
 
     request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
+    frontend_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_frontend_throughput");
 
     metrics_thread_ = std::thread([this]() {
       while(active_) {
@@ -441,12 +442,14 @@ class RequestHandler {
           } break;
         }
 
+        frontend_throughput_->mark(1);
+
         long uid = 0;
         folly::Future<clipper::Response> prediction =
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
 
-        request_throughput->mark(1);
+        request_throughput_->mark(1);
 
         prediction
           .then([app_metrics, rpc_context](Response r) {
@@ -573,6 +576,7 @@ class RequestHandler {
       linked_models_for_apps_;
 
   std::shared_ptr<clipper::metrics::Meter> request_throughput_;
+  std::shared_ptr<clipper::metrics::Meter> frontend_throughput_;
 
   std::unique_ptr<grpc::ServerCompletionQueue> cq_;
   Predict::AsyncService service_;

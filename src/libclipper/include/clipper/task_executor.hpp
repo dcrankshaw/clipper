@@ -154,7 +154,6 @@ class ModelQueue {
     Deadline deadline = queue_.top().first;
     int max_batch_size = get_batch_size(deadline);
     std::vector<PredictTask> batch;
-    log_error_formatted(LOGGING_TAG_CLIPPER, "QUEUE SIZE: {}", queue_.size());
     while (batch.size() < (size_t)max_batch_size && queue_.size() > 0) {
       batch.push_back(queue_.top().second);
       queue_.pop();
