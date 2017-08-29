@@ -188,7 +188,7 @@ class RequestHandler {
       while(active_) {
         std::this_thread::sleep_for(std::chrono::seconds(10));
         std::string metrics_report = clipper::metrics::MetricsRegistry::get_metrics().report_metrics();
-        clipper::log_info(METRICS, metrics_report);
+        clipper::log_info("METRICS", metrics_report);
       }
     });
 
@@ -447,7 +447,7 @@ class RequestHandler {
                                            policy, versioned_models});
 
         prediction
-          .then([app_metrics, rpc_context](Response r) {
+          .then([request_throughput = request_throughput_, app_metrics, rpc_context](Response r) {
           // Update metrics
           if (r.output_is_default_) {
             app_metrics.default_pred_ratio_->increment(1, 1);
@@ -493,7 +493,7 @@ class RequestHandler {
 
           rpc_context->send_response();
 
-          request_throughput_->mark(1);
+          request_throughput->mark(1);
 
           })
         .onError([rpc_context](const std::exception& e) {
