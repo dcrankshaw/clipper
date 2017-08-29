@@ -446,16 +446,16 @@ class RequestHandler {
         }
 
         frontend_throughput_->mark(1);
-        before = std::chrono::system_clock::now();
+        auto before = std::chrono::system_clock::now();
 
         long uid = 0;
         folly::Future<clipper::Response> prediction =
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
 
-        after = std::chrono::system_clock::now();
+        auto after = std::chrono::system_clock::now();
 
-        long lat_micros = std::chrono::duration_cast<std::chrono::microsecondseconds>(after - before).count();
+        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
 
         qp_latency_->insert(lat_micros);
 
