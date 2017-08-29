@@ -158,6 +158,7 @@ class ModelQueue {
       batch.push_back(queue_.top().second);
       queue_.pop();
     }
+    log_error_formatted(LOGGING_TAG_CLIPPER, "QUEUE SIZE: {}", queue_.size());
     return batch;
   }
 
