@@ -175,19 +175,27 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 //  });
 //  return response_future;
 
-
   Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
 
-  Response response{
-      query,
-      query_id,
-      1000,
+  response_ready_future.then([
       output,
-      true,
-      boost::optional<std::string>("BAD")
-  };
+    outputs_ptr, outputs_mutex, num_tasks, query, query_id,
+    selection_state = selection_state_, current_policy,
+    response_promise = std::move(response_promise), default_explanation
+  ](const std::pair<size_t,
+                    folly::Try<folly::Unit>>& /* completed_future */) mutable {
+    Response response{
+        query,
+        query_id,
+        1000,
+        output,
+        true,
+        boost::optional<std::string>("BAD")
+    };
+    response_promise.setValue(response);
+  });
 
-  return folly::makeFuture(std::move(response));
+  return response_future;
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {
