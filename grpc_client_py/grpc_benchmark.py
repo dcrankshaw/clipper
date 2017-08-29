@@ -19,7 +19,7 @@ DATA_TYPE_FLOATS = 2
 DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
 
-CIFAR_SIZE = 1024 * 8
+CIFAR_SIZE = 3072
 
 input_type = "doubles"
 app_name = "a1"
@@ -31,8 +31,8 @@ def run():
 	i = 0
 	while True:
 		begin = datetime.now()
-		x = clipper_frontend_pb2.FloatData(data=list(np.random.random(CIFAR_SIZE)))
-		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_FLOATS, float_data=x)
+		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE)))
+		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, float_data=x)
 		response = stub.Predict(req)
 		end = datetime.now()
 
