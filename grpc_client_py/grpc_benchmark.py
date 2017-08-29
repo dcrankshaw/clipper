@@ -10,7 +10,7 @@ import clipper_frontend_pb2
 import clipper_frontend_pb2_grpc
 
 from datetime import datetime
-from multiprocessing import Pool
+from multiprocessing import Process
 
 DATA_TYPE_BYTES = 0
 DATA_TYPE_INTS = 1
@@ -28,10 +28,11 @@ def run():
 	channel = grpc.insecure_channel('localhost:1337')
 	stub = clipper_frontend_pb2_grpc.PredictStub(channel)
 	i = 0
+	latency = 0
 	while True:
 		begin = datetime.now()
 		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
-		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, float_data=x)
+		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, double_data=x)
 		response = stub.Predict(req)
 		end = datetime.now()
 
@@ -41,6 +42,8 @@ def run():
 		print("Throughput: {} qps", float(latency) / i)
 		i = 0
 		latency = 0
+
+	i += 1
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
