@@ -182,7 +182,7 @@ class RequestHandler {
   RequestHandler() : query_processor_() {
     // Init Clipper stuff
 
-    request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("request_throughput");
+    request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
 
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
