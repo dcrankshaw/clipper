@@ -9,6 +9,7 @@ import clipper_frontend_pb2
 import clipper_frontend_pb2_grpc
 
 from datetime import datetime
+from multiprocessing import Pool
 
 from clipper_admin import Clipper
 
@@ -41,5 +42,16 @@ def run():
 		print("Throughput: {} qps", float(latency) / i)
 		i = 0
 		latency = 0
+
+if __name__ == "__main__":
+	if len(sys.argv) < 2:
+		raise
+
+	num_procs = int(sys.argv[0])
+
+	pool = Pool(num_procs)
+	pool.map((run, None))
+
+
 
 
