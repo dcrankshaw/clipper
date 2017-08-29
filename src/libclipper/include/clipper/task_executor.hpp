@@ -308,6 +308,8 @@ class TaskExecutor {
     predictions_counter_ =
         metrics::MetricsRegistry::get_metrics().create_counter(
             "internal:aggregate_num_predictions");
+    queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
+        "internal:model queue insertion latency", "milliseconds", 4096);
   }
 
   // Disallow copy
@@ -330,7 +332,11 @@ class TaskExecutor {
         // output_futures.push_back(cache_.fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
+          auto before = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
+          auto after = std::chrono::system_clock::now();
+          long lat_millis = std::chrono::duration_cast<std::chrono::milliseconds>(after - before).count();
+          queue_latency_hist_->insert(lat_millis);
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
@@ -380,6 +386,7 @@ class TaskExecutor {
   std::unordered_map<int, std::vector<InflightMessage>> inflight_messages_;
   std::shared_ptr<metrics::Counter> predictions_counter_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
+  std::shared_ptr<metrics::Histogram> queue_latency_hist_;
   boost::shared_mutex model_queues_mutex_;
   std::unordered_map<VersionedModelId, std::shared_ptr<ModelQueue>>
       model_queues_;
