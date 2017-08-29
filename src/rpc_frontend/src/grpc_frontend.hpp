@@ -179,10 +179,18 @@ class ServerRpcContext {
 
 class RequestHandler {
  public:
-  RequestHandler() : query_processor_() {
+  RequestHandler() : query_processor_(), active_(true) {
     // Init Clipper stuff
 
     request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
+
+    metrics_thread_ = std::thread([this]() {
+      while(active_) {
+        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::string metrics_report = clipper::metrics::MetricsRegistry::get_metrics().report_metrics();
+        clipper::log_info(METRICS, metrics_report);
+      }
+    });
 
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
@@ -333,6 +341,8 @@ class RequestHandler {
   ~RequestHandler() {
     redis_connection_.disconnect();
     redis_subscriber_.disconnect();
+    active_ = false;
+    metrics_thread_.join();
   }
 
   void set_linked_models_for_app(std::string name,
@@ -571,6 +581,8 @@ class RequestHandler {
   std::mutex app_predict_functions_mutex_;
   std::unordered_map<std::string, std::function<void(ServerRpcContext*)>>
       app_predict_functions_;
+  std::atomic_bool active_;
+  std::thread metrics_thread_;
 };
 
 class ServerImpl {
