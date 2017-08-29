@@ -446,8 +446,10 @@ class RequestHandler {
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
 
+        request_throughput->mark(1);
+
         prediction
-          .then([request_throughput = request_throughput_, app_metrics, rpc_context](Response r) {
+          .then([app_metrics, rpc_context](Response r) {
           // Update metrics
           if (r.output_is_default_) {
             app_metrics.default_pred_ratio_->increment(1, 1);
@@ -492,9 +494,6 @@ class RequestHandler {
           response.set_is_default(r.output_is_default_);
 
           rpc_context->send_response();
-
-          request_throughput->mark(1);
-
           })
         .onError([rpc_context](const std::exception& e) {
             clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
