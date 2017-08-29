@@ -18,7 +18,7 @@ DATA_TYPE_FLOATS = 2
 DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
 
-CIFAR_SIZE = 384
+CIFAR_SIZE_DOUBLES = 384
 
 input_type = "doubles"
 app_name = "app1"
@@ -30,7 +30,7 @@ def run():
 	i = 0
 	while True:
 		begin = datetime.now()
-		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE)))
+		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
 		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, float_data=x)
 		response = stub.Predict(req)
 		end = datetime.now()
@@ -48,5 +48,12 @@ if __name__ == "__main__":
 
 	num_procs = int(sys.argv[1])
 
-	pool = Pool(num_procs)
-	pool.map(run, [])
+	processes = []
+
+	for i in range(num_procs):
+		p = Process(target=run)
+		p.start()
+		processes.append(p)
+
+	for p in processes:
+		p.join()
