@@ -188,7 +188,7 @@ class RequestHandler {
       while(active_) {
         std::this_thread::sleep_for(std::chrono::seconds(10));
         std::string metrics_report = clipper::metrics::MetricsRegistry::get_metrics().report_metrics();
-        clipper::log_info("METRICS", metrics_report);
+        clipper::log_debug("METRICS", metrics_report);
       }
     });
 
