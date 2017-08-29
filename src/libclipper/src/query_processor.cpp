@@ -178,7 +178,8 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
 
   response_ready_future.then([
-      output
+      output,
+    response_promise = std::move(response_promise)
   ](const std::pair<size_t,
                     folly::Try<folly::Unit>>& /* completed_future */) mutable {
     Response response{
