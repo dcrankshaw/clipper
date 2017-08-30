@@ -544,7 +544,7 @@ class TaskExecutor {
           .latency_->insert(static_cast<int64_t>(task_latency_micros));
     }
     cache_.put(completed_msg.model_, completed_msg.query_id_,
-               Output{deserialized_output, {completed_msg.model_}});
+               std::move(Output{deserialized_output, {completed_msg.model_}}));
     // cache_.put(completed_msg.model_, completed_msg.input_,
     //            Output{deserialized_output, {completed_msg.model_}});
   }
