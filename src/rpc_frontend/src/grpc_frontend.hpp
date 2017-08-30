@@ -461,13 +461,14 @@ class RequestHandler {
 
         request_throughput_->mark(1);
 
-        prediction.first.then([response = prediction.second](std::pair<size_t, folly::Try<folly::Unit>> output) {
+        prediction.first.then([response = prediction.second, rpc_context]
+                                  (std::pair<size_t, folly::Try<folly::Unit>> output) {
           PredictResponse &response = rpc_context->response_;
           response.set_has_error(false);
-          std::shared_ptr<OutputData> output_data = prediction.second.output_.y_hat_;
+          std::shared_ptr<OutputData> output_data = response.output_.y_hat_;
           response.set_data_type(static_cast<int>(output_data->type()));
-          response.set_default_explanation(prediction.second.default_explanation_.get_value_or(""));
-          response.set_is_default(prediction.second.output_is_default_);
+          response.set_default_explanation(response.default_explanation_.get_value_or(""));
+          response.set_is_default(response.output_is_default_);
           rpc_context->send_response();
         });
 
