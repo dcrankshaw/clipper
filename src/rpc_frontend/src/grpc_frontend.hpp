@@ -9,6 +9,7 @@
 #include <tuple>
 
 #include <folly/futures/Future.h>
+#include <wangle/concurrent/CPUThreadPoolExecutor.h>
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
@@ -179,7 +180,8 @@ class ServerRpcContext {
 
 class RequestHandler {
  public:
-  RequestHandler() : query_processor_(), active_(true) {
+  RequestHandler() : query_processor_(), active_(true), futures_executor_(
+      std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
     // Init Clipper stuff
 
     request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
@@ -461,8 +463,8 @@ class RequestHandler {
 
         request_throughput_->mark(1);
 
-        prediction
-          .then([app_metrics, rpc_context](Response r) {
+        prediction.via(futures_executor_.get())
+            .then([app_metrics, rpc_context](Response r) {
           // Update metrics
           if (r.output_is_default_) {
             app_metrics.default_pred_ratio_->increment(1, 1);
@@ -597,6 +599,7 @@ class RequestHandler {
       app_predict_functions_;
   std::atomic_bool active_;
   std::thread metrics_thread_;
+  std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
 };
 
 class ServerImpl {

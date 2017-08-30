@@ -64,6 +64,7 @@ target_link_libraries(clipper_grpc_frontend
     # httpserver
     cxxopts
     # rapidjson
+    wangle
     )
 
 
