@@ -147,9 +147,6 @@ void QueryCache::put(const VersionedModelId &model,
                           const Output &output) {
   auto before = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> l(m_);
-  auto after = std::chrono::system_clock::now();
-  long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  cache_seg_hist_->insert(seg_lat_micros);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
   if (search != cache_.end()) {
@@ -169,6 +166,9 @@ void QueryCache::put(const VersionedModelId &model,
     new_entry.completed_ = true;
     cache_.insert(std::make_pair(key, std::move(new_entry)));
   }
+  auto after = std::chrono::system_clock::now();
+  long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  cache_seg_hist_->insert(seg_lat_micros);
 }
 
 size_t QueryCache::hash(const VersionedModelId &model,
