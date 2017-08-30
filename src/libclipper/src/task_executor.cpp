@@ -155,11 +155,13 @@ void QueryCache::put(const VersionedModelId &model,
   if (search != cache_.end()) {
     if (!search->second.completed_) {
       // Complete the outstanding promises
-      for (auto &p : search->second.value_promises_) {
-        p.setValue(std::move(output));
-      }
       search->second.completed_ = true;
       search->second.value_ = output;
+      auto promises = search->second.value_promises_;
+      l.unlock();
+      for (auto &p : promises) {
+        p.setValue(std::move(output));
+      }
     }
   } else {
     CacheEntry new_entry;
