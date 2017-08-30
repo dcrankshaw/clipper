@@ -157,7 +157,7 @@ void QueryCache::put(const VersionedModelId &model,
       // Complete the outstanding promises
       search->second.completed_ = true;
       search->second.value_ = output;
-      auto promises = search->second.value_promises_;
+      auto promises = std::move(search->second.value_promises_);
       l.unlock();
       for (auto &p : promises) {
         p.setValue(std::move(output));
