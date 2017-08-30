@@ -55,7 +55,7 @@ class QueryProcessor {
   // same instance for different applications or users.
   std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
       selection_policies_;
-  wangle::CPUThreadPoolExecutor futures_executor_;
+  std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
 };
 
 }  // namespace clipper

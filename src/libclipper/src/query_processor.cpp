@@ -14,6 +14,7 @@
 
 #include <folly/Unit.h>
 #include <folly/futures/Future.h>
+#include <wangle/concurrent/CPUThreadPoolExecutor.h>
 
 #include <clipper/containers.hpp>
 #include <clipper/datatypes.hpp>
@@ -32,7 +33,7 @@ using std::tuple;
 namespace clipper {
 
 QueryProcessor::QueryProcessor() : state_db_(std::make_shared<StateDB>()),
-                                   futures_executor_(wangle::CPUThreadPoolExecutor(6)) {
+                                   futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
   // Create selection policy instances
   selection_policies_.emplace(DefaultOutputSelectionPolicy::get_name(),
                               std::make_shared<DefaultOutputSelectionPolicy>());
@@ -143,7 +144,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
 
-  response_ready_future.via(&futures_executor_).then([
+  response_ready_future.via(futures_executor_.get()).then([
     outputs_ptr, outputs_mutex, num_tasks, query, query_id,
     selection_state = selection_state_, current_policy,
     response_promise = std::move(response_promise), default_explanation
