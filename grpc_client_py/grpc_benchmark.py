@@ -41,7 +41,8 @@ def run(proc_num):
 		latency += (end - begin).total_seconds()
 
 		if i > 0 and i % 100 == 0:
-			out_file.write("Throughput: {} qps\n".format(float(latency) / i))
+			print("Throughput: {} qps\n".format(float(latency) / i))
+			#out_file.write("Throughput: {} qps\n".format(float(latency) / i))
 			i = 0
 			latency = 0
 
