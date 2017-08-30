@@ -153,7 +153,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
 
-  response_ready_future.then([
+  response_ready_future.via(futures_executor_.get()).then([
     outputs_ptr, outputs_mutex, num_tasks, query, query_id,
     selection_state = selection_state_, current_policy,
     response_promise = std::move(response_promise), default_explanation
@@ -169,9 +169,9 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     std::pair<Output, bool> final_output = current_policy->combine_predictions(
         selection_state, query, *outputs_ptr);
 
-    long current_tid = std::hash<std::thread::id>()(std::this_thread::get_id());
-    log_error_formatted(
-        LOGGING_TAG_QUERY_PROCESSOR, "FUTURE TID: {}, CACHE TID: {}", current_tid, final_output.first.tid_);
+//    long current_tid = std::hash<std::thread::id>()(std::this_thread::get_id());
+//    log_error_formatted(
+//        LOGGING_TAG_QUERY_PROCESSOR, "FUTURE TID: {}, CACHE TID: {}", current_tid, final_output.first.tid_);
 
     std::chrono::time_point<std::chrono::high_resolution_clock> end =
         std::chrono::high_resolution_clock::now();
