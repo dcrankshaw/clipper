@@ -153,7 +153,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
 
-  response_ready_future.then([
+  response_ready_future.via(futures_executor_.get()).then([
     outputs_ptr, outputs_mutex, num_tasks, query, query_id,
     selection_state = selection_state_, current_policy,
     response_promise = std::move(response_promise), default_explanation
