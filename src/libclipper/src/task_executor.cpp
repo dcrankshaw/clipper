@@ -107,11 +107,7 @@ QueryCache::QueryCache() {
 
 folly::Future<Output> QueryCache::fetch(
     const VersionedModelId &model, const QueryId query_id) {
-  auto before = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> l(m_);
-  auto after = std::chrono::system_clock::now();
-  long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  cache_seg_hist_->insert(seg_lat_micros);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
   // lookups_counter_->increment(1);
@@ -149,7 +145,11 @@ folly::Future<Output> QueryCache::fetch(
 void QueryCache::put(const VersionedModelId &model,
                           const QueryId query_id,
                           const Output &output) {
+  auto before = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> l(m_);
+  auto after = std::chrono::system_clock::now();
+  long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  cache_seg_hist_->insert(seg_lat_micros);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
   if (search != cache_.end()) {
