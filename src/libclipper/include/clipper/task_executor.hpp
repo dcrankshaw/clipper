@@ -308,6 +308,8 @@ class TaskExecutor {
     predictions_counter_ =
         metrics::MetricsRegistry::get_metrics().create_counter(
             "internal:aggregate_num_predictions");
+    te_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
+        "task executor seg latency", "microseconds", 4096);
     queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
         "internal:model queue insertion latency", "microseconds", 4096);
   }
@@ -328,15 +330,19 @@ class TaskExecutor {
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
+        auto before_seg = std::chrono::system_clock::now();
         output_futures.push_back(cache_.fetch(t.model_, t.query_id_));
+        auto after_seg = std::chrono::system_clock::now();
+        long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
+        te_seg_hist_->insert(seg_lat_micros);
         // output_futures.push_back(cache_.fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
           auto before = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
           auto after = std::chrono::system_clock::now();
-          long lat_millis = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-          queue_latency_hist_->insert(lat_millis);
+          long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+          queue_latency_hist_->insert(lat_micros);
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
@@ -387,6 +393,7 @@ class TaskExecutor {
   std::shared_ptr<metrics::Counter> predictions_counter_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
   std::shared_ptr<metrics::Histogram> queue_latency_hist_;
+  std::shared_ptr<metrics::Histogram> te_seg_hist_;
   boost::shared_mutex model_queues_mutex_;
   std::unordered_map<VersionedModelId, std::shared_ptr<ModelQueue>>
       model_queues_;
