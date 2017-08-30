@@ -190,7 +190,7 @@ std::pair<folly::Future<std::pair<size_t, folly::Try<folly::Unit>>>, Response> Q
   };
 
   //return folly::makeFuture(std::move(response));
-  return std::make_pair(response_ready_future, response);
+  return std::make_pair(std::move(response_ready_future), response);
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {
