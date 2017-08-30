@@ -175,7 +175,9 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 //  });
 //  return response_future;
 
+
   Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
+
   Response response{
       query,
       query_id,
@@ -185,15 +187,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
       boost::optional<std::string>("BAD")
   };
 
-  response_ready_future.then([
-      response,
-    response_promise = std::move(response_promise)
-  ](const std::pair<size_t,
-                    folly::Try<folly::Unit>>& /* completed_future */) mutable {
-    response_promise.setValue(response);
-  });
-
-  return response_future;
+  return folly::makeFuture(std::move(response));
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {

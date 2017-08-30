@@ -29,6 +29,14 @@ set(FOLLY_LINK_FLAGS "-lglog")
 set_property(TARGET folly PROPERTY
     INTERFACE_LINK_LIBRARIES ${FOLLY_LINK_FLAGS} ${FOLLY_LIBRARY})
 
+# Include Wangle as an imported target
+find_package(Wangle REQUIRED)
+add_library(wangle INTERFACE IMPORTED)
+set_property(TARGET wangle PROPERTY
+        INTERFACE_INCLUDE_DIRECTORIES ${WANGLE_INCLUDE_DIR})
+set_property(TARGET wangle PROPERTY
+        INTERFACE_LINK_LIBRARIES ${WANGLE_LIBRARY})
+
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wextra -Werror -Wno-deprecated-declarations -Wno-unsupported-friend")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-compare")
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
