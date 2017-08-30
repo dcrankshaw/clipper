@@ -24,11 +24,12 @@ input_type = "doubles"
 app_name = "app1"
 model_name = "m1"
 
-def run():
+def run(proc_num):
 	channel = grpc.insecure_channel('localhost:1337')
 	stub = clipper_frontend_pb2_grpc.PredictStub(channel)
 	i = 0
 	latency = 0
+	out_file = open("/tmp/bench_%d".format(proc_num), "w")
 	while True:
 		begin = datetime.now()
 		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
@@ -38,12 +39,14 @@ def run():
 
 		latency += (end - begin).total_seconds()
 
-	if i % 10000 == 0:
-		print("Throughput: {} qps", float(latency) / i)
-		i = 0
-		latency = 0
+		if i % 100 == 0:
+			out_file.write("Throughput: {} qps\n".format(float(latency) / i))
+			i = 0
+			latency = 0
 
-	i += 1
+		i += 1
+		
+	out_file.close()
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
@@ -54,7 +57,7 @@ if __name__ == "__main__":
 	processes = []
 
 	for i in range(num_procs):
-		p = Process(target=run)
+		p = Process(target=run, args=('%d'.format(i),))
 		p.start()
 		processes.append(p)
 
