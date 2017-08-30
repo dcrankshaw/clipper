@@ -169,6 +169,10 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     std::pair<Output, bool> final_output = current_policy->combine_predictions(
         selection_state, query, *outputs_ptr);
 
+    long current_tid = std::hash<std::thread::id>()(std::this_thread::get_id());
+    log_error_formatted(
+        LOGGING_TAG_QUERY_PROCESSOR, "FUTURE TID: {}, CACHE TID: {}", current_tid, final_output.first.tid_);
+
     std::chrono::time_point<std::chrono::high_resolution_clock> end =
         std::chrono::high_resolution_clock::now();
     long duration_micros =
