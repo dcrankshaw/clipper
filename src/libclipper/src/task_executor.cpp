@@ -101,8 +101,7 @@ QueryCache::QueryCache() {
   // hit_ratio_ = metrics::MetricsRegistry::get_metrics().create_ratio_counter(
   //     "internal:query_cache_hit_ratio");
   cache_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-      "cache seg latency", "microseconds", 4096
-  );
+      "cache seg latency", "microseconds", 1048576);
 }
 
 folly::Future<Output> QueryCache::fetch(

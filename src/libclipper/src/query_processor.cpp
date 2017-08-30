@@ -34,7 +34,7 @@ namespace clipper {
 
 QueryProcessor::QueryProcessor() : state_db_(std::make_shared<StateDB>()),
                                    futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
-  qp_pred_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram("qp_seg_latency", "microseconds", 4096);
+  qp_pred_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram("qp_seg_latency", "microseconds", 1048576);
   // Create selection policy instances
   selection_policies_.emplace(DefaultOutputSelectionPolicy::get_name(),
                               std::make_shared<DefaultOutputSelectionPolicy>());

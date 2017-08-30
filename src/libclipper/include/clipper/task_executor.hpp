@@ -310,9 +310,9 @@ class TaskExecutor {
         metrics::MetricsRegistry::get_metrics().create_counter(
             "internal:aggregate_num_predictions");
     te_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-        "task executor seg latency", "microseconds", 4096);
+        "task executor seg latency", "microseconds", 1048576);
     queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-        "internal:model queue insertion latency", "microseconds", 4096);
+        "internal:model queue insertion latency", "microseconds", 1048576);
   }
 
   // Disallow copy
