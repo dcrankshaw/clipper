@@ -37,7 +37,7 @@ class QueryProcessor {
   QueryProcessor(QueryProcessor&& other) = default;
   QueryProcessor& operator=(QueryProcessor&& other) = default;
 
-  std::pair<folly::Future<std::pair<size_t, folly::Try<folly::Unit>>>, Response> predict(Query query);
+  folly::Future<Response> predict(Query query);
   folly::Future<FeedbackAck> update(FeedbackQuery feedback);
 
   std::shared_ptr<StateDB> get_state_table() const;
@@ -56,6 +56,7 @@ class QueryProcessor {
   std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
       selection_policies_;
   std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
+  std::shared_ptr<metrics::Histogram> qp_pred_seg_hist_;
 };
 
 }  // namespace clipper

@@ -461,73 +461,62 @@ class RequestHandler {
 
         request_throughput_->mark(1);
 
-        prediction.first.then([qp_response = prediction.second, rpc_context]
-                                  (std::pair<size_t, folly::Try<folly::Unit>> output) {
+        prediction
+          .then([app_metrics, rpc_context](Response r) {
+          // Update metrics
+          if (r.output_is_default_) {
+            app_metrics.default_pred_ratio_->increment(1, 1);
+          } else {
+            app_metrics.default_pred_ratio_->increment(0, 1);
+          }
+          app_metrics.latency_->insert(r.duration_micros_);
+          app_metrics.num_predictions_->increment(1);
+          app_metrics.throughput_->mark(1);
+
           PredictResponse &response = rpc_context->response_;
           response.set_has_error(false);
-          std::shared_ptr<OutputData> output_data = qp_response.output_.y_hat_;
+          std::shared_ptr<OutputData> output_data = r.output_.y_hat_;
           response.set_data_type(static_cast<int>(output_data->type()));
-          response.set_default_explanation(qp_response.default_explanation_.get_value_or(""));
-          response.set_is_default(qp_response.output_is_default_);
-          rpc_context->send_response();
-        });
 
-//        prediction.first
-//          .then([app_metrics, rpc_context](Response r) {
-//          // Update metrics
-//          if (r.output_is_default_) {
-//            app_metrics.default_pred_ratio_->increment(1, 1);
-//          } else {
-//            app_metrics.default_pred_ratio_->increment(0, 1);
-//          }
-//          app_metrics.latency_->insert(r.duration_micros_);
-//          app_metrics.num_predictions_->increment(1);
-//          app_metrics.throughput_->mark(1);
-//
-//          PredictResponse &response = rpc_context->response_;
-//          response.set_has_error(false);
-//          std::shared_ptr<OutputData> output_data = r.output_.y_hat_;
-//          response.set_data_type(static_cast<int>(output_data->type()));
-//
-//          switch(output_data->type()) {
-//            case DataType::Bytes:
-//              response.mutable_byte_data()->set_data(output_data->get_data(), output_data->size());
-//              break;
-//            case DataType::Ints: {
-//              response.mutable_int_data()->mutable_data()->Resize(output_data->byte_size(), 0);
-//              output_data->serialize(response.mutable_int_data()->mutable_data()->mutable_data());
-//            } break;
-//            case DataType::Floats: {
-//              response.mutable_float_data()->mutable_data()->Resize(output_data->size(), 0);
-//              output_data->serialize(response.mutable_float_data()->mutable_data()->mutable_data());
-//            } break;
-//            case DataType::Strings: {
-//              response.mutable_string_data()->set_data(
-//                  static_cast<const char*>(output_data->get_data()), output_data->size());
-//            } break;
-//            case DataType::Invalid:
-//            default: {
-//              std::stringstream ss;
-//              ss << "Received a prediction response with an invalid output type: "
-//                 << get_readable_input_type(output_data->type());
-//              throw std::runtime_error(ss.str());
-//            } break;
-//          }
-//
-//          response.set_default_explanation(r.default_explanation_.get_value_or(""));
-//          response.set_is_default(r.output_is_default_);
-//
-//          rpc_context->send_response();
-//          })
-//        .onError([rpc_context](const std::exception& e) {
-//            clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
-//                "Unexpected error: {}", e.what());
-//            // TODO: Use grpc status
-//            rpc_context->response_.set_has_error(true);
-//            rpc_context->response_.set_error("An unexpected error occurred!");
-//            rpc_context->send_response();
-//            return;
-//        });
+          switch(output_data->type()) {
+            case DataType::Bytes:
+              response.mutable_byte_data()->set_data(output_data->get_data(), output_data->size());
+              break;
+            case DataType::Ints: {
+              response.mutable_int_data()->mutable_data()->Resize(output_data->byte_size(), 0);
+              output_data->serialize(response.mutable_int_data()->mutable_data()->mutable_data());
+            } break;
+            case DataType::Floats: {
+              response.mutable_float_data()->mutable_data()->Resize(output_data->size(), 0);
+              output_data->serialize(response.mutable_float_data()->mutable_data()->mutable_data());
+            } break;
+            case DataType::Strings: {
+              response.mutable_string_data()->set_data(
+                  static_cast<const char*>(output_data->get_data()), output_data->size());
+            } break;
+            case DataType::Invalid:
+            default: {
+              std::stringstream ss;
+              ss << "Received a prediction response with an invalid output type: "
+                 << get_readable_input_type(output_data->type());
+              throw std::runtime_error(ss.str());
+            } break;
+          }
+
+          response.set_default_explanation(r.default_explanation_.get_value_or(""));
+          response.set_is_default(r.output_is_default_);
+
+          rpc_context->send_response();
+          })
+        .onError([rpc_context](const std::exception& e) {
+            clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
+                "Unexpected error: {}", e.what());
+            // TODO: Use grpc status
+            rpc_context->response_.set_has_error(true);
+            rpc_context->response_.set_error("An unexpected error occurred!");
+            rpc_context->send_response();
+            return;
+        });
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
