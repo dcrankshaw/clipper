@@ -145,7 +145,6 @@ folly::Future<Output> QueryCache::fetch(
 void QueryCache::put(const VersionedModelId &model,
                           const QueryId query_id,
                           const Output &output) {
-  auto before = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
@@ -156,6 +155,7 @@ void QueryCache::put(const VersionedModelId &model,
       search->second.value_ = output;
       auto promises = std::move(search->second.value_promises_);
       l.unlock();
+      auto before = std::chrono::system_clock::now();
       for (auto &p : promises) {
         p.setValue(std::move(output));
       }
