@@ -309,7 +309,7 @@ class TaskExecutor {
         metrics::MetricsRegistry::get_metrics().create_counter(
             "internal:aggregate_num_predictions");
     queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-        "internal:model queue insertion latency", "milliseconds", 4096);
+        "internal:model queue insertion latency", "microseconds", 4096);
   }
 
   // Disallow copy
@@ -335,7 +335,7 @@ class TaskExecutor {
           auto before = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
           auto after = std::chrono::system_clock::now();
-          long lat_millis = std::chrono::duration_cast<std::chrono::milliseconds>(after - before).count();
+          long lat_millis = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
           queue_latency_hist_->insert(lat_millis);
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
