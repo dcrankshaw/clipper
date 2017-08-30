@@ -44,7 +44,7 @@ std::shared_ptr<StateDB> QueryProcessor::get_state_table() const {
   return state_db_;
 }
 
-folly::Future<Response> QueryProcessor::predict(Query query) {
+std::pair<folly::Future<std::pair<size_t, folly::Try<folly::Unit>>>, Response> QueryProcessor::predict(Query query) {
   long query_id = query_counter_.fetch_add(1);
   auto current_policy_iter = selection_policies_.find(query.selection_policy_);
   if (current_policy_iter == selection_policies_.end()) {
@@ -189,7 +189,8 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
       boost::optional<std::string>("BAD")
   };
 
-  return folly::makeFuture(std::move(response));
+  //return folly::makeFuture(std::move(response));
+  return std::make_pair(response_ready_future, response);
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {

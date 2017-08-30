@@ -37,7 +37,7 @@ class QueryProcessor {
   QueryProcessor(QueryProcessor&& other) = default;
   QueryProcessor& operator=(QueryProcessor&& other) = default;
 
-  folly::Future<Response> predict(Query query);
+  std::pair<folly::Future<std::pair<size_t, folly::Try<folly::Unit>>>, Response> predict(Query query);
   folly::Future<FeedbackAck> update(FeedbackQuery feedback);
 
   std::shared_ptr<StateDB> get_state_table() const;
