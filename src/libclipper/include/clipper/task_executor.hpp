@@ -81,7 +81,7 @@ class PredictionCache {
                               const std::shared_ptr<Input> &input);
 
   void put(const VersionedModelId &model, const std::shared_ptr<Input> &input,
-           Output &output);
+           const Output &output);
 
  private:
   std::mutex m_;
@@ -100,7 +100,7 @@ class QueryCache {
                               const QueryId query_id);
 
   void put(const VersionedModelId &model, const QueryId query_id,
-           const Output &output);
+           Output &output);
 
  private:
   std::mutex m_;
