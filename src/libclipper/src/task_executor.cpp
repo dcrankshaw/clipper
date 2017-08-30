@@ -1,5 +1,6 @@
 #include <memory>
 #include <random>
+#include <chrono>
 // uncomment to disable assert()
 // #define NDEBUG
 #include <cassert>
@@ -99,13 +100,20 @@ QueryCache::QueryCache() {
   //     "internal:query_cache_lookups");
   // hit_ratio_ = metrics::MetricsRegistry::get_metrics().create_ratio_counter(
   //     "internal:query_cache_hit_ratio");
+  cache_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
+      "cache seg latency", "microseconds", 4096
+  );
 }
 
 folly::Future<Output> QueryCache::fetch(
     const VersionedModelId &model, const QueryId query_id) {
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
+  auto before = std::chrono::system_clock::now();
   auto search = cache_.find(key);
+  auto after = std::chrono::system_clock::now();
+  long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  cache_seg_hist_->insert(seg_lat_micros);
   // lookups_counter_->increment(1);
   if (search != cache_.end()) {
     // cache entry exists

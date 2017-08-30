@@ -104,6 +104,7 @@ class QueryCache {
 
  private:
   std::mutex m_;
+  std::shared_ptr<metrics::Histogram> cache_seg_hist_;
   size_t hash(const VersionedModelId &model, const QueryId query_id) const;
   // TODO cache needs a promise as well?
   std::unordered_map<long, CacheEntry> cache_;
