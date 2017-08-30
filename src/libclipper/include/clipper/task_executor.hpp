@@ -81,7 +81,7 @@ class PredictionCache {
                               const std::shared_ptr<Input> &input);
 
   void put(const VersionedModelId &model, const std::shared_ptr<Input> &input,
-           const Output &output);
+           Output &output);
 
  private:
   std::mutex m_;

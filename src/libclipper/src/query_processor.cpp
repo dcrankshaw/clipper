@@ -141,7 +141,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   // error
   folly::Future<folly::Unit> all_tasks_completed_future =
       folly::collect(wrapped_task_futures)
-          .then([](std::vector<folly::Unit> /* outputs */) {});
+          .via(features_executor_.get()).then([](std::vector<folly::Unit> /* outputs */) {});
 
   std::vector<folly::Future<folly::Unit>> when_either_futures;
   when_either_futures.push_back(std::move(all_tasks_completed_future));
