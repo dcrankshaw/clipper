@@ -46,9 +46,6 @@ std::shared_ptr<StateDB> QueryProcessor::get_state_table() const {
 }
 
 folly::Future<Response> QueryProcessor::predict(Query query) {
-  auto before = std::chrono::system_clock::now();
-
-
   long query_id = query_counter_.fetch_add(1);
   auto current_policy_iter = selection_policies_.find(query.selection_policy_);
   if (current_policy_iter == selection_policies_.end()) {
@@ -75,12 +72,6 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     selection_state_ = current_policy->deserialize(*state_opt);
   }
 
-  auto after = std::chrono::system_clock::now();
-
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-
-  qp_pred_seg_hist_->insert(lat_micros);
-
 //  Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
 //
 //  Response response{
@@ -93,6 +84,8 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 //  };
 //
 //  return folly::makeFuture(std::move(response));
+
+  auto before = std::chrono::system_clock::now();
 
   boost::optional<std::string> default_explanation;
   std::vector<PredictTask> tasks =
@@ -109,6 +102,12 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
                         "No connected models found for query with id: {}",
                         query_id);
   }
+
+  auto after = std::chrono::system_clock::now();
+
+  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+
+  qp_pred_seg_hist_->insert(lat_micros);
 
   size_t num_tasks = task_futures.size();
 
