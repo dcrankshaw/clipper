@@ -100,7 +100,7 @@ class QueryCache {
                               const QueryId query_id);
 
   void put(const VersionedModelId &model, const QueryId query_id,
-           Output &output);
+           Output output);
 
  private:
   std::mutex m_;
@@ -544,7 +544,7 @@ class TaskExecutor {
           .latency_->insert(static_cast<int64_t>(task_latency_micros));
     }
     cache_.put(completed_msg.model_, completed_msg.query_id_,
-               std::move(Output{deserialized_output, {completed_msg.model_}}));
+               Output{deserialized_output, {completed_msg.model_}});
     // cache_.put(completed_msg.model_, completed_msg.input_,
     //            Output{deserialized_output, {completed_msg.model_}});
   }

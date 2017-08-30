@@ -144,7 +144,7 @@ folly::Future<Output> QueryCache::fetch(
 
 void QueryCache::put(const VersionedModelId &model,
                           const QueryId query_id,
-                          Output &output) {
+                          Output output) {
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
