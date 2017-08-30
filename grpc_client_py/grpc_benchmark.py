@@ -29,7 +29,8 @@ def run(proc_num):
 	stub = clipper_frontend_pb2_grpc.PredictStub(channel)
 	i = 0
 	latency = 0
-	out_file = open("/tmp/bench_%d".format(proc_num), "w")
+	file_name = "/tmp/bench_{}".format(proc_num)
+	out_file = open(file_name, "rw")
 	while True:
 		begin = datetime.now()
 		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
@@ -39,13 +40,13 @@ def run(proc_num):
 
 		latency += (end - begin).total_seconds()
 
-		if i % 100 == 0:
+		if i > 0 and i % 100 == 0:
 			out_file.write("Throughput: {} qps\n".format(float(latency) / i))
 			i = 0
 			latency = 0
 
 		i += 1
-		
+
 	out_file.close()
 
 if __name__ == "__main__":
