@@ -719,7 +719,7 @@ class ServerImpl {
           long curr_time_micros =
               std::chrono::duration_cast<std::chrono::microseconds>(
                   std::chrono::system_clock::now().time_since_epoch()).count();
-          thread_latency_hist_.insert(curr_time_micros - times_search.second);
+          thread_latency_hist_.insert(curr_time_micros - times_search->second);
           processing_times_map_.erase(ctx->id_);
         }
       }
