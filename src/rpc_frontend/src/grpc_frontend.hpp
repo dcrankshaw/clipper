@@ -701,7 +701,10 @@ class ServerImpl {
         long start_time_micros =
             std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
-        processing_times_map_.emplace(ctx->id_, start_time_micros);
+        //processing_times_map_.emplace(ctx->id_, start_time_micros);
+        processing_times_map_.emplace(ctx->id_, 0);
+      } else {
+        processing_times_map_[ctx->id_] = processing_times_map_[ctx->id_] + 1;
       }
 
       // The tag is a pointer to an RPC context to invoke
@@ -720,7 +723,8 @@ class ServerImpl {
           long curr_time_micros =
               std::chrono::duration_cast<std::chrono::microseconds>(
                   std::chrono::system_clock::now().time_since_epoch()).count();
-          thread_latency_hist_->insert(curr_time_micros - times_search->second);
+//          thread_latency_hist_->insert(curr_time_micros - times_search->second);
+          thread_latency_hist_->insert(times_search->second);
           processing_times_map_.erase(ctx->id_);
         }
       }
