@@ -155,10 +155,6 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
 
-  auto after = std::chrono::system_clock::now();
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  qp_pred_seg_hist_->insert(lat_micros);
-
   response_ready_future.via(futures_executor_.get()).then([
     outputs_ptr, outputs_mutex, num_tasks, query, query_id,
     selection_state = selection_state_, current_policy,
@@ -194,6 +190,11 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
                       std::move(default_explanation)};
     response_promise.setValue(response);
   });
+
+  auto after = std::chrono::system_clock::now();
+  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  qp_pred_seg_hist_->insert(lat_micros);
+
   return response_future;
 
 
