@@ -609,7 +609,7 @@ class RequestHandler {
 class ServerImpl {
  public:
   ServerImpl(std::string address, int portno, int num_threads)
-      : handler_(new RequestHandler{}), processing_times_map_() {
+      : handler_(new RequestHandler{}) {
 
     thread_latency_hist_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
         "thread task latency", "microseconds", 1048576
@@ -691,6 +691,7 @@ class ServerImpl {
 
   void ThreadFunc(int thread_idx) {
     // Wait until work is available or we are shutting down
+    std::unordered_map<size_t, long> processing_times_map_;
     bool ok;
     void* got_tag;
     while (srv_cqs_[thread_idx]->Next(&got_tag, &ok)) {
@@ -734,7 +735,6 @@ class ServerImpl {
   std::vector<std::unique_ptr<ServerRpcContext>> contexts_;
   std::unique_ptr<RequestHandler> handler_;
   std::shared_ptr<clipper::metrics::Histogram> thread_latency_hist_;
-  std::unordered_map<size_t, long> processing_times_map_;
 
   struct PerThreadShutdownState {
     mutable std::mutex mutex;
