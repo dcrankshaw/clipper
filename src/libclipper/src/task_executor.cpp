@@ -209,7 +209,7 @@ void QueryCache2::put(const VersionedModelId &model, const QueryId query_id, Out
   }
 }
 
-size_t QueryCache::hash(const VersionedModelId &model,
+size_t QueryCache2::hash(const VersionedModelId &model,
                         const QueryId query_id) const {
   std::size_t seed = 0;
   size_t model_hash = std::hash<clipper::VersionedModelId>()(model);
