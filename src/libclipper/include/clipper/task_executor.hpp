@@ -267,8 +267,7 @@ class TaskExecutor {
         rpc_(std::make_unique<rpc::RPCService>()),
         cache_(std::make_unique<QueryCache2>(0)),
         model_queues_({}),
-        model_metrics_({}),
-        tasks_added(0) {
+        model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
     rpc_->start(
         "*", RPC_SERVICE_PORT, [ this, task_executor_valid = active_ ](
@@ -382,10 +381,7 @@ class TaskExecutor {
         // output_futures.push_back(cache_->fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
-          tasks_added.fetch_add(1);
-          log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "NUM ADDS TOTAL: {}", static_cast<long>(tasks_added));
           model_queue_entry->second->add_task(t);
-          log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "QUEUE SIZE: {}", model_queue_entry->second->get_size());
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
@@ -444,7 +440,6 @@ class TaskExecutor {
   boost::shared_mutex model_metrics_mutex_;
   std::unordered_map<VersionedModelId, ModelMetrics> model_metrics_;
   static constexpr int INITIAL_MODEL_QUEUES_MAP_SIZE = 100;
-  std::atomic_long tasks_added;
 
   bool create_model_queue_if_necessary(const VersionedModelId &model_id) {
     // Adds a new <model_id, task_queue> entry to the queues map, if one

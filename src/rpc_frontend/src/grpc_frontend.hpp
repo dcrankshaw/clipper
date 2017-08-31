@@ -391,6 +391,7 @@ class RequestHandler {
     auto predict_fn = [this, name, application_input_type = input_type, policy, latency_slo_micros,
                        app_metrics](ServerRpcContext* rpc_context) {
       try {
+        auto before = std::chrono::system_clock::now();
         std::vector<std::string> models = get_linked_models_for_app(name);
         std::vector<VersionedModelId> versioned_models;
         {
@@ -448,18 +449,11 @@ class RequestHandler {
         }
 
         frontend_throughput_->mark(1);
-        auto before = std::chrono::system_clock::now();
 
         long uid = 0;
         auto prediction =
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
-
-        auto after = std::chrono::system_clock::now();
-
-        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-
-        qp_latency_->insert(lat_micros);
 
         request_throughput_->mark(1);
 
@@ -519,6 +513,12 @@ class RequestHandler {
             rpc_context->send_response();
             return;
         });
+
+        auto after = std::chrono::system_clock::now();
+
+        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+
+        qp_latency_->insert(lat_micros);
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
