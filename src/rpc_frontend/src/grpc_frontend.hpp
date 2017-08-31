@@ -703,8 +703,6 @@ class ServerImpl {
             std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
         processing_times_map_.emplace(ctx->id_, start_time_micros);
-      } else {
-        processing_times_map_[ctx->id_] = processing_times_map_[ctx->id_] + 1;
       }
 
       // The tag is a pointer to an RPC context to invoke
@@ -716,8 +714,11 @@ class ServerImpl {
       }
       const bool still_going = ctx->RunNextState(ok);
 
+      clipper::log_error_formatted(LOGGING_TAG_RPC_FRONTEND, "ID: {}", ctx.id_);
 
-      if(new_ctx) {
+      // if this RPC context is done, refresh it
+      if (!still_going) {
+        ctx->Reset();
         times_search = processing_times_map_.find(ctx->id_);
         if(times_search != processing_times_map_.end()) {
           long curr_time_micros =
@@ -726,11 +727,6 @@ class ServerImpl {
           thread_latency_hist_->insert(curr_time_micros - times_search->second);
           processing_times_map_.erase(ctx->id_);
         }
-      }
-
-      // if this RPC context is done, refresh it
-      if (!still_going) {
-        ctx->Reset();
       }
     }
     return;
