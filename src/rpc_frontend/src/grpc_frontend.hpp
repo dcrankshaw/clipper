@@ -714,7 +714,7 @@ class ServerImpl {
       }
       const bool still_going = ctx->RunNextState(ok);
 
-      clipper::log_error_formatted(LOGGING_TAG_RPC_FRONTEND, "ID: {}", ctx.id_);
+      clipper::log_error_formatted(LOGGING_TAG_RPC_FRONTEND, "ID: {}", ctx->id_);
 
       // if this RPC context is done, refresh it
       if (!still_going) {
