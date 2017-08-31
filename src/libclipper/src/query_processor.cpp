@@ -46,6 +46,7 @@ std::shared_ptr<StateDB> QueryProcessor::get_state_table() const {
 }
 
 folly::Future<Response> QueryProcessor::predict(Query query) {
+  auto before = std::chrono::system_clock::now();
   long query_id = query_counter_.fetch_add(1);
   auto current_policy_iter = selection_policies_.find(query.selection_policy_);
   if (current_policy_iter == selection_policies_.end()) {
@@ -113,10 +114,12 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 
   size_t num_tasks = task_futures.size();
 
+  auto after = std::chrono::system_clock::now();
+  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  qp_pred_seg_hist_->insert(lat_micros);
+
   folly::Future<folly::Unit> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
-
-  auto before = std::chrono::system_clock::now();
 
   std::shared_ptr<std::mutex> outputs_mutex = std::make_shared<std::mutex>();
   std::vector<Output> outputs;
@@ -190,11 +193,6 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
                       std::move(default_explanation)};
     response_promise.setValue(response);
   });
-
-  auto after = std::chrono::system_clock::now();
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  qp_pred_seg_hist_->insert(lat_micros);
-
   return response_future;
 
 
