@@ -516,19 +516,10 @@ const HistogramStats Histogram::compute_stats() {
   std::sort(snapshot.begin(), snapshot.end());
   int64_t min = snapshot.front();
   int64_t max = snapshot.back();
-<<<<<<< HEAD
-  double p50 = percentile(snapshot, .5);
-  double p95 = percentile(snapshot, .95);
-  double p99 = percentile(snapshot, .99);
-  double mean = std::accumulate(snapshot.begin(), snapshot.end(), static_cast<long long>(0)) /
-                static_cast<double>(snapshot_size);
-  double var = 0;
-=======
   long double p50 = percentile(snapshot, .5);
   long double p95 = percentile(snapshot, .95);
   long double p99 = percentile(snapshot, .99);
   long double var = 0;
->>>>>>> cache_eviction
   if (snapshot_size > 1) {
     for (auto elem : snapshot) {
       long double incr = std::pow(elem - mean_, static_cast<long double>(2));
