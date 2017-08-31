@@ -192,7 +192,6 @@ class ModelQueue {
     Deadline deadline = queue_.top().first;
     int max_batch_size = get_batch_size(deadline);
     std::vector<PredictTask> batch;
-    log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "QUEUE SIZE: {}", queue_.size());
     while (batch.size() < (size_t)max_batch_size && queue_.size() > 0) {
       batch.push_back(queue_.top().second);
       queue_.pop();
@@ -370,45 +369,38 @@ class TaskExecutor {
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
-        model_queue_entry->second->add_task(t);
+        auto before_seg = std::chrono::system_clock::now();
         output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
-
-
-
-
-
-//        auto before_seg = std::chrono::system_clock::now();
-//        output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
-//        auto after_seg = std::chrono::system_clock::now();
-//        long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
-//        te_seg_hist_->insert(seg_lat_micros);
-//        // output_futures.push_back(cache_->fetch(t.model_, t.input_));
-//        if (!output_futures.back().isReady()) {
-//          t.recv_time_ = std::chrono::system_clock::now();
-//          auto before = std::chrono::system_clock::now();
-//          model_queue_entry->second->add_task(t);
-//          auto after = std::chrono::system_clock::now();
-//          long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-//          queue_latency_hist_->insert(lat_micros);
-//          log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
-//                             "Adding task to queue. QueryID: {}, model: {}",
-//                             t.query_id_, t.model_.serialize());
-//          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
-//              model_metrics_mutex_);
-//          auto cur_model_metric_entry = model_metrics_.find(t.model_);
-//          if (cur_model_metric_entry != model_metrics_.end()) {
-//            auto cur_model_metric = cur_model_metric_entry->second;
-//            cur_model_metric.cache_hit_ratio_->increment(0, 1);
-//          }
-//        } else {
-//          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
-//              model_metrics_mutex_);
-//          auto cur_model_metric_entry = model_metrics_.find(t.model_);
-//          if (cur_model_metric_entry != model_metrics_.end()) {
-//            auto cur_model_metric = cur_model_metric_entry->second;
-//            cur_model_metric.cache_hit_ratio_->increment(1, 1);
-//          }
-//        }
+        auto after_seg = std::chrono::system_clock::now();
+        long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
+        te_seg_hist_->insert(seg_lat_micros);
+        // output_futures.push_back(cache_->fetch(t.model_, t.input_));
+        if (!output_futures.back().isReady()) {
+          t.recv_time_ = std::chrono::system_clock::now();
+          auto before = std::chrono::system_clock::now();
+          model_queue_entry->second->add_task(t);
+          auto after = std::chrono::system_clock::now();
+          long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+          queue_latency_hist_->insert(lat_micros);
+          log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
+                             "Adding task to queue. QueryID: {}, model: {}",
+                             t.query_id_, t.model_.serialize());
+          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
+              model_metrics_mutex_);
+          auto cur_model_metric_entry = model_metrics_.find(t.model_);
+          if (cur_model_metric_entry != model_metrics_.end()) {
+            auto cur_model_metric = cur_model_metric_entry->second;
+            cur_model_metric.cache_hit_ratio_->increment(0, 1);
+          }
+        } else {
+          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
+              model_metrics_mutex_);
+          auto cur_model_metric_entry = model_metrics_.find(t.model_);
+          if (cur_model_metric_entry != model_metrics_.end()) {
+            auto cur_model_metric = cur_model_metric_entry->second;
+            cur_model_metric.cache_hit_ratio_->increment(1, 1);
+          }
+        }
       } else {
         log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
                             "Received task for unknown model: {} : {}",
