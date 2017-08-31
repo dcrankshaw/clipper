@@ -111,9 +111,9 @@ class ServerRpcContext {
   ServerRpcContext(
       std::function<void(grpc::ServerContext*, PredictRequest*,
                          grpc::ServerAsyncResponseWriter<PredictResponse>*,
-                         void*, size_t id)>
+                         void*)>
           request_method,
-      std::function<void(std::string, ServerRpcContext*)> invoke_method)
+      std::function<void(std::string, ServerRpcContext*)> invoke_method, size_t id)
       : status_(grpc::Status::OK),
         srv_ctx_(new grpc::ServerContext),
         next_state_(&ServerRpcContext::invoker),
@@ -695,12 +695,12 @@ class ServerImpl {
     void* got_tag;
     while (srv_cqs_[thread_idx]->Next(&got_tag, &ok)) {
       ServerRpcContext* ctx = ServerRpcContext::detag(got_tag);
-      auto times_search = processing_times_map_.find(ctx.id_);
+      auto times_search = processing_times_map_.find(ctx->id_);
       if(times_search == processing_times_map_.end()) {
         long start_time_micros =
             std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
-        processing_times_map_.emplace(ctx.id_, start_time_micros);
+        processing_times_map_.emplace(ctx->id_, start_time_micros);
       }
 
       // The tag is a pointer to an RPC context to invoke
@@ -714,13 +714,13 @@ class ServerImpl {
       // if this RPC context is done, refresh it
       if (!still_going) {
         ctx->Reset();
-        times_search = processing_times_map_.find(ctx.id_);
+        times_search = processing_times_map_.find(ctx->id_);
         if(times_search != processing_times_map_.end()) {
           long curr_time_micros =
               std::chrono::duration_cast<std::chrono::microseconds>(
                   std::chrono::system_clock::now().time_since_epoch()).count();
           thread_latency_hist_.insert(curr_time_micros - times_search.second);
-          processing_times_map_.erase(ctx.id_);
+          processing_times_map_.erase(ctx->id_);
         }
       }
     }
@@ -733,7 +733,7 @@ class ServerImpl {
   std::vector<std::thread> threads_;
   std::vector<std::unique_ptr<ServerRpcContext>> contexts_;
   std::unique_ptr<RequestHandler> handler_;
-  std::shared_ptr<metrics::Histogram> thread_latency_hist_;
+  std::shared_ptr<clipper::metrics::Histogram> thread_latency_hist_;
   std::unordered_map<size_t, long> processing_times_map_;
 
   struct PerThreadShutdownState {
