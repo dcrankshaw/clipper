@@ -154,7 +154,6 @@ QueryCache::QueryCache() {
 
 folly::Future<Output> QueryCache::fetch(
     const VersionedModelId &model, const QueryId query_id) {
-  auto before = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = cache_.find(key);
@@ -169,9 +168,6 @@ folly::Future<Output> QueryCache::fetch(
       // the cache value directly would destroy it. Therefore, we use
       // copy assignment to `value` and move the copied object instead
       Output value = search->second.value_;
-      auto after = std::chrono::system_clock::now();
-      long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-      cache_seg_hist_->insert(seg_lat_micros);
       return folly::makeFuture<Output>(std::move(value));
     } else {
       // value not in cache yet
@@ -179,9 +175,6 @@ folly::Future<Output> QueryCache::fetch(
       folly::Future<Output> new_future = new_promise.getFuture();
       search->second.value_promises_.push_back(std::move(new_promise));
       // hit_ratio_->increment(0, 1);
-      auto after = std::chrono::system_clock::now();
-      long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-      cache_seg_hist_->insert(seg_lat_micros);
       return new_future;
     }
   } else {
@@ -191,10 +184,11 @@ folly::Future<Output> QueryCache::fetch(
     folly::Promise<Output> new_promise;
     folly::Future<Output> new_future = new_promise.getFuture();
     new_entry.value_promises_.push_back(std::move(new_promise));
+    auto before = std::chrono::system_clock::now();
     cache_.insert(std::make_pair(key, std::move(new_entry)));
-//    auto after = std::chrono::system_clock::now();
-//    long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-//    cache_seg_hist_->insert(seg_lat_micros);
+    auto after = std::chrono::system_clock::now();
+    long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+    cache_seg_hist_->insert(seg_lat_micros);
     return new_future;
   }
 }
