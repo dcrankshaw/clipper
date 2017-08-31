@@ -264,7 +264,7 @@ class TaskExecutor {
       : active_(std::make_shared<std::atomic_bool>(true)),
         active_containers_(std::make_shared<ActiveContainers>()),
         rpc_(std::make_unique<rpc::RPCService>()),
-        cache_(std::make_shared<QueryCache2>(0)),
+        cache_(std::make_unique<QueryCache2>(0)),
         model_queues_({}),
         model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
@@ -422,8 +422,8 @@ class TaskExecutor {
   std::shared_ptr<std::atomic_bool> active_;
   std::shared_ptr<ActiveContainers> active_containers_;
   std::unique_ptr<rpc::RPCService> rpc_;
-  //std::unique_ptr<QueryCache2> cache_;
-  QueryCache cache_;
+  std::unique_ptr<QueryCache2> cache_;
+  //QueryCache cache_;
   //std::unique_ptr<PredictionCache> cache_;
   redox::Redox redis_connection_;
   redox::Subscriber redis_subscriber_;
