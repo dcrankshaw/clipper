@@ -79,7 +79,7 @@ class AppMetrics {
         latency_(
             clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
                 "app:" + app_name + ":prediction_latency", "microseconds",
-                4096)),
+                1048576)),
         throughput_(
             clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                 "app:" + app_name + ":prediction_throughput")),
