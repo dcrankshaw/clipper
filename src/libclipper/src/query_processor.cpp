@@ -113,14 +113,10 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 
   size_t num_tasks = task_futures.size();
 
-  auto before = std::chrono::system_clock::now();
-
   folly::Future<folly::Unit> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
 
-  auto after = std::chrono::system_clock::now();
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  qp_pred_seg_hist_->insert(lat_micros);
+  auto before = std::chrono::system_clock::now();
 
   std::shared_ptr<std::mutex> outputs_mutex = std::make_shared<std::mutex>();
   std::vector<Output> outputs;
@@ -158,6 +154,10 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 
   folly::Promise<Response> response_promise;
   folly::Future<Response> response_future = response_promise.getFuture();
+
+  auto after = std::chrono::system_clock::now();
+  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  qp_pred_seg_hist_->insert(lat_micros);
 
   response_ready_future.via(futures_executor_.get()).then([
     outputs_ptr, outputs_mutex, num_tasks, query, query_id,
