@@ -632,7 +632,7 @@ class ServerImpl {
       handler_->predict(app_name, context);
     };
 
-    for (int i = 0; i < 1000; ++i) {
+    for (int i = 0; i < 1000000; ++i) {
       for (int j = 0; j < num_threads; j++) {
         auto request_func = [j, this](
             grpc::ServerContext* ctx, PredictRequest* request,
@@ -643,7 +643,7 @@ class ServerImpl {
                                         tag);
         };
         contexts_.emplace_back(
-            new ServerRpcContext(request_func, process_func, (j * 10000) + i));
+            new ServerRpcContext(request_func, process_func, (j * 10000000) + i));
       }
     }
 
