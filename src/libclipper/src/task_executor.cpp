@@ -152,7 +152,6 @@ folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const Qu
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = entries_.find(key);
-  lookups_counter_->increment(1);
   if (search != entries_.end()) {
     // cache entry exists
     if (search->second.completed_) {
