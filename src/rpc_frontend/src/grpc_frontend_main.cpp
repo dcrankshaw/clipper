@@ -15,13 +15,17 @@ int main(int argc, char* argv[]) {
     ("redis_port", "Redis port",
         cxxopts::value<int>()->default_value("6379"))
     ("num_rpc_threads_size", "Number of threads for the grpc frontend",
-        cxxopts::value<int>()->default_value("2"));
+        cxxopts::value<int>()->default_value("2"))
+    ("rpc_recv_max", "", cxxopts::value<int>()->default_value("1"))
+    ("rpc_send_max", "", cxxopts::value<int>()->default_value("-1"));
   // clang-format on
   options.parse(argc, argv);
 
   clipper::Config& conf = clipper::get_config();
   conf.set_redis_address(options["redis_ip"].as<std::string>());
   conf.set_redis_port(options["redis_port"].as<int>());
+  conf.set_rpc_max_recv(options["rpc_recv_max"].as<int>());
+  conf.set_rpc_max_send(options["rpc_send_max"].as<int>());
   // conf.set_task_execution_threadpool_size(options["threadpool_size"].as<int>());
   conf.ready();
 
