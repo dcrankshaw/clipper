@@ -118,6 +118,7 @@ class QueryCache2 {
   void evict_entries(long space_needed_bytes);
 
   std::mutex m_;
+  std::shared_ptr<metrics::Histogram> cache_seg_hist_;
   const size_t max_size_bytes_;
   size_t size_bytes_ = 0;
   // TODO cache needs a promise as well?

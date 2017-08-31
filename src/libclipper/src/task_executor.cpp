@@ -144,6 +144,8 @@ size_t PredictionCache::hash(const VersionedModelId &model,
 
 QueryCache2::QueryCache2(size_t size_bytes)
     : max_size_bytes_(size_bytes) {
+  cache_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
+      "cache seg latency", "microseconds", 1048576);
 }
 
 folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const QueryId query_id) {
@@ -177,7 +179,11 @@ folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const Qu
     folly::Promise<Output> new_promise;
     folly::Future<Output> new_future = new_promise.getFuture();
     new_entry.value_promises_.push_back(std::move(new_promise));
+    auto before = std::chrono::system_clock::now();
     insert_entry(key, new_entry);
+    auto after = std::chrono::system_clock::now();
+    long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+    cache_seg_hist_->insert(seg_lat_micros);
     hit_ratio_->increment(0, 1);
     return new_future;
   }
