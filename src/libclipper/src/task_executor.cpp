@@ -157,7 +157,6 @@ folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const Qu
     // cache entry exists
     if (search->second.completed_) {
       // value already in cache
-      hit_ratio_->increment(1, 1);
       search->second.used_ = true;
       // `makeFuture` takes an rvalue reference, so moving/forwarding
       // the cache value directly would destroy it. Therefore, we use
@@ -169,7 +168,6 @@ folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const Qu
       folly::Promise<Output> new_promise;
       folly::Future<Output> new_future = new_promise.getFuture();
       search->second.value_promises_.push_back(std::move(new_promise));
-      hit_ratio_->increment(0, 1);
       return new_future;
     }
   } else {
@@ -184,7 +182,6 @@ folly::Future<Output> QueryCache2::fetch(const VersionedModelId &model, const Qu
     auto after = std::chrono::system_clock::now();
     long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
     cache_seg_hist_->insert(seg_lat_micros);
-    hit_ratio_->increment(0, 1);
     return new_future;
   }
 }
