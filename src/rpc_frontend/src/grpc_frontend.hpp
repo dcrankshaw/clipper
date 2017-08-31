@@ -391,7 +391,6 @@ class RequestHandler {
     auto predict_fn = [this, name, application_input_type = input_type, policy, latency_slo_micros,
                        app_metrics](ServerRpcContext* rpc_context) {
       try {
-        auto before = std::chrono::system_clock::now();
         std::vector<std::string> models = get_linked_models_for_app(name);
         std::vector<VersionedModelId> versioned_models;
         {
@@ -449,11 +448,16 @@ class RequestHandler {
         }
 
         frontend_throughput_->mark(1);
+//        auto before = std::chrono::system_clock::now();
 
         long uid = 0;
         auto prediction =
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
+
+//        auto after = std::chrono::system_clock::now();
+//        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+//        qp_latency_->insert(lat_micros);
 
         request_throughput_->mark(1);
 
@@ -513,12 +517,6 @@ class RequestHandler {
             rpc_context->send_response();
             return;
         });
-
-        auto after = std::chrono::system_clock::now();
-
-        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-
-        qp_latency_->insert(lat_micros);
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
@@ -542,11 +540,15 @@ class RequestHandler {
   }
 
   void predict(std::string app_name, ServerRpcContext* rpc_context) {
+    auto before = std::chrono::system_clock::now();
     std::unique_lock<std::mutex> l(app_predict_functions_mutex_);
     auto search = app_predict_functions_.find(app_name);
     if (search != app_predict_functions_.end()) {
       l.unlock();
       search->second(rpc_context);
+      auto after = std::chrono::system_clock::now();
+      long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+      qp_latency_->insert(lat_micros);
     } else {
       l.unlock();
       std::string error_response = get_prediction_error_response_content(
