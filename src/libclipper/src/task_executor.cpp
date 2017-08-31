@@ -145,10 +145,10 @@ folly::Future<Output> QueryCache::fetch(
     new_entry.value_promises_.push_back(std::move(new_promise));
     cache_.insert(std::make_pair(key, std::move(new_entry)));
     // hit_ratio_->increment(0, 1);
-    auto after = std::chrono::system_clock::now();
-    long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-    cache_seg_hist_->insert(seg_lat_micros);
-    return new_future;
+//    auto after = std::chrono::system_clock::now();
+//    long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+//    cache_seg_hist_->insert(seg_lat_micros);
+//    return new_future;
   }
 }
 
