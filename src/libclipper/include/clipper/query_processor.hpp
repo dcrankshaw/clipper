@@ -6,7 +6,7 @@
 #include <tuple>
 #include <utility>
 
-#include <boost/thread.hpp>
+#include <folly/futures/Future.h>
 
 #include <folly/futures/Future.h>
 #include <wangle/concurrent/CPUThreadPoolExecutor.h>

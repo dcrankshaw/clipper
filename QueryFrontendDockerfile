@@ -1,9 +1,19 @@
 ARG CODE_VERSION=0.2-rc1
-FROM clipper/clipper-base:${CODE_VERSION}
+FROM clipper/lib_base:${CODE_VERSION}
+
+# Build Clipper
 
 RUN cd /clipper/release \
     && make -j8 query_frontend
 
-ENTRYPOINT ["/clipper/release/src/rest_frontend/query_frontend"]
+RUN cd /clipper/src/libs/spdlog \
+    && git apply ../patches/make_spdlog_compile_linux.patch \
+    && cd /clipper \
+    && ./configure --cleanup-quiet \
+    && ./configure --release \
+    && cd release \
+    && make query_frontend
+
+ENTRYPOINT ["/clipper/release/src/frontends/query_frontend"]
 
 # vim: set filetype=dockerfile:

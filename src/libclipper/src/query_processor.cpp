@@ -9,7 +9,7 @@
 #define PROVIDES_EXECUTORS
 #include <boost/exception_ptr.hpp>
 #include <boost/optional.hpp>
-#include <boost/thread.hpp>
+
 #include <boost/thread/executors/basic_thread_pool.hpp>
 
 #include <folly/Unit.h>
@@ -111,8 +111,8 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
 
   size_t num_tasks = task_futures.size();
 
-  // TODO(czumar): Find a more readable name for std::vector<folly::Unit> and
-  // typedef accordingly
+  size_t num_tasks = task_futures.size();
+
   folly::Future<folly::Unit> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
 
