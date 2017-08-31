@@ -79,7 +79,7 @@ class AppMetrics {
         latency_(
             clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
                 "app:" + app_name + ":prediction_latency", "microseconds",
-                1048576)),
+                4096)),
         throughput_(
             clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                 "app:" + app_name + ":prediction_throughput")),
@@ -188,7 +188,7 @@ class RequestHandler {
     frontend_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_frontend_throughput");
 
     qp_latency_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-      "qp predict latency", "microseconds", 4096);
+      "qp predict latency", "microseconds", 1048576);
 
     metrics_thread_ = std::thread([this]() {
       while(active_) {
