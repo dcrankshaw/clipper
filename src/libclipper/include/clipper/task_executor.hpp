@@ -103,6 +103,31 @@ class PredictionCache {
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
 };
 
+class QueryCache2 {
+ public:
+  QueryCache2(size_t size_bytes);
+  folly::Future<Output> fetch(const VersionedModelId &model,
+                              const QueryId query_id);
+
+  void put(const VersionedModelId &model, const QueryId query_id,
+              Output output);
+
+ private:
+  size_t hash(const VersionedModelId &model, const QueryId query_id) const;
+  void insert_entry(const long key, CacheEntry &value);
+  void evict_entries(long space_needed_bytes);
+
+  std::mutex m_;
+  const size_t max_size_bytes_;
+  size_t size_bytes_ = 0;
+  // TODO cache needs a promise as well?
+  std::unordered_map<long, CacheEntry> entries_;
+  std::vector<long> page_buffer_;
+  size_t page_buffer_index_ = 0;
+  std::shared_ptr<metrics::Counter> lookups_counter_;
+  std::shared_ptr<metrics::RatioCounter> hit_ratio_;
+};
+
 // NOTE: Prediction cache is now a query cache
 class QueryCache {
  public:
@@ -239,7 +264,7 @@ class TaskExecutor {
       : active_(std::make_shared<std::atomic_bool>(true)),
         active_containers_(std::make_shared<ActiveContainers>()),
         rpc_(std::make_unique<rpc::RPCService>()),
-        cache_(),
+        cache_(std::make_shared<QueryCache2>(0)),
         model_queues_({}),
         model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
@@ -344,11 +369,11 @@ class TaskExecutor {
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
         auto before_seg = std::chrono::system_clock::now();
-        output_futures.push_back(cache_.fetch(t.model_, t.query_id_));
+        output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
         auto after_seg = std::chrono::system_clock::now();
         long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
         te_seg_hist_->insert(seg_lat_micros);
-        // output_futures.push_back(cache_.fetch(t.model_, t.input_));
+        // output_futures.push_back(cache_->fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
           auto before = std::chrono::system_clock::now();
@@ -397,6 +422,7 @@ class TaskExecutor {
   std::shared_ptr<std::atomic_bool> active_;
   std::shared_ptr<ActiveContainers> active_containers_;
   std::unique_ptr<rpc::RPCService> rpc_;
+  //std::unique_ptr<QueryCache2> cache_;
   QueryCache cache_;
   //std::unique_ptr<PredictionCache> cache_;
   redox::Redox redis_connection_;
@@ -555,7 +581,7 @@ class TaskExecutor {
       (*cur_model_metric)
           .latency_->insert(static_cast<int64_t>(task_latency_micros));
     }
-    cache_.put(completed_msg.model_, completed_msg.query_id_,
+    cache_->put(completed_msg.model_, completed_msg.query_id_,
                Output{deserialized_output, {completed_msg.model_}});
 //    cache_->put(completed_msg.model_, completed_msg.input_,
 //                Output{deserialized_output, {completed_msg.model_}});>>>>>>> cache_eviction
