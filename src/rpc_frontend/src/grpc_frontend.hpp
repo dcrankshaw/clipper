@@ -697,12 +697,12 @@ class ServerImpl {
     while (srv_cqs_[thread_idx]->Next(&got_tag, &ok)) {
       ServerRpcContext* ctx = ServerRpcContext::detag(got_tag);
       auto times_search = processing_times_map_.find(ctx->id_);
-      if(times_search == processing_times_map_.end()) {
+      bool new_ctx = (times_search == processing_times_map_.end());
+      if(new_ctx) {
         long start_time_micros =
             std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
-        //processing_times_map_.emplace(ctx->id_, start_time_micros);
-        processing_times_map_.emplace(ctx->id_, 0);
+        processing_times_map_.emplace(ctx->id_, start_time_micros);
       } else {
         processing_times_map_[ctx->id_] = processing_times_map_[ctx->id_] + 1;
       }
@@ -715,18 +715,22 @@ class ServerImpl {
         return;
       }
       const bool still_going = ctx->RunNextState(ok);
-      // if this RPC context is done, refresh it
-      if (!still_going) {
-        ctx->Reset();
+
+
+      if(new_ctx) {
         times_search = processing_times_map_.find(ctx->id_);
         if(times_search != processing_times_map_.end()) {
           long curr_time_micros =
               std::chrono::duration_cast<std::chrono::microseconds>(
                   std::chrono::system_clock::now().time_since_epoch()).count();
-//          thread_latency_hist_->insert(curr_time_micros - times_search->second);
-          thread_latency_hist_->insert(times_search->second);
+          thread_latency_hist_->insert(curr_time_micros - times_search->second);
           processing_times_map_.erase(ctx->id_);
         }
+      }
+
+      // if this RPC context is done, refresh it
+      if (!still_going) {
+        ctx->Reset();
       }
     }
     return;
