@@ -36,6 +36,7 @@ def run(proc_num):
 		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
 		req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, double_data=x)
 		response = stub.Predict(req)
+		print("Received response!")
 		end = datetime.now()
 
 		latency += (end - begin).total_seconds()
