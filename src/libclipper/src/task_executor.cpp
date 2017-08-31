@@ -113,6 +113,7 @@ folly::Future<Output> QueryCache::fetch(
   // lookups_counter_->increment(1);
   if (search != cache_.end()) {
     // cache entry exists
+    l.unlock();
     if (search->second.completed_) {
       // value already in cache
       // hit_ratio_->increment(1, 1);
