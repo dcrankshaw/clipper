@@ -609,7 +609,7 @@ class RequestHandler {
 class ServerImpl {
  public:
   ServerImpl(std::string address, int portno, int num_threads)
-      : handler_(new RequestHandler{}) {
+      : handler_(new RequestHandler{}), processing_times_map_() {
 
     thread_latency_hist_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
         "thread task latency", "microseconds", 1048576
