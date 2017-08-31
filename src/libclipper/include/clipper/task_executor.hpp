@@ -366,7 +366,11 @@ class TaskExecutor {
     std::vector<folly::Future<Output>> output_futures;
     for (auto &t : tasks) {
       // add each task to the queue corresponding to its associated model
+      auto before = std::chrono::system_clock::now();
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
+      auto after = std::chrono::system_clock::now();
+      long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+      queue_latency_hist_->insert(lat_micros);
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
         auto before_seg = std::chrono::system_clock::now();
@@ -377,11 +381,7 @@ class TaskExecutor {
         // output_futures.push_back(cache_->fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
-          auto before = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
-          auto after = std::chrono::system_clock::now();
-          long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-          queue_latency_hist_->insert(lat_micros);
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
