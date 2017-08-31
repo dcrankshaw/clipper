@@ -92,7 +92,9 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
   log_info_formatted(LOGGING_TAG_QUERY_PROCESSOR, "Found {} tasks",
                      tasks.size());
 
-  auto before = std::chrono::system_clock::now();
+  // CACHE BOTTLENECK SEGMENT
+  //
+  // auto before = std::chrono::system_clock::now();
 
   vector<folly::Future<Output>> task_futures =
       task_executor_.schedule_predictions(tasks);
@@ -103,16 +105,22 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
                         query_id);
   }
 
-  auto after = std::chrono::system_clock::now();
-
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-
-  qp_pred_seg_hist_->insert(lat_micros);
+  // END CACHE BOTTLENECK SEGMENT
+  //
+  // auto after = std::chrono::system_clock::now();
+  // long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  // qp_pred_seg_hist_->insert(lat_micros);
 
   size_t num_tasks = task_futures.size();
 
+  auto before = std::chrono::system_clock::now();
+
   folly::Future<folly::Unit> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
+
+  auto after = std::chrono::system_clock::now();
+  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
+  qp_pred_seg_hist_->insert(lat_micros);
 
   std::shared_ptr<std::mutex> outputs_mutex = std::make_shared<std::mutex>();
   std::vector<Output> outputs;
