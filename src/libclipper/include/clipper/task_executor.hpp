@@ -383,7 +383,7 @@ class TaskExecutor {
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
           tasks_added.fetch_add(1);
-          log_info_formatted(LOGGING_TAG_TASK_EXECUTOR, "NUM ADDS TOTAL: {}", tasks_added);
+          log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "NUM ADDS TOTAL: {}", static_cast<long>(tasks_added));
           model_queue_entry->second->add_task(t);
           log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "QUEUE SIZE: {}", model_queue_entry->second->get_size());
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
