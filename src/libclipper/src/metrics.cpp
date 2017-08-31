@@ -184,23 +184,24 @@ RatioCounter::RatioCounter(const std::string name, uint32_t num, uint32_t denom)
 
 void RatioCounter::increment(const uint32_t num_incr,
                              const uint32_t denom_incr) {
-  std::lock_guard<std::mutex> guard(ratio_lock_);
-  numerator_.fetch_add(num_incr, std::memory_order_relaxed);
-  denominator_.fetch_add(denom_incr, std::memory_order_relaxed);
+//  std::lock_guard<std::mutex> guard(ratio_lock_);
+//  numerator_.fetch_add(num_incr, std::memory_order_relaxed);
+//  denominator_.fetch_add(denom_incr, std::memory_order_relaxed);
 }
 
 double RatioCounter::get_ratio() {
-  std::lock_guard<std::mutex> guard(ratio_lock_);
-  uint32_t num_value = numerator_.load(std::memory_order_seq_cst);
-  uint32_t denom_value = denominator_.load(std::memory_order_seq_cst);
-  if (denom_value == 0) {
-    log_error_formatted(LOGGING_TAG_METRICS, "Ratio {} has denominator zero!",
-                        name_);
-    return std::nan("");
-  }
-  double ratio =
-      static_cast<double>(num_value) / static_cast<double>(denom_value);
-  return ratio;
+//  std::lock_guard<std::mutex> guard(ratio_lock_);
+//  uint32_t num_value = numerator_.load(std::memory_order_seq_cst);
+//  uint32_t denom_value = denominator_.load(std::memory_order_seq_cst);
+//  if (denom_value == 0) {
+//    log_error_formatted(LOGGING_TAG_METRICS, "Ratio {} has denominator zero!",
+//                        name_);
+//    return std::nan("");
+//  }
+//  double ratio =
+//      static_cast<double>(num_value) / static_cast<double>(denom_value);
+//  return ratio;
+  return 0;
 }
 
 MetricType RatioCounter::type() const { return MetricType::RatioCounter; }
@@ -222,9 +223,9 @@ const std::string RatioCounter::report_str() {
 }
 
 void RatioCounter::clear() {
-  std::lock_guard<std::mutex> guard(ratio_lock_);
-  numerator_.store(0, std::memory_order_seq_cst);
-  denominator_.store(0, std::memory_order_seq_cst);
+//  std::lock_guard<std::mutex> guard(ratio_lock_);
+//  numerator_.store(0, std::memory_order_seq_cst);
+//  denominator_.store(0, std::memory_order_seq_cst);
 }
 
 long RealTimeClock::get_time_micros() const {
@@ -261,18 +262,18 @@ EWMA::EWMA(long tick_interval_seconds, LoadAverage load_average)
 }
 
 void EWMA::tick() {
-  std::lock_guard<std::mutex> guard(rate_lock_);
-  double count = uncounted_.exchange(0, std::memory_order_relaxed);
-  double current_rate = count / static_cast<double>(tick_interval_seconds_);
-  if (rate_ == -1) {
-    // current_rate is the first rate we've calculated,
-    // so we set rate to current_rate.
-    rate_ = current_rate;
-  } else {
-    // Update the rate in accordance with an exponentially decaying function
-    // of current_rate
-    rate_ += alpha_ * (current_rate - rate_);
-  }
+//  std::lock_guard<std::mutex> guard(rate_lock_);
+//  double count = uncounted_.exchange(0, std::memory_order_relaxed);
+//  double current_rate = count / static_cast<double>(tick_interval_seconds_);
+//  if (rate_ == -1) {
+//    // current_rate is the first rate we've calculated,
+//    // so we set rate to current_rate.
+//    rate_ = current_rate;
+//  } else {
+//    // Update the rate in accordance with an exponentially decaying function
+//    // of current_rate
+//    rate_ += alpha_ * (current_rate - rate_);
+//  }
 }
 
 void EWMA::mark_uncounted(uint32_t num) {
@@ -280,15 +281,16 @@ void EWMA::mark_uncounted(uint32_t num) {
 }
 
 void EWMA::reset() {
-  std::lock_guard<std::mutex> guard(rate_lock_);
-  rate_ = -1;
-  uncounted_.store(0, std::memory_order_seq_cst);
+//  std::lock_guard<std::mutex> guard(rate_lock_);
+//  rate_ = -1;
+//  uncounted_.store(0, std::memory_order_seq_cst);
 }
 
 double EWMA::get_rate_seconds() {
-  std::lock_guard<std::mutex> guard(rate_lock_);
-  double rate = rate_;
-  return rate;
+//  std::lock_guard<std::mutex> guard(rate_lock_);
+//  double rate = rate_;
+//  return rate;
+  return 0;
 }
 
 Meter::Meter(std::string name, std::shared_ptr<MeterClock> clock)
@@ -341,12 +343,13 @@ void Meter::tick_if_necessary() {
 }
 
 double Meter::get_rate_micros() {
-  std::lock_guard<std::mutex> guard(start_time_lock_);
-  uint32_t curr_count = count_.load(std::memory_order_seq_cst);
-  long curr_time_micros = clock_->get_time_micros();
-  double rate = static_cast<double>(curr_count) /
-                static_cast<double>(curr_time_micros - start_time_micros_);
-  return rate;
+//  std::lock_guard<std::mutex> guard(start_time_lock_);
+//  uint32_t curr_count = count_.load(std::memory_order_seq_cst);
+//  long curr_time_micros = clock_->get_time_micros();
+//  double rate = static_cast<double>(curr_count) /
+//                static_cast<double>(curr_time_micros - start_time_micros_);
+//  return rate;
+  return 0;
 }
 
 double Meter::get_rate_seconds() {
@@ -390,12 +393,12 @@ const std::string Meter::report_str() {
 }
 
 void Meter::clear() {
-  std::lock_guard<std::mutex> guard(start_time_lock_);
-  start_time_micros_ = clock_->get_time_micros();
-  count_.store(0, std::memory_order_seq_cst);
-  m1_rate.reset();
-  m5_rate.reset();
-  m15_rate.reset();
+//  std::lock_guard<std::mutex> guard(start_time_lock_);
+//  start_time_micros_ = clock_->get_time_micros();
+//  count_.store(0, std::memory_order_seq_cst);
+//  m1_rate.reset();
+//  m5_rate.reset();
+//  m15_rate.reset();
 }
 
 ReservoirSampler::ReservoirSampler(size_t sample_size)
@@ -448,11 +451,11 @@ Histogram::Histogram(const std::string name, const std::string unit,
     : name_(name), unit_(unit), sampler_(sample_size) {}
 
 void Histogram::insert(const int64_t value) {
-  std::lock_guard<std::mutex> guard(sampler_lock_);
-  size_t old_reservoir_size = sampler_.current_size();
-  int64_t replaced_value = sampler_.sample(value);
-  size_t new_reservoir_size = sampler_.current_size();
-  update_mean(old_reservoir_size, new_reservoir_size, value, replaced_value);
+//  std::lock_guard<std::mutex> guard(sampler_lock_);
+//  size_t old_reservoir_size = sampler_.current_size();
+//  int64_t replaced_value = sampler_.sample(value);
+//  size_t new_reservoir_size = sampler_.current_size();
+//  update_mean(old_reservoir_size, new_reservoir_size, value, replaced_value);
 }
 
 void Histogram::update_mean(const size_t old_reservoir_size,
@@ -495,40 +498,42 @@ long double Histogram::percentile(std::vector<int64_t> snapshot, double rank) {
 }
 
 long double Histogram::percentile(double rank) {
-  std::lock_guard<std::mutex> guard(sampler_lock_);
-  std::vector<int64_t> snapshot = sampler_.snapshot();
-  if (snapshot.size() == 0) {
-    return 0;
-  }
-  std::sort(snapshot.begin(), snapshot.end());
-
-  return Histogram::percentile(snapshot, rank);
+//  std::lock_guard<std::mutex> guard(sampler_lock_);
+//  std::vector<int64_t> snapshot = sampler_.snapshot();
+//  if (snapshot.size() == 0) {
+//    return 0;
+//  }
+//  std::sort(snapshot.begin(), snapshot.end());
+//
+//  return Histogram::percentile(snapshot, rank);
+  return 0;
 }
 
 const HistogramStats Histogram::compute_stats() {
-  std::lock_guard<std::mutex> guard(sampler_lock_);
-  std::vector<int64_t> snapshot = sampler_.snapshot();
-  size_t snapshot_size = snapshot.size();
-  if (snapshot_size == 0) {
-    HistogramStats stats;
-    return stats;
-  }
-  std::sort(snapshot.begin(), snapshot.end());
-  int64_t min = snapshot.front();
-  int64_t max = snapshot.back();
-  long double p50 = percentile(snapshot, .5);
-  long double p95 = percentile(snapshot, .95);
-  long double p99 = percentile(snapshot, .99);
-  long double var = 0;
-  if (snapshot_size > 1) {
-    for (auto elem : snapshot) {
-      long double incr = std::pow(elem - mean_, static_cast<long double>(2));
-      var += incr;
-    }
-    var = var / static_cast<double>(snapshot_size);
-  }
-  long double std_dev = std::sqrt(var);
-  return HistogramStats(snapshot_size, min, max, mean_, std_dev, p50, p95, p99);
+//  std::lock_guard<std::mutex> guard(sampler_lock_);
+//  std::vector<int64_t> snapshot = sampler_.snapshot();
+//  size_t snapshot_size = snapshot.size();
+//  if (snapshot_size == 0) {
+//    HistogramStats stats;
+//    return stats;
+//  }
+//  std::sort(snapshot.begin(), snapshot.end());
+//  int64_t min = snapshot.front();
+//  int64_t max = snapshot.back();
+//  long double p50 = percentile(snapshot, .5);
+//  long double p95 = percentile(snapshot, .95);
+//  long double p99 = percentile(snapshot, .99);
+//  long double var = 0;
+//  if (snapshot_size > 1) {
+//    for (auto elem : snapshot) {
+//      long double incr = std::pow(elem - mean_, static_cast<long double>(2));
+//      var += incr;
+//    }
+//    var = var / static_cast<double>(snapshot_size);
+//  }
+//  long double std_dev = std::sqrt(var);
+//  return HistogramStats(snapshot_size, min, max, mean_, std_dev, p50, p95, p99);
+  return HistogramStats(0,0,0,0,0,0,0,0);
 }
 
 MetricType Histogram::type() const { return MetricType::Histogram; }
@@ -558,8 +563,8 @@ const std::string Histogram::report_str() {
 }
 
 void Histogram::clear() {
-  std::lock_guard<std::mutex> guard(sampler_lock_);
-  sampler_.clear();
+//  std::lock_guard<std::mutex> guard(sampler_lock_);
+//  sampler_.clear();
 }
 
 }  // namespace metrics
