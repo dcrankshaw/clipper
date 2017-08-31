@@ -382,6 +382,7 @@ class TaskExecutor {
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
+          log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "QUEUE SIZE: {}", model_queue_entry->second->get_size());
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
                              "Adding task to queue. QueryID: {}, model: {}",
                              t.query_id_, t.model_.serialize());
