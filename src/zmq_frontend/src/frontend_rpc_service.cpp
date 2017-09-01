@@ -198,8 +198,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
                                         std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests) {
   size_t num_responses = NUM_RESPONSES_SEND;
   while(!response_queue_->isEmpty() && num_responses > 0) {
-    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID: {}", response->second);
     FrontendRPCResponse* response = response_queue_->frontPtr();
+    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID: {}", response->second);
     auto routing_identity_search = outstanding_requests.find(response->second);
     if(routing_identity_search == outstanding_requests.end()) {
       std::stringstream ss;
