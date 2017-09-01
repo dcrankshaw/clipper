@@ -167,8 +167,8 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
                                     static_cast<uint8_t*>(msg_routing_identity.data()) + msg_routing_identity.size());
 
-    size_t hash = boost::hash_range(routing_id.begin(), routing_id.end());
-    log_error_formatted(LOGGING_TAG_CLIPPER, "IN HASH: {}", hash);
+//    size_t hash = boost::hash_range(routing_id.begin(), routing_id.end());
+//    log_error_formatted(LOGGING_TAG_CLIPPER, "IN HASH: {}", hash);
 
     outstanding_requests.emplace(req_id, std::move(routing_id));
 
