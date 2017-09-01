@@ -164,11 +164,10 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     int req_id = request_id;
     request_id++;
 
-    std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
-                                    static_cast<uint8_t*>(msg_routing_identity.data()) + msg_routing_identity.size());
+    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID SIZE: {}", msg_routing_identity.size());
 
-//    size_t hash = boost::hash_range(routing_id.begin(), routing_id.end());
-//    log_error_formatted(LOGGING_TAG_CLIPPER, "IN HASH: {}", hash);
+    std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
+                                    static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
 
     outstanding_requests.emplace(req_id, std::move(routing_id));
 
@@ -195,9 +194,6 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
 
     std::vector<uint8_t> &routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response->first.y_hat_->type());
-
-    size_t hash = boost::hash_range(routing_id.begin(), routing_id.end());
-    log_error_formatted(LOGGING_TAG_CLIPPER, "OUT HASH: {}", hash);
 
     // TODO(czumar): If this works, include other relevant output data (default bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
