@@ -193,6 +193,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
 
     // TODO(czumar): If this works, include other relevant output data (default bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
+    socket.send("", 0, ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
     socket.send(response->first.y_hat_->get_data(), response->first.y_hat_->byte_size());
 
