@@ -6,6 +6,7 @@
 
 #include <redox.hpp>
 #include <concurrentqueue.h>
+#include <base64.h>
 
 #include <clipper/config.hpp>
 #include <clipper/datatypes.hpp>
@@ -235,6 +236,16 @@ void RPCService::receive_message(
       (uint8_t *)msg_routing_identity.data(),
       (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
 
+  const char* decoded_str = reinterpret_cast<const char*>(connection_id.data());
+  size_t decoded_length = connection_id.size() * sizeof(char);
+  size_t encoded_length =
+      static_cast<size_t>(Base64::EncodedLength(decoded_length));
+  char* encoded_str = static_cast<char*>(malloc(encoded_length));
+  Base64 encoder;
+  encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
+
+  log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC IN: {}", encoded_str);
+
   MessageType type =
       static_cast<MessageType>(static_cast<int *>(msg_type.data())[0]);
 
@@ -334,6 +345,17 @@ void RPCService::receive_message(
 void RPCService::send_heartbeat_response(socket_t &socket,
                                          const vector<uint8_t> &connection_id,
                                          bool request_container_metadata) {
+
+  const char* decoded_str = reinterpret_cast<const char*>(connection_id.data());
+  size_t decoded_length = connection_id.size() * sizeof(char);
+  size_t encoded_length =
+      static_cast<size_t>(Base64::EncodedLength(decoded_length));
+  char* encoded_str = static_cast<char*>(malloc(encoded_length));
+  Base64 encoder;
+  encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
+
+  log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC OUT: {}", encoded_str);
+
   message_t type_message(sizeof(int));
   message_t heartbeat_type_message(sizeof(int));
   static_cast<int *>(type_message.data())[0] =
