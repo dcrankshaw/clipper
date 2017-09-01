@@ -285,7 +285,7 @@ class ServerImpl {
                                            policy, versioned_models});
 
         prediction.via(futures_executor_.get())
-            .then([app_metrics, rpc_context, rpc_service_, request_id](Response r) {
+            .then([app_metrics, rpc_service_, request_id](Response r) {
               // Update metrics
               if (r.output_is_default_) {
                 app_metrics.default_pred_ratio_->increment(1, 1);
@@ -297,13 +297,10 @@ class ServerImpl {
 
               rpc_service_->send_response(std::make_pair(std::move(r.output_), request_id));
             })
-            .onError([rpc_context](const std::exception& e) {
+            .onError([request_id](const std::exception& e) {
               clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
                                            "Unexpected error: {}", e.what());
-              // TODO: Use grpc status
-              rpc_context->response_.set_has_error(true);
-              rpc_context->response_.set_error("An unexpected error occurred!");
-              rpc_context->send_response();
+              // TODO(czumar): Do something here!
               return;
             });
       } catch (const std::invalid_argument& e) {
@@ -312,39 +309,13 @@ class ServerImpl {
         // when Rapidjson attempts to parse an invalid json schema
         std::string error_response = get_prediction_error_response_content(
             PREDICTION_ERROR_NAME_JSON, e.what());
-        rpc_context->response_.set_has_error(true);
-        rpc_context->response_.set_error(error_response);
-        rpc_context->send_response();
+        // TODO(czumar): Do something here!
       } catch (const clipper::PredictError& e) {
         std::string error_response = get_prediction_error_response_content(
             PREDICTION_ERROR_NAME_QUERY_PROCESSING, e.what());
-        rpc_context->response_.set_has_error(true);
-        rpc_context->response_.set_error(error_response);
-        rpc_context->send_response();
+        // TODO(czumar): Do something here!
       }
     };
-
-
-  }
-
-  void predict(std::string app_name, ServerRpcContext* rpc_context) {
-    auto before = std::chrono::system_clock::now();
-    std::unique_lock<std::mutex> l(app_predict_functions_mutex_);
-    auto search = app_predict_functions_.find(app_name);
-    if (search != app_predict_functions_.end()) {
-      l.unlock();
-      search->second(rpc_context);
-      auto after = std::chrono::system_clock::now();
-      long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-      qp_latency_->insert(lat_micros);
-    } else {
-      l.unlock();
-      std::string error_response = get_prediction_error_response_content(
-          PREDICTION_ERROR_NAME_REQUEST, "No registered application with name: " + app_name);
-      rpc_context->response_.set_has_error(true);
-      rpc_context->response_.set_error(error_response);
-      rpc_context->send_response();
-    }
   }
 
   /**
