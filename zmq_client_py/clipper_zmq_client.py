@@ -9,6 +9,12 @@ import sys
 from threading import Lock, Thread
 from Queue import Queue
 
+DATA_TYPE_BYTES = 0
+DATA_TYPE_INTS = 1
+DATA_TYPE_FLOATS = 2
+DATA_TYPE_DOUBLES = 3
+DATA_TYPE_STRINGS = 4
+
 NUM_REQUESTS_SEND = 10
 NUM_RESPONSES_RECV = 10
 
@@ -75,6 +81,7 @@ class Client:
 			app_name, input_item = self.request_queue.get()
 			socket.send("", zmq.SNDMORE)
 			socket.send_string(app_name, zmq.SNDMORE)
+			socket.send(struct.pack("<I", DATA_TYPE_FLOATS), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
 			i -= 1
