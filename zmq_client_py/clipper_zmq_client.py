@@ -26,6 +26,7 @@ class Client:
 		self.clipper_host = clipper_host
 		self.clipper_port = clipper_port
 		self.request_queue = Queue()
+		self.recv_count = 0
 
 	def start(self):
 		global active
@@ -40,6 +41,7 @@ class Client:
 			self.thread.join()
 
 	def send_request(self, app_name, input_item):
+		self.start_time = datetime.now()
 		self.request_queue.put((app_name, input_item))
 
 	def _run(self):
@@ -73,7 +75,12 @@ class Client:
 		socket.recv()
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
-		print("Received response!")
+		self.recv_count += 1
+		if self.recv_count % 1000 == 0:
+			curr_time = datetime.now()
+			latency = (end - begin).total_seconds()
+			print("Throughput: {} qps\n".format(float(latency) / self.recv_count))
+
 
 	def _send_requests(self, socket):
 		i = NUM_REQUESTS_SEND
