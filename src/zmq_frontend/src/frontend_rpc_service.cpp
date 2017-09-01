@@ -165,7 +165,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     int req_id = request_id;
     request_id++;
 
-    std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
+    const std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
                                     static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
 
     char* decoded_str = reinterpret_cast<char*>(routing_id.data());
