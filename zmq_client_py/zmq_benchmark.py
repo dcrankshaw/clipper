@@ -17,7 +17,7 @@ DATA_TYPE_FLOATS = 2
 DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
 
-CIFAR_SIZE_DOUBLES = 384
+CIFAR_SIZE_DOUBLES = (299 * 299 * 3) / 2
 
 input_type = "doubles"
 app_name = "app1"

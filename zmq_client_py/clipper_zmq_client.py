@@ -76,10 +76,10 @@ class Client:
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
 		self.recv_count += 1
-		if self.recv_count % 1000 == 0:
+		if self.recv_count % 200 == 0:
 			curr_time = datetime.now()
 			latency = (curr_time - self.start_time).total_seconds()
-			print("Throughput: {} qps\n".format(float(self.recv_count) / latency))
+			print("Throughput: {} qps\n".format(200.0 / latency))
 			self.start_time = curr_time
 
 
