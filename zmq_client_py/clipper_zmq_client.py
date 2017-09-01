@@ -73,7 +73,7 @@ class Client:
 	def _send_requests(self, socket):
 		i = NUM_REQUESTS_SEND
 		while (not self.request_queue.empty()) and i > 0:
-			app_name, input_item = request_queue.get()
+			app_name, input_item = self.request_queue.get()
 			socket.send_string(app_name, zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
