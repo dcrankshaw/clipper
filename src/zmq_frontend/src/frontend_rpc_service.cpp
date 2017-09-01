@@ -149,8 +149,8 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     int req_id = request_id;
     request_id++;
 
-    std::vector<uint8_t> routing_id(msg_routing_identity.data(),
-                                    msg_routing_identity.data() + msg_routing_identity.size());
+    std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
+                                    static_cast<uint8_t*>(msg_routing_identity.data()) + msg_routing_identity.size());
     outstanding_requests.emplace(req_id, std::move(routing_id));
 
     // Submit the function call with the request to a threadpool!!!
