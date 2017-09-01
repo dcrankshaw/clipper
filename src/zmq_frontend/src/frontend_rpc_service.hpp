@@ -40,6 +40,7 @@ class FrontendRPCService {
 
  private:
   void manage_service(const std::string ip, int port);
+  void shutdown_service(zmq::socket_t& socket);
   void receive_request(zmq::socket_t &socket,
                        std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests,
                        size_t& request_id);

@@ -39,6 +39,7 @@ class Client:
 	def _run(self):
 		global active
 		clipper_address = "tcp://{0}:{1}".format(self.clipper_host, self.clipper_port)
+		print(clipper_address)
 		context = zmq.Context()
 		socket = context.socket(zmq.DEALER)
 		poller = zmq.Poller()

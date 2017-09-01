@@ -84,6 +84,16 @@ void FrontendRPCService::manage_service(const std::string ip, int port) {
     }
     send_responses(socket, outstanding_requests);
   }
+  shutdown_service(socket);
+}
+
+void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
+  size_t buf_size = 32;
+  std::vector<char> buf(buf_size);
+  socket.getsockopt(ZMQ_LAST_ENDPOINT, (void *)buf.data(), &buf_size);
+  std::string last_endpoint = std::string(buf.begin(), buf.end());
+  socket.unbind(last_endpoint);
+  socket.close();
 }
 
 void FrontendRPCService::receive_request(zmq::socket_t &socket,
