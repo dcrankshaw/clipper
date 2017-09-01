@@ -80,6 +80,7 @@ class Client:
 			curr_time = datetime.now()
 			latency = (curr_time - self.start_time).total_seconds()
 			print("Throughput: {} qps\n".format(float(self.recv_count) / latency))
+			self.start_time = curr_time
 
 
 	def _send_requests(self, socket):
