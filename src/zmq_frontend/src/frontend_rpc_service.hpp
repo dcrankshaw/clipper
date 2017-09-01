@@ -46,6 +46,7 @@ class FrontendRPCService {
   void send_responses(zmq::socket_t &socket,
                       std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests);
 
+  std::mutex response_queue_insertion_mutex_;
   std::shared_ptr<folly::ProducerConsumerQueue<FrontendRPCResponse>> response_queue_;
   std::shared_ptr<wangle::CPUThreadPoolExecutor> prediction_executor_;
   std::atomic_bool active_;

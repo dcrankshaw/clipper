@@ -49,6 +49,7 @@ void FrontendRPCService::add_application(std::string name, std::function<void(Fr
 }
 
 void FrontendRPCService::send_response(FrontendRPCResponse response) {
+  std::lock_guard<std::mutex> lock(response_queue_insertion_mutex_);
   response_queue_->write(response);
 }
 
@@ -96,7 +97,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
 
-  std::string app_name(msg_app_name.data(), msg_app_name.data() + msg_app_name.size());
+  std::string app_name(msg_app_name.data(), msg_app_name.size());
   DataType input_type = static_cast<DataType>(static_cast<int*>(msg_data_type.data())[0]);
   size_t input_size_typed = static_cast<size_t*>(msg_data_size_typed.data())[0];
 
@@ -131,12 +132,12 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     default: {
       std::stringstream ss;
       ss << "Received a request with an input with invalid type: "
-         << get_readable_input_type(request_input_type);
+         << get_readable_input_type(input_type);
       throw std::runtime_error(ss.str());
     }
   }
 
-  std::lock_guard<std::mutex> lock(app_functions_);
+  std::lock_guard<std::mutex> lock(app_functions_mutex_);
   auto app_functions_search = app_functions_.find(app_name);
   if(app_functions_search == app_functions_.end()) {
     log_error_formatted(LOGGING_TAG_ZMQ_FRONTEND,
@@ -163,23 +164,26 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
                                         std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests) {
   size_t num_responses = NUM_RESPONSES_SEND;
   while(!response_queue_->isEmpty() && num_responses > 0) {
-    FrontendRPCResponse response = response_queue_->popFront();
-    auto routing_identity_search = outstanding_requests.find(response.second);
+    FrontendRPCResponse* response = response_queue_->frontPtr();
+    auto routing_identity_search = outstanding_requests.find(response->second);
     if(routing_identity_search == outstanding_requests.end()) {
       std::stringstream ss;
-      ss << "Received a response for a request with id " << response.second
+      ss << "Received a response for a request with id " << response->second
          << " that has no associated routing identity";
       throw std::runtime_error(ss.str());
     }
-    outstanding_requests.erase(response.second);
+    outstanding_requests.erase(response->second);
 
     std::vector<uint8_t> &routing_id = routing_identity_search->second;
-    int output_type = static_cast<int>(response.first.y_hat_->type());
+    int output_type = static_cast<int>(response->first.y_hat_->type());
 
     // TODO(czumar): If this works, include other relevant output data (default bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
-    socket.send(response.first.y_hat_->get_data(), response.first.y_hat_->byte_size());
+    socket.send(response->first.y_hat_->get_data(), response->first.y_hat_->byte_size());
+
+    // Remove the response from the outbound queue now that we're done processing it
+    response_queue_->popFront();
   }
 }
 
