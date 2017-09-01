@@ -206,7 +206,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
     }
     outstanding_requests.erase(response->second);
 
-    const std::vector<uint8_t> &routing_id = routing_identity_search->second;
+    const std::vector<uint8_t> routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response->first.y_hat_->type());
 
     const char* decoded_str = reinterpret_cast<const char*>(routing_id.data());
