@@ -56,7 +56,6 @@ class Client:
 				receivable_sockets = dict(poller.poll(1))
 				print(receivable_sockets)
 				if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
-					print("GOT IT")
 					self._receive_response(socket)
 					for i in range(NUM_REQUESTS_SEND - 1):
 						receivable_sockets = dict(poller.poll(0))
@@ -81,11 +80,11 @@ class Client:
 
 	def _send_requests(self, socket):
 		i = NUM_REQUESTS_SEND
-		while (not self.request_queue.empty()) and i > 0:
-			app_name, input_item = self.request_queue.get()
-			socket.send("", zmq.SNDMORE)
-			socket.send_string(app_name, zmq.SNDMORE)
-			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
-			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
-			socket.send(input_item)
-			i -= 1
+		# while (not self.request_queue.empty()) and i > 0:
+		app_name, input_item = self.request_queue.get()
+		socket.send("", zmq.SNDMORE)
+		socket.send_string(app_name, zmq.SNDMORE)
+		socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
+		socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
+		socket.send(input_item)
+		i -= 1
