@@ -57,7 +57,6 @@ class Client:
 				if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 					self._receive_response(socket)
 					for i in range(NUM_REQUESTS_SEND - 1):
-						x = 1/0
 						receivable_sockets = dict(poller.poll(0))
 						if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 							self._receive_response(socket)
@@ -65,13 +64,13 @@ class Client:
 				for i in range(NUM_RESPONSES_RECV):
 					receivable_sockets = dict(poller.poll(1000))
 					if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
-						x = 1/0
 						self._receive_response(socket)
 
 			self._send_requests(socket)
 
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
+		print("Starting recv!")
 		socket.recv()
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
@@ -87,3 +86,6 @@ class Client:
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
 			i -= 1
+
+			time.sleep(5)
+			self._receive_response(socket)
