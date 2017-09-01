@@ -61,9 +61,11 @@ class Client:
 						if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 							self._receive_response(socket)
 			else:
-				for i in range(NUM_REQUESTS_SEND):
+				for i in range(NUM_RESPONSES_RECV):
 					receivable_sockets = dict(poller.poll(0))
+					print("HUR")
 					if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
+						print("HI")
 						self._receive_response(socket)
 
 			self._send_requests(socket)
