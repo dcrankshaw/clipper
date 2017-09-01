@@ -54,6 +54,7 @@ class Client:
 		while active:
 			if self.request_queue.empty():
 				receivable_sockets = dict(poller.poll(1))
+				print(receivable_sockets)
 				if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 					print("GOT IT")
 					self._receive_response(socket)
