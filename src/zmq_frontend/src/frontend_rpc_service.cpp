@@ -114,34 +114,36 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 
   std::string app_name(static_cast<char*>(msg_app_name.data()), msg_app_name.size());
   DataType input_type = static_cast<DataType>(static_cast<int*>(msg_data_type.data())[0]);
-  size_t input_size_typed = static_cast<size_t*>(msg_data_size_typed.data())[0];
+  int input_size_typed = static_cast<int*>(msg_data_size_typed.data())[0];
+
+  log_error_formatted(LOGGING_TAG_CLIPPER, "INPUT SIZE: {}, SIZE_T: {}", input_size_typed, static_cast<size_t*>(msg_data_size_typed.data())[0]);
 
   std::shared_ptr<clipper::Input> input;
   switch(input_type) {
     case DataType::Bytes: {
-      input = std::make_shared<ByteVector>(input_size_typed);
       std::shared_ptr<uint8_t> data(static_cast<uint8_t *>(malloc(input_size_typed)), free);
       socket.recv(data.get(), input_size_typed, 0);
+      input = std::make_shared<ByteVector>(data, input_size_typed);
     } break;
     case DataType::Ints: {
-      input = std::make_shared<IntVector>(input_size_typed);
       std::shared_ptr<int> data(static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
       socket.recv(data.get(), input_size_typed * sizeof(int), 0);
+      input = std::make_shared<IntVector>(data, input_size_typed);
     } break;
     case DataType::Floats: {
-      input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<float> data(static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
       socket.recv(data.get(), input_size_typed * sizeof(float), 0);
+      input = std::make_shared<FloatVector>(data, input_size_typed);
     } break;
     case DataType::Doubles: {
-      input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<double> data(static_cast<double *>(malloc(input_size_typed * sizeof(double))), free);
       socket.recv(data.get(), input_size_typed * sizeof(double), 0);
+      input = std::make_shared<DoubleVector>(data, input_size_typed);
     } break;
     case DataType::Strings: {
-      input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<char> data(static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
       socket.recv(data.get(), input_size_typed * sizeof(char), 0);
+      input = std::make_shared<SerializableString>(data, input_size_typed);
     } break;
     case DataType::Invalid:
     default: {
