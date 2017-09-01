@@ -3,6 +3,7 @@
 
 #include <mutex>
 
+#include <zmq.hpp>
 #include <clipper/datatypes.hpp>
 #include <folly/ProducerConsumerQueue.h>
 #include <wangle/concurrent/CPUThreadPoolExecutor.h>

@@ -22,6 +22,20 @@
 #include <clipper/query_processor.hpp>
 #include <clipper/redis.hpp>
 
+using clipper::Response;
+using clipper::FeedbackAck;
+using clipper::VersionedModelId;
+using clipper::DataType;
+using clipper::Input;
+using clipper::Output;
+using clipper::OutputData;
+using clipper::Query;
+using clipper::Feedback;
+using clipper::FeedbackQuery;
+using clipper::json::json_parse_error;
+using clipper::json::json_semantic_error;
+using clipper::redis::labels_to_str;
+
 namespace zmq_frontend {
 
 const std::string LOGGING_TAG_RPC_FRONTEND = "RPC FRONTEND";
