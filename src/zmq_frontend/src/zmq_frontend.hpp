@@ -350,7 +350,7 @@ class ServerImpl {
         // TODO(czumar): Do something here!
       }
     };
-    
+
     rpc_service_->add_application(name, predict_fn);
   }
 

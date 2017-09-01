@@ -83,7 +83,7 @@ class Client:
 			app_name, input_item = self.request_queue.get()
 			socket.send("", zmq.SNDMORE)
 			socket.send_string(app_name, zmq.SNDMORE)
-			socket.send(struct.pack("<I", DATA_TYPE_FLOATS), zmq.SNDMORE)
+			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
 			i -= 1
