@@ -54,7 +54,7 @@ void FrontendRPCService::send_response(FrontendRPCResponse response) {
 }
 
 void FrontendRPCService::manage_service(const std::string ip, int port) {
-  std::string address = "tcp://" + ip + ":" + port;
+  std::string address = "tcp://" + ip + ":" + std::to_string(port);
   // Mapping from request id to ZMQ routing ID
   std::unordered_map<size_t, std::vector<uint8_t>> outstanding_requests;
   size_t request_id = 0;
