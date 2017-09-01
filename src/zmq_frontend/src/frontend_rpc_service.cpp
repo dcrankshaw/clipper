@@ -5,7 +5,7 @@
 #include <zmq.hpp>
 #include <folly/ProducerConsumerQueue.h>
 #include <boost/functional/hash.hpp>
-#include <base64/base64.h>
+#include <base64.h>
 
 #include <clipper/config.hpp>
 #include <clipper/datatypes.hpp>
