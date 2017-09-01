@@ -172,7 +172,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 //    const std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
 //                                    static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
 
-    char* decoded_str = reinterpret_cast<char*>(routing_id.data());
+    const char* decoded_str = reinterpret_cast<char*>(routing_id.data());
     size_t decoded_length = routing_id.size() * sizeof(char);
     size_t encoded_length =
         static_cast<size_t>(Base64::EncodedLength(decoded_length));
@@ -206,7 +206,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
     }
     outstanding_requests.erase(response->second);
 
-    std::vector<uint8_t> &routing_id = routing_identity_search->second;
+    const std::vector<uint8_t> &routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response->first.y_hat_->type());
 
 //    char* decoded_str = reinterpret_cast<char*>(routing_id.data());
