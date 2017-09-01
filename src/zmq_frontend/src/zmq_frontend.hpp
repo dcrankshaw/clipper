@@ -319,7 +319,7 @@ class ServerImpl {
                                            policy, versioned_models});
 
         prediction.via(futures_executor_.get())
-            .then([app_metrics, rpc_service_, request_id](Response r) {
+            .then([this, app_metrics, request_id](Response r) {
               // Update metrics
               if (r.output_is_default_) {
                 app_metrics.default_pred_ratio_->increment(1, 1);

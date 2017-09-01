@@ -97,7 +97,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
 
-  std::string app_name(msg_app_name.data(), msg_app_name.size());
+  std::string app_name(static_cast<char*>(msg_app_name.data()), msg_app_name.size());
   DataType input_type = static_cast<DataType>(static_cast<int*>(msg_data_type.data())[0]);
   size_t input_size_typed = static_cast<size_t*>(msg_data_size_typed.data())[0];
 
