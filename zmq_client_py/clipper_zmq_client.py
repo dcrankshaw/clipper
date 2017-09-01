@@ -20,12 +20,14 @@ class Client:
 		self.clipper_host = clipper_host
 		self.clipper_port = clipper_port
 		self.request_queue = Queue()
+		self.request_queue.put(("app1", np.random.rand(384)))
 
 	def start(self):
 		global active
 		active = True
-		self.thread = Thread(target=self._run, args=[])
-		self.thread.start()
+		# self.thread = Thread(target=self._run, args=[])
+		# self.thread.start()
+		self._run()
 
 	def stop(self):
 		global active
@@ -73,10 +75,8 @@ class Client:
 	def _send_requests(self, socket):
 		i = NUM_REQUESTS_SEND
 		while (not self.request_queue.empty()) and i > 0:
-			print("HERE!!!!!")
 			app_name, input_item = self.request_queue.get()
 			socket.send_string(app_name, zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
 			i -= 1
-		print("DONE!")
