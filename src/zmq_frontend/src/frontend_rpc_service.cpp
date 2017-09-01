@@ -121,27 +121,27 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     case DataType::Bytes: {
       input = std::make_shared<ByteVector>(input_size_typed);
       std::shared_ptr<uint8_t> data(static_cast<uint8_t *>(malloc(input_size_typed)), free);
-      socket.recv(data.get(), input_size_typed);
+      socket.recv(data.get(), input_size_typed, 0);
     } break;
     case DataType::Ints: {
       input = std::make_shared<IntVector>(input_size_typed);
       std::shared_ptr<int> data(static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(int));
+      socket.recv(data.get(), input_size_typed * sizeof(int), 0);
     } break;
     case DataType::Floats: {
       input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<float> data(static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(float));
+      socket.recv(data.get(), input_size_typed * sizeof(float), 0);
     } break;
     case DataType::Doubles: {
       input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<double> data(static_cast<double *>(malloc(input_size_typed * sizeof(double))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(double));
+      socket.recv(data.get(), input_size_typed * sizeof(double), 0);
     } break;
     case DataType::Strings: {
       input = std::make_shared<FloatVector>(input_size_typed);
       std::shared_ptr<char> data(static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(char));
+      socket.recv(data.get(), input_size_typed * sizeof(char), 0);
     } break;
     case DataType::Invalid:
     default: {
