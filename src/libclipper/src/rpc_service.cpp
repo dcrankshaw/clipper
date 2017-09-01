@@ -6,7 +6,6 @@
 
 #include <redox.hpp>
 #include <concurrentqueue.h>
-#include <base64.h>
 
 #include <clipper/config.hpp>
 #include <clipper/datatypes.hpp>
@@ -200,16 +199,6 @@ void RPCService::send_messages(socket_t &socket,
     memcpy(id_message.data(), &std::get<1>(request), sizeof(int));
     vector<uint8_t> routing_identity = connection->second;
 
-    const char* decoded_str = reinterpret_cast<const char*>(routing_identity.data());
-    size_t decoded_length = routing_identity.size() * sizeof(char);
-    size_t encoded_length =
-        static_cast<size_t>(Base64::EncodedLength(decoded_length));
-    char* encoded_str = static_cast<char*>(malloc(encoded_length));
-    Base64 encoder;
-    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-
-    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC OUT: {}", encoded_str);
-
     socket.send(routing_identity.data(), routing_identity.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(type_message, ZMQ_SNDMORE);
@@ -245,16 +234,6 @@ void RPCService::receive_message(
   const vector<uint8_t> connection_id(
       (uint8_t *)msg_routing_identity.data(),
       (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
-
-  const char* decoded_str = reinterpret_cast<const char*>(connection_id.data());
-  size_t decoded_length = connection_id.size() * sizeof(char);
-  size_t encoded_length =
-      static_cast<size_t>(Base64::EncodedLength(decoded_length));
-  char* encoded_str = static_cast<char*>(malloc(encoded_length));
-  Base64 encoder;
-  encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-
-  log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC IN: {}", encoded_str);
 
   MessageType type =
       static_cast<MessageType>(static_cast<int *>(msg_type.data())[0]);

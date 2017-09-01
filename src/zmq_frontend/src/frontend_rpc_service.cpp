@@ -183,7 +183,9 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID IN: {}", encoded_str);
 
 
-    outstanding_requests.emplace(req_id, routing_id);
+    outstanding_requests.emplace(req_id, std::move(routing_id));
+
+    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID IN : {}", req_id);
 
     // Submit the function call with the request to a threadpool!!!
     prediction_executor_->add([app_function, input, req_id]() {
@@ -196,6 +198,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
                                         std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests) {
   size_t num_responses = NUM_RESPONSES_SEND;
   while(!response_queue_->isEmpty() && num_responses > 0) {
+    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID: {}", response->second);
     FrontendRPCResponse* response = response_queue_->frontPtr();
     auto routing_identity_search = outstanding_requests.find(response->second);
     if(routing_identity_search == outstanding_requests.end()) {

@@ -20,9 +20,9 @@ constexpr size_t NUM_REQUESTS_RECV = 100;
 constexpr size_t NUM_RESPONSES_SEND = 100;
 
 // Pair of input and request id
-typedef std::pair<std::shared_ptr<Input>, size_t> FrontendRPCRequest;
+typedef std::pair<std::shared_ptr<Input>, int> FrontendRPCRequest;
 // Pair of output and request id. Request id should match the id of a FrontendRPCRequest object
-typedef std::pair<Output, size_t> FrontendRPCResponse;
+typedef std::pair<Output, int> FrontendRPCResponse;
 
 class FrontendRPCService {
  public:
