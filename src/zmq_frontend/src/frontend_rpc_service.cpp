@@ -61,11 +61,11 @@ void FrontendRPCService::manage_service(const std::string ip, int port) {
 
   zmq::context_t context(1);
   zmq::socket_t socket(context, ZMQ_ROUTER);
-  log_error_formatted(LOGGING_TAG_CLIPPER, "BOUND TO: {}", address);
   socket.bind(address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   while(active_) {
     if(response_queue_->isEmpty()) {
+      zmq_poll(items, 1, 1);
       if (items[0].revents & ZMQ_POLLIN) {
         receive_request(socket, outstanding_requests, request_id);
         for (int i = 0; i < NUM_REQUESTS_RECV - 1; i++) {
