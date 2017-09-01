@@ -116,8 +116,6 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
   DataType input_type = static_cast<DataType>(static_cast<int*>(msg_data_type.data())[0]);
   int input_size_typed = static_cast<int*>(msg_data_size_typed.data())[0];
 
-  log_error_formatted(LOGGING_TAG_CLIPPER, "INPUT SIZE: {}, SIZE_T: {}", input_size_typed, static_cast<size_t*>(msg_data_size_typed.data())[0]);
-
   std::shared_ptr<clipper::Input> input;
   switch(input_type) {
     case DataType::Bytes: {
