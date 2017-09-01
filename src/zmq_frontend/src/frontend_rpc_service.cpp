@@ -88,11 +88,13 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
                                          std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests,
                                          size_t& request_id) {
   zmq::message_t msg_routing_identity;
+  zmq::message_t msg_delimiter;
   zmq::message_t msg_app_name;
   zmq::message_t msg_data_type;
   zmq::message_t msg_data_size_typed;
 
   socket.recv(&msg_routing_identity, 0);
+  socket.recv(&msg_delimiter, 0);
   socket.recv(&msg_app_name, 0);
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
@@ -184,6 +186,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
 
     // Remove the response from the outbound queue now that we're done processing it
     response_queue_->popFront();
+
+    num_responses--;
   }
 }
 
