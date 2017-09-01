@@ -24,7 +24,7 @@ app_name = "app1"
 model_name = "m1"
 
 def run(proc_num):
-	client = Client("localhost", 1337)
+	client = Client("localhost", 4455)
 	client.start()
 	while True:
 		client.send_request(app_name, np.array(np.random.rand(CIFAR_SIZE_DOUBLES), dtype=np.float64))

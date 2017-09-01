@@ -78,7 +78,7 @@ class Client:
 		self.recv_count += 1
 		if self.recv_count % 1000 == 0:
 			curr_time = datetime.now()
-			latency = (end - begin).total_seconds()
+			latency = (curr_time - self.start_time).total_seconds()
 			print("Throughput: {} qps\n".format(float(latency) / self.recv_count))
 
 
