@@ -236,7 +236,7 @@ void RPCService::receive_message(
       (uint8_t *)msg_routing_identity.data(),
       (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
 
-  char* decoded_str = reinterpret_cast<char*>(connection_id.data());
+  const char* decoded_str = reinterpret_cast<const char*>(connection_id.data());
   size_t decoded_length = connection_id.size() * sizeof(char);
   size_t encoded_length =
       static_cast<size_t>(Base64::EncodedLength(decoded_length));
