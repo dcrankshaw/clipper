@@ -32,6 +32,7 @@ class Client:
 		global active
 		active = True
 		self.thread = Thread(target=self._run, args=[])
+		self.start_time = datetime.now()
 		self.thread.start()
 
 	def stop(self):
@@ -41,7 +42,6 @@ class Client:
 			self.thread.join()
 
 	def send_request(self, app_name, input_item):
-		self.start_time = datetime.now()
 		self.request_queue.put((app_name, input_item))
 
 	def _run(self):
