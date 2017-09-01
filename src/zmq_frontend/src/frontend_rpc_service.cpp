@@ -57,7 +57,7 @@ void FrontendRPCService::send_response(FrontendRPCResponse response) {
 void FrontendRPCService::manage_service(const std::string ip, int port) {
   std::string address = "tcp://" + ip + ":" + std::to_string(port);
   // Mapping from request id to ZMQ routing ID
-  std::unordered_map<size_t, std::vector<uint8_t>> outstanding_requests;
+  std::unordered_map<size_t, const std::vector<uint8_t>> outstanding_requests;
   size_t request_id = 0;
 
   zmq::context_t context(1);
@@ -99,7 +99,7 @@ void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
 }
 
 void FrontendRPCService::receive_request(zmq::socket_t &socket,
-                                         std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests,
+                                         std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests,
                                          size_t& request_id) {
   zmq::message_t msg_routing_identity;
   zmq::message_t msg_delimiter;
@@ -165,18 +165,22 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
     int req_id = request_id;
     request_id++;
 
-    const std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
-                                    static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
+    const vector<uint8_t> routing_id(
+        (uint8_t *)msg_routing_identity.data(),
+        (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
 
-//    char* decoded_str = reinterpret_cast<char*>(routing_id.data());
-//    size_t decoded_length = routing_id.size() * sizeof(char);
-//    size_t encoded_length =
-//        static_cast<size_t>(Base64::EncodedLength(decoded_length));
-//    char* encoded_str = static_cast<char*>(malloc(encoded_length));
-//    Base64 encoder;
-//    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-//
-//    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID IN: {}", encoded_str);
+//    const std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
+//                                    static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
+
+    char* decoded_str = reinterpret_cast<char*>(routing_id.data());
+    size_t decoded_length = routing_id.size() * sizeof(char);
+    size_t encoded_length =
+        static_cast<size_t>(Base64::EncodedLength(decoded_length));
+    char* encoded_str = static_cast<char*>(malloc(encoded_length));
+    Base64 encoder;
+    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
+
+    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID IN: {}", encoded_str);
 
 
     outstanding_requests.emplace(req_id, std::move(routing_id));
@@ -189,7 +193,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 }
 
 void FrontendRPCService::send_responses(zmq::socket_t &socket,
-                                        std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests) {
+                                        std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests) {
   size_t num_responses = NUM_RESPONSES_SEND;
   while(!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse* response = response_queue_->frontPtr();
