@@ -10,4 +10,5 @@ target_link_libraries(clipper_zmq_frontend
         cxxopts
         folly
         zmqcpp
-        wangle)
+        wangle
+        base64)

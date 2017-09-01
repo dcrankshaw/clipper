@@ -53,7 +53,7 @@ class Client:
 		socket.connect(clipper_address)
 		while active:
 			if self.request_queue.empty():
-				receivable_sockets = dict(poller.poll(1))
+				receivable_sockets = dict(poller.poll(1000))
 				print(receivable_sockets)
 				if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 					self._receive_response(socket)
@@ -80,11 +80,11 @@ class Client:
 
 	def _send_requests(self, socket):
 		i = NUM_REQUESTS_SEND
-		# while (not self.request_queue.empty()) and i > 0:
-		app_name, input_item = self.request_queue.get()
-		socket.send("", zmq.SNDMORE)
-		socket.send_string(app_name, zmq.SNDMORE)
-		socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
-		socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
-		socket.send(input_item)
-		i -= 1
+		while (not self.request_queue.empty()) and i > 0:
+			app_name, input_item = self.request_queue.get()
+			socket.send("", zmq.SNDMORE)
+			socket.send_string(app_name, zmq.SNDMORE)
+			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
+			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
+			socket.send(input_item)
+			i -= 1
