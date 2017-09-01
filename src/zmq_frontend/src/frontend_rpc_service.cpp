@@ -54,7 +54,7 @@ void FrontendRPCService::send_response(FrontendRPCResponse response) {
 
 void FrontendRPCService::manage_service(const std::string address, int port) {
   // Mapping from request id to ZMQ routing ID
-  std::unordered_map<size_t, std::vector<uint8_t>> outstanding_requests_;
+  std::unordered_map<size_t, std::vector<uint8_t>> outstanding_requests;
   size_t request_id = 0;
 
   zmq::context_t context(1);
@@ -63,11 +63,11 @@ void FrontendRPCService::manage_service(const std::string address, int port) {
   while(active_) {
     if(response_queue_->isEmpty()) {
       if (items[0].revents & ZMQ_POLLIN) {
-        receive_request(socket, request_id);
+        receive_request(socket, outstanding_requests, request_id);
         for (int i = 0; i < NUM_REQUESTS_RECV - 1; i++) {
           zmq_poll(items, 1, 0);
           if (items[0].revents & ZMQ_POLLIN) {
-            receive_request(socket, request_id);
+            receive_request(socket, outstanding_requests, request_id);
           }
         }
       }
@@ -75,11 +75,11 @@ void FrontendRPCService::manage_service(const std::string address, int port) {
       for (int i = 0; i < NUM_REQUESTS_RECV; i++) {
         zmq_poll(items, 1, 0);
         if (items[0].revents & ZMQ_POLLIN) {
-          receive_request(socket, request_id);
+          receive_request(socket, outstanding_requests, request_id);
         }
       }
     }
-    send_responses(socket);
+    send_responses(socket, outstanding_requests);
   }
 }
 
@@ -102,31 +102,31 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 
   std::shared_ptr<clipper::Input> input;
   switch(input_type) {
-    case DataType::Bytes:
+    case DataType::Bytes: {
       input = std::make_shared<ByteVector>(input_size_typed);
-      std::shared_ptr<uint8_t> data(static_cast<uint8_t*>(malloc(input_size_typed)), free);
+      std::shared_ptr<uint8_t> data(static_cast<uint8_t *>(malloc(input_size_typed)), free);
       socket.recv(data.get(), input_size_typed);
-      break;
-    case DataType::Ints:
+    } break;
+    case DataType::Ints: {
       input = std::make_shared<IntVector>(input_size_typed);
-      std::shared_ptr<int> data(static_cast<int*>(malloc(input_size_typed * sizeof(int))), free);
+      std::shared_ptr<int> data(static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
       socket.recv(data.get(), input_size_typed * sizeof(int));
-      break;
-    case DataType::Floats:
+    } break;
+    case DataType::Floats: {
       input = std::make_shared<FloatVector>(input_size_typed);
-      std::shared_ptr<float> data(static_cast<float*>(malloc(input_size_typed * sizeof(float))), free);
+      std::shared_ptr<float> data(static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
       socket.recv(data.get(), input_size_typed * sizeof(float));
-      break;
-    case DataType::Doubles:
+    } break;
+    case DataType::Doubles: {
       input = std::make_shared<FloatVector>(input_size_typed);
-      std::shared_ptr<double> data(static_cast<double*>(malloc(input_size_typed * sizeof(double))), free);
+      std::shared_ptr<double> data(static_cast<double *>(malloc(input_size_typed * sizeof(double))), free);
       socket.recv(data.get(), input_size_typed * sizeof(double));
-      break;
-    case DataType::Strings:
+    } break;
+    case DataType::Strings: {
       input = std::make_shared<FloatVector>(input_size_typed);
-      std::shared_ptr<char> data(static_cast<char*>(malloc(input_size_typed * sizeof(char))), free);
+      std::shared_ptr<char> data(static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
       socket.recv(data.get(), input_size_typed * sizeof(char));
-      break;
+    } break;
     case DataType::Invalid:
     default: {
       std::stringstream ss;
@@ -171,6 +171,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
          << " that has no associated routing identity";
       throw std::runtime_error(ss.str());
     }
+    outstanding_requests.erase(response.second);
+
     std::vector<uint8_t> &routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response.first.y_hat_->type());
 
