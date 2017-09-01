@@ -209,15 +209,15 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
     const std::vector<uint8_t> &routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response->first.y_hat_->type());
 
-//    char* decoded_str = reinterpret_cast<char*>(routing_id.data());
-//    size_t decoded_length = routing_id.size() * sizeof(char);
-//    size_t encoded_length =
-//        static_cast<size_t>(Base64::EncodedLength(decoded_length));
-//    char* encoded_str = static_cast<char*>(malloc(encoded_length));
-//    Base64 encoder;
-//    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-//
-//    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID OUT: {}", encoded_str);
+    const char* decoded_str = reinterpret_cast<const char*>(routing_id.data());
+    size_t decoded_length = routing_id.size() * sizeof(char);
+    size_t encoded_length =
+        static_cast<size_t>(Base64::EncodedLength(decoded_length));
+    char* encoded_str = static_cast<char*>(malloc(encoded_length));
+    Base64 encoder;
+    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
+
+    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID OUT: {}", encoded_str);
 
     // TODO(czumar): If this works, include other relevant output data (default bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);

@@ -70,7 +70,6 @@ class Client:
 
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
-		print("Starting recv!")
 		socket.recv()
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
@@ -86,6 +85,3 @@ class Client:
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
 			i -= 1
-
-			time.sleep(5)
-			self._receive_response(socket)
