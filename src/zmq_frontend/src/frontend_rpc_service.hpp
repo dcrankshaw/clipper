@@ -39,7 +39,7 @@ class FrontendRPCService {
   void add_application(std::string name, std::function<void(FrontendRPCRequest)> app_function);
 
  private:
-  void manage_service(const std::string address, int port);
+  void manage_service(const std::string ip, int port);
   void receive_request(zmq::socket_t &socket,
                        std::unordered_map<size_t, std::vector<uint8_t>>& outstanding_requests,
                        size_t& request_id);

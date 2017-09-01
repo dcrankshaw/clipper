@@ -43,7 +43,6 @@ class Client:
 		socket = context.socket(zmq.DEALER)
 		poller = zmq.Poller()
 		poller.register(socket, zmq.POLLIN)
-		print("HERE!")
 
 		socket.connect(clipper_address)
 		while active:

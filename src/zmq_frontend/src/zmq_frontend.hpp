@@ -99,14 +99,14 @@ class AppMetrics {
 
 class ServerImpl {
  public:
-  ServerImpl(const std::string address, int port)
+  ServerImpl(const std::string ip, int port)
       : rpc_service_(std::make_shared<FrontendRPCService>()),
         query_processor_(),
         futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
     // Init Clipper stuff
 
     // Start the frontend rpc service
-    rpc_service_->start(address, port);
+    rpc_service_->start(ip, port);
 
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
