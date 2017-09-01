@@ -200,6 +200,16 @@ void RPCService::send_messages(socket_t &socket,
     memcpy(id_message.data(), &std::get<1>(request), sizeof(int));
     vector<uint8_t> routing_identity = connection->second;
 
+    const char* decoded_str = reinterpret_cast<const char*>(routing_identity.data());
+    size_t decoded_length = routing_identity.size() * sizeof(char);
+    size_t encoded_length =
+        static_cast<size_t>(Base64::EncodedLength(decoded_length));
+    char* encoded_str = static_cast<char*>(malloc(encoded_length));
+    Base64 encoder;
+    encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
+
+    log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC OUT: {}", encoded_str);
+
     socket.send(routing_identity.data(), routing_identity.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(type_message, ZMQ_SNDMORE);
@@ -345,17 +355,6 @@ void RPCService::receive_message(
 void RPCService::send_heartbeat_response(socket_t &socket,
                                          const vector<uint8_t> &connection_id,
                                          bool request_container_metadata) {
-
-  const char* decoded_str = reinterpret_cast<const char*>(connection_id.data());
-  size_t decoded_length = connection_id.size() * sizeof(char);
-  size_t encoded_length =
-      static_cast<size_t>(Base64::EncodedLength(decoded_length));
-  char* encoded_str = static_cast<char*>(malloc(encoded_length));
-  Base64 encoder;
-  encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-
-  log_error_formatted(LOGGING_TAG_CLIPPER, "ROUTING ID RPC OUT: {}", encoded_str);
-
   message_t type_message(sizeof(int));
   message_t heartbeat_type_message(sizeof(int));
   static_cast<int *>(type_message.data())[0] =
