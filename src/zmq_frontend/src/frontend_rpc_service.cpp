@@ -169,9 +169,6 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
         (uint8_t *)msg_routing_identity.data(),
         (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
 
-//    const std::vector<uint8_t> routing_id(static_cast<uint8_t*>(msg_routing_identity.data()),
-//                                    static_cast<uint8_t*>(msg_routing_identity.data() + msg_routing_identity.size()));
-
     const char* decoded_str = reinterpret_cast<const char*>(routing_id.data());
     size_t decoded_length = routing_id.size() * sizeof(char);
     size_t encoded_length =
@@ -185,8 +182,6 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 
     outstanding_requests.emplace(req_id, std::move(routing_id));
 
-    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID IN : {}", req_id);
-
     // Submit the function call with the request to a threadpool!!!
     prediction_executor_->add([app_function, input, req_id]() {
       app_function(std::make_pair(input, req_id));
@@ -199,7 +194,6 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
   size_t num_responses = NUM_RESPONSES_SEND;
   while(!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse* response = response_queue_->frontPtr();
-    log_error_formatted(LOGGING_TAG_CLIPPER, "REQ ID: {}", response->second);
     auto routing_identity_search = outstanding_requests.find(response->second);
     if(routing_identity_search == outstanding_requests.end()) {
       std::stringstream ss;
@@ -207,9 +201,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
          << " that has no associated routing identity";
       throw std::runtime_error(ss.str());
     }
-    outstanding_requests.erase(response->second);
 
-    const std::vector<uint8_t> routing_id = routing_identity_search->second;
+    const std::vector<uint8_t> &routing_id = routing_identity_search->second;
     int output_type = static_cast<int>(response->first.y_hat_->type());
 
     const char* decoded_str = reinterpret_cast<const char*>(routing_id.data());
@@ -230,6 +223,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
 
     // Remove the response from the outbound queue now that we're done processing it
     response_queue_->popFront();
+    // Remove the oustanding request from the map
+    outstanding_requests.erase(response->second);
 
     num_responses--;
   }
