@@ -11,4 +11,4 @@ target_link_libraries(clipper_zmq_frontend
         folly
         zmqcpp
         wangle
-        base64)
+        base64json)
