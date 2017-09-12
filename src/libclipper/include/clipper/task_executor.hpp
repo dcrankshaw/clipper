@@ -129,6 +129,13 @@ class QueryCache {
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
 };
 
+struct DeadlineCompare {
+  bool operator()(const std::pair<Deadline, PredictTask> &lhs,
+                  const std::pair<Deadline, PredictTask> &rhs) {
+    return lhs.first > rhs.first;
+  }
+};
+
 // thread safe model queue
 class ModelQueue {
  public:
