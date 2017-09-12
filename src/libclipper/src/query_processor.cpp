@@ -34,7 +34,6 @@ namespace clipper {
 
 QueryProcessor::QueryProcessor() : state_db_(std::make_shared<StateDB>()),
                                    futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
-  qp_pred_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram("qp_seg_latency", "microseconds", 1048576);
   // Create selection policy instances
   selection_policies_.emplace(DefaultOutputSelectionPolicy::get_name(),
                               std::make_shared<DefaultOutputSelectionPolicy>());
@@ -46,7 +45,6 @@ std::shared_ptr<StateDB> QueryProcessor::get_state_table() const {
 }
 
 folly::Future<Response> QueryProcessor::predict(Query query) {
-  auto before = std::chrono::system_clock::now();
   long query_id = query_counter_.fetch_add(1);
   auto current_policy_iter = selection_policies_.find(query.selection_policy_);
   if (current_policy_iter == selection_policies_.end()) {
@@ -73,29 +71,12 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     selection_state_ = current_policy->deserialize(*state_opt);
   }
 
-//  Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
-//
-//  Response response{
-//      query,
-//      query_id,
-//      1000,
-//      output,
-//      true,
-//      boost::optional<std::string>("BAD")
-//  };
-//
-//  return folly::makeFuture(std::move(response));
-
   boost::optional<std::string> default_explanation;
   std::vector<PredictTask> tasks =
       current_policy->select_predict_tasks(selection_state_, query, query_id);
 
   log_info_formatted(LOGGING_TAG_QUERY_PROCESSOR, "Found {} tasks",
                      tasks.size());
-
-  // CACHE BOTTLENECK SEGMENT
-  //
-  // auto before = std::chrono::system_clock::now();
 
   vector<folly::Future<Output>> task_futures =
       task_executor_.schedule_predictions(tasks);
@@ -106,17 +87,7 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
                         query_id);
   }
 
-  // END CACHE BOTTLENECK SEGMENT
-  //
-  // auto after = std::chrono::system_clock::now();
-  // long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  // qp_pred_seg_hist_->insert(lat_micros);
-
   size_t num_tasks = task_futures.size();
-
-  auto after = std::chrono::system_clock::now();
-  long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-  qp_pred_seg_hist_->insert(lat_micros);
 
   folly::Future<folly::Unit> timer_future =
       timer_system_.set_timer(query.latency_budget_micros_);
@@ -174,10 +145,6 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     std::pair<Output, bool> final_output = current_policy->combine_predictions(
         selection_state, query, *outputs_ptr);
 
-//    long current_tid = std::hash<std::thread::id>()(std::this_thread::get_id());
-//    log_error_formatted(
-//        LOGGING_TAG_QUERY_PROCESSOR, "FUTURE TID: {}, CACHE TID: {}", current_tid, final_output.first.tid_);
-
     std::chrono::time_point<std::chrono::high_resolution_clock> end =
         std::chrono::high_resolution_clock::now();
     long duration_micros =
@@ -194,20 +161,6 @@ folly::Future<Response> QueryProcessor::predict(Query query) {
     response_promise.setValue(response);
   });
   return response_future;
-
-
-//  Output output = std::dynamic_pointer_cast<DefaultOutputSelectionState>(selection_state_)->default_output_;
-//
-//  Response response{
-//      query,
-//      query_id,
-//      1000,
-//      output,
-//      true,
-//      boost::optional<std::string>("BAD")
-//  };
-//
-//  return folly::makeFuture(std::move(response));
 }
 
 folly::Future<FeedbackAck> QueryProcessor::update(FeedbackQuery feedback) {
