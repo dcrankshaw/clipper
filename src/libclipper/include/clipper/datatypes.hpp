@@ -8,6 +8,7 @@
 
 #include <boost/functional/hash.hpp>
 #include <boost/optional.hpp>
+#include <boost/thread.hpp>
 
 namespace clipper {
 
@@ -494,7 +495,6 @@ class Output {
 
   std::shared_ptr<OutputData> y_hat_;
   std::vector<VersionedModelId> models_used_;
-  long tid_ = -1;
 };
 
 namespace rpc {

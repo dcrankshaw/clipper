@@ -9,7 +9,6 @@
 #include <tuple>
 
 #include <folly/futures/Future.h>
-#include <wangle/concurrent/CPUThreadPoolExecutor.h>
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
@@ -113,14 +112,13 @@ class ServerRpcContext {
                          grpc::ServerAsyncResponseWriter<PredictResponse>*,
                          void*)>
           request_method,
-      std::function<void(std::string, ServerRpcContext*)> invoke_method, size_t id)
+      std::function<void(std::string, ServerRpcContext*)> invoke_method)
       : status_(grpc::Status::OK),
         srv_ctx_(new grpc::ServerContext),
         next_state_(&ServerRpcContext::invoker),
         request_method_(request_method),
         invoke_method_(invoke_method),
-        response_writer_(srv_ctx_.get()),
-        id_(id) {
+        response_writer_(srv_ctx_.get()) {
     request_method_(srv_ctx_.get(), &req_, &response_writer_,
                     ServerRpcContext::tag(this));
   }
@@ -157,7 +155,6 @@ class ServerRpcContext {
   PredictRequest req_;
   PredictResponse response_;
   grpc::Status status_;
-  const size_t id_;
 
  private:
   bool finisher(bool) { return false; }
@@ -182,23 +179,8 @@ class ServerRpcContext {
 
 class RequestHandler {
  public:
-  RequestHandler() : query_processor_(), active_(true), futures_executor_(
-      std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
+  RequestHandler() : query_processor_() {
     // Init Clipper stuff
-
-    request_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_request_throughput");
-    frontend_throughput_ = clipper::metrics::MetricsRegistry::get_metrics().create_meter("grpc_frontend_throughput");
-
-    qp_latency_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-      "qp predict latency", "microseconds", 1048576);
-
-    metrics_thread_ = std::thread([this]() {
-      while(active_) {
-        std::this_thread::sleep_for(std::chrono::seconds(10));
-        std::string metrics_report = clipper::metrics::MetricsRegistry::get_metrics().report_metrics();
-        clipper::log_error("METRICS", metrics_report);
-      }
-    });
 
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
@@ -349,8 +331,6 @@ class RequestHandler {
   ~RequestHandler() {
     redis_connection_.disconnect();
     redis_subscriber_.disconnect();
-    active_ = false;
-    metrics_thread_.join();
   }
 
   void set_linked_models_for_app(std::string name,
@@ -449,22 +429,13 @@ class RequestHandler {
           } break;
         }
 
-        frontend_throughput_->mark(1);
-//        auto before = std::chrono::system_clock::now();
-
         long uid = 0;
-        auto prediction =
+        folly::Future<clipper::Response> prediction =
             query_processor_.predict(Query{name, uid, input, latency_slo_micros,
                                            policy, versioned_models});
 
-//        auto after = std::chrono::system_clock::now();
-//        long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-//        qp_latency_->insert(lat_micros);
-
-        request_throughput_->mark(1);
-
-        prediction.via(futures_executor_.get())
-            .then([app_metrics, rpc_context](Response r) {
+        prediction
+          .then([app_metrics, rpc_context](Response r) {
           // Update metrics
           if (r.output_is_default_) {
             app_metrics.default_pred_ratio_->increment(1, 1);
@@ -509,6 +480,7 @@ class RequestHandler {
           response.set_is_default(r.output_is_default_);
 
           rpc_context->send_response();
+
           })
         .onError([rpc_context](const std::exception& e) {
             clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
@@ -542,15 +514,11 @@ class RequestHandler {
   }
 
   void predict(std::string app_name, ServerRpcContext* rpc_context) {
-    auto before = std::chrono::system_clock::now();
     std::unique_lock<std::mutex> l(app_predict_functions_mutex_);
     auto search = app_predict_functions_.find(app_name);
     if (search != app_predict_functions_.end()) {
       l.unlock();
       search->second(rpc_context);
-      auto after = std::chrono::system_clock::now();
-      long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-      qp_latency_->insert(lat_micros);
     } else {
       l.unlock();
       std::string error_response = get_prediction_error_response_content(
@@ -591,30 +559,18 @@ class RequestHandler {
   std::unordered_map<std::string, std::vector<std::string>>
       linked_models_for_apps_;
 
-  std::shared_ptr<clipper::metrics::Meter> request_throughput_;
-  std::shared_ptr<clipper::metrics::Meter> frontend_throughput_;
-  std::shared_ptr<clipper::metrics::Histogram> qp_latency_;
-
   std::unique_ptr<grpc::ServerCompletionQueue> cq_;
   Predict::AsyncService service_;
   std::unique_ptr<grpc::Server> rpc_server_;
   std::mutex app_predict_functions_mutex_;
   std::unordered_map<std::string, std::function<void(ServerRpcContext*)>>
       app_predict_functions_;
-  std::atomic_bool active_;
-  std::thread metrics_thread_;
-  std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
 };
 
 class ServerImpl {
  public:
   ServerImpl(std::string address, int portno, int num_threads)
       : handler_(new RequestHandler{}) {
-
-    thread_latency_hist_ = clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-        "thread task latency", "microseconds", 1048576
-    );
-
     std::string server_address = address + ":" + std::to_string(portno);
 
     grpc::ServerBuilder builder;
@@ -643,7 +599,7 @@ class ServerImpl {
                                         tag);
         };
         contexts_.emplace_back(
-            new ServerRpcContext(request_func, process_func, (j * 10000) + i));
+            new ServerRpcContext(request_func, process_func));
       }
     }
 
@@ -691,20 +647,10 @@ class ServerImpl {
 
   void ThreadFunc(int thread_idx) {
     // Wait until work is available or we are shutting down
-    std::unordered_map<size_t, long> processing_times_map_;
     bool ok;
     void* got_tag;
     while (srv_cqs_[thread_idx]->Next(&got_tag, &ok)) {
       ServerRpcContext* ctx = ServerRpcContext::detag(got_tag);
-      auto times_search = processing_times_map_.find(ctx->id_);
-      bool new_ctx = (times_search == processing_times_map_.end());
-      if(new_ctx) {
-        long start_time_micros =
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-        processing_times_map_.emplace(ctx->id_, start_time_micros);
-      }
-
       // The tag is a pointer to an RPC context to invoke
       // Proceed while holding a lock to make sure that
       // this thread isn't supposed to shut down
@@ -713,20 +659,9 @@ class ServerImpl {
         return;
       }
       const bool still_going = ctx->RunNextState(ok);
-
-      clipper::log_error_formatted(LOGGING_TAG_RPC_FRONTEND, "ID: {}", ctx->id_);
-
       // if this RPC context is done, refresh it
       if (!still_going) {
         ctx->Reset();
-        times_search = processing_times_map_.find(ctx->id_);
-        if(times_search != processing_times_map_.end()) {
-          long curr_time_micros =
-              std::chrono::duration_cast<std::chrono::microseconds>(
-                  std::chrono::system_clock::now().time_since_epoch()).count();
-          thread_latency_hist_->insert(curr_time_micros - times_search->second);
-          processing_times_map_.erase(ctx->id_);
-        }
       }
     }
     return;
@@ -738,7 +673,6 @@ class ServerImpl {
   std::vector<std::thread> threads_;
   std::vector<std::unique_ptr<ServerRpcContext>> contexts_;
   std::unique_ptr<RequestHandler> handler_;
-  std::shared_ptr<clipper::metrics::Histogram> thread_latency_hist_;
 
   struct PerThreadShutdownState {
     mutable std::mutex mutex;

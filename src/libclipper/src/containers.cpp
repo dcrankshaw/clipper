@@ -14,6 +14,7 @@
 #include <clipper/util.hpp>
 
 #include <boost/circular_buffer.hpp>
+#include <boost/thread.hpp>
 
 namespace clipper {
 

@@ -1,5 +1,5 @@
 ARG CODE_VERSION=0.2-rc1
-FROM clipper/lib_base:${CODE_VERSION}
+FROM clipper/clipper-base:${CODE_VERSION}
 
 RUN cd /clipper/release \
     && make -j8 management_frontend
