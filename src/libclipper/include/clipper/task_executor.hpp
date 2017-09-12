@@ -103,9 +103,10 @@ class PredictionCache {
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
 };
 
-class QueryCache2 {
+// NOTE: Prediction cache is now a query cache
+class QueryCache {
  public:
-  QueryCache2(size_t size_bytes);
+  QueryCache(size_t size_bytes);
   folly::Future<Output> fetch(const VersionedModelId &model,
                               const QueryId query_id);
 
@@ -118,7 +119,6 @@ class QueryCache2 {
   void evict_entries(long space_needed_bytes);
 
   std::mutex m_;
-  std::shared_ptr<metrics::Histogram> cache_seg_hist_;
   const size_t max_size_bytes_;
   size_t size_bytes_ = 0;
   // TODO cache needs a promise as well?
@@ -127,33 +127,6 @@ class QueryCache2 {
   size_t page_buffer_index_ = 0;
   std::shared_ptr<metrics::Counter> lookups_counter_;
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
-};
-
-// NOTE: Prediction cache is now a query cache
-class QueryCache {
- public:
-  QueryCache();
-  folly::Future<Output> fetch(const VersionedModelId &model,
-                              const QueryId query_id);
-
-  void put(const VersionedModelId &model, const QueryId query_id,
-           Output output);
-
- private:
-  std::mutex m_;
-  std::shared_ptr<metrics::Histogram> cache_seg_hist_;
-  size_t hash(const VersionedModelId &model, const QueryId query_id) const;
-  // TODO cache needs a promise as well?
-  std::unordered_map<long, CacheEntry> cache_;
-  // std::shared_ptr<metrics::Counter> lookups_counter_;
-  // std::shared_ptr<metrics::RatioCounter> hit_ratio_;
-};
-
-struct DeadlineCompare {
-  bool operator()(const std::pair<Deadline, PredictTask> &lhs,
-                  const std::pair<Deadline, PredictTask> &rhs) {
-    return lhs.first > rhs.first;
-  }
 };
 
 // thread safe model queue
@@ -265,7 +238,7 @@ class TaskExecutor {
       : active_(std::make_shared<std::atomic_bool>(true)),
         active_containers_(std::make_shared<ActiveContainers>()),
         rpc_(std::make_unique<rpc::RPCService>()),
-        cache_(std::make_unique<QueryCache2>(0)),
+        cache_(std::make_unique<QueryCache>(0)),
         model_queues_({}),
         model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
@@ -347,10 +320,6 @@ class TaskExecutor {
     predictions_counter_ =
         metrics::MetricsRegistry::get_metrics().create_counter(
             "internal:aggregate_num_predictions");
-    te_seg_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-        "task executor seg latency", "microseconds", 1048576);
-    queue_latency_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
-        "internal:model queue insertion latency", "microseconds", 1048576);
   }
 
   // Disallow copy
@@ -366,18 +335,12 @@ class TaskExecutor {
     std::vector<folly::Future<Output>> output_futures;
     for (auto &t : tasks) {
       // add each task to the queue corresponding to its associated model
-      auto before = std::chrono::system_clock::now();
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
-      auto after = std::chrono::system_clock::now();
       long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
-      queue_latency_hist_->insert(lat_micros);
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
-        auto before_seg = std::chrono::system_clock::now();
         output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
-        auto after_seg = std::chrono::system_clock::now();
         long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
-        te_seg_hist_->insert(seg_lat_micros);
         // output_futures.push_back(cache_->fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
@@ -423,7 +386,7 @@ class TaskExecutor {
   std::shared_ptr<std::atomic_bool> active_;
   std::shared_ptr<ActiveContainers> active_containers_;
   std::unique_ptr<rpc::RPCService> rpc_;
-  std::unique_ptr<QueryCache2> cache_;
+  std::unique_ptr<QueryCache> cache_;
   //QueryCache cache_;
   //std::unique_ptr<PredictionCache> cache_;
   redox::Redox redis_connection_;
@@ -432,8 +395,6 @@ class TaskExecutor {
   std::unordered_map<int, std::vector<InflightMessage>> inflight_messages_;
   std::shared_ptr<metrics::Counter> predictions_counter_;
   std::shared_ptr<metrics::Meter> throughput_meter_;
-  std::shared_ptr<metrics::Histogram> queue_latency_hist_;
-  std::shared_ptr<metrics::Histogram> te_seg_hist_;
   boost::shared_mutex model_queues_mutex_;
   std::unordered_map<VersionedModelId, std::shared_ptr<ModelQueue>>
       model_queues_;
