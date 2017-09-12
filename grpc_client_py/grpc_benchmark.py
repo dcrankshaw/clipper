@@ -30,7 +30,6 @@ def run(proc_num):
 	i = 0
 	latency = 0
 	file_name = "/tmp/bench_{}".format(proc_num)
-	out_file = open(file_name, "rw")
 	while True:
 		begin = datetime.now()
 		x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
@@ -43,13 +42,10 @@ def run(proc_num):
 
 		if i > 0 and i % 100 == 0:
 			print("Throughput: {} qps\n".format(float(latency) / i))
-			#out_file.write("Throughput: {} qps\n".format(float(latency) / i))
 			i = 0
 			latency = 0
 
 		i += 1
-
-	out_file.close()
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
