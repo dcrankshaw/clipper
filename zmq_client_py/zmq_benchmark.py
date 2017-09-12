@@ -24,31 +24,15 @@ app_name = "app1"
 model_name = "m1"
 
 def run(proc_num):
+	"""
+	Note: Throughput logging is performed by the ZMQ Frontend Client
+	(clipper_zmq_client.py)
+	"""
 	client = Client("localhost", 4455)
 	client.start()
 	while True:
 		client.send_request(app_name, np.array(np.random.rand(CIFAR_SIZE_DOUBLES), dtype=np.float64))
 		time.sleep(.001)
-
-	# i = 0
-	# latency = 0
-	# while True:
-	# 	begin = datetime.now()
-	# 	x = clipper_frontend_pb2.DoubleData(data=list(np.random.random(CIFAR_SIZE_DOUBLES)))
-	# 	req = clipper_frontend_pb2.PredictRequest(application=app_name, data_type=DATA_TYPE_DOUBLES, double_data=x)
-	# 	response = stub.Predict(req)
-	# 	print("Received response!")
-	# 	end = datetime.now()
-
-	# 	latency += (end - begin).total_seconds()
-
-	# 	if i > 0 and i % 100 == 0:
-	# 		print("Throughput: {} qps\n".format(float(latency) / i))
-	# 		#out_file.write("Throughput: {} qps\n".format(float(latency) / i))
-	# 		i = 0
-	# 		latency = 0
-
-	# 	i += 1
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
