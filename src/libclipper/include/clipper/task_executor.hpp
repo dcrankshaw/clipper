@@ -505,6 +505,13 @@ class TaskExecutor {
         std::chrono::system_clock::now();
     if (batch_size > 0) {
       const VersionedModelId &cur_model = keys[0].model_;
+      const int cur_replica_id = keys[0].replica_id_;
+      std::shared_ptr<ModelContainer> processing_container =
+          active_containers_->get_model_replica(cur_model, cur_replica_id);
+
+      processing_container->update_throughput(batch_size, task_latency_micros);
+      processing_container->latency_hist_.insert(task_latency_micros);
+
       boost::optional<ModelMetrics> cur_model_metric;
       auto cur_model_metric_entry = model_metrics_.find(cur_model);
       if (cur_model_metric_entry != model_metrics_.end()) {
@@ -529,29 +536,16 @@ class TaskExecutor {
       const std::shared_ptr<OutputData> &deserialized_output,
       std::chrono::time_point<std::chrono::system_clock> &current_time,
       boost::optional<ModelMetrics> cur_model_metric) {
-    std::shared_ptr<ModelContainer> processing_container =
-        active_containers_->get_model_replica(completed_msg.model_,
-                                              completed_msg.replica_id_);
-
     auto task_latency = current_time - completed_msg.send_time_;
     long task_latency_micros =
         std::chrono::duration_cast<std::chrono::microseconds>(task_latency)
             .count();
-    if (processing_container != nullptr) {
-      processing_container->update_throughput(1, task_latency_micros);
-      processing_container->latency_hist_.insert(task_latency_micros);
-    } else {
-      log_error(LOGGING_TAG_TASK_EXECUTOR,
-                "Could not find processing container. Something is wrong.");
-    }
     if (cur_model_metric) {
       (*cur_model_metric)
           .latency_->insert(static_cast<int64_t>(task_latency_micros));
     }
     cache_->put(completed_msg.model_, completed_msg.query_id_,
                Output{deserialized_output, {completed_msg.model_}});
-//    cache_->put(completed_msg.model_, completed_msg.input_,
-//                Output{deserialized_output, {completed_msg.model_}});>>>>>>> cache_eviction
   }
 };
 
