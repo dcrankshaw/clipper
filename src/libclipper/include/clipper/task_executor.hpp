@@ -336,11 +336,9 @@ class TaskExecutor {
     for (auto &t : tasks) {
       // add each task to the queue corresponding to its associated model
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
-      long lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after - before).count();
       auto model_queue_entry = model_queues_.find(t.model_);
       if (model_queue_entry != model_queues_.end()) {
         output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
-        long seg_lat_micros = std::chrono::duration_cast<std::chrono::microseconds>(after_seg - before_seg).count();
         // output_futures.push_back(cache_->fetch(t.model_, t.input_));
         if (!output_futures.back().isReady()) {
           t.recv_time_ = std::chrono::system_clock::now();
