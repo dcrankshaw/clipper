@@ -504,8 +504,14 @@ class TaskExecutor {
     std::chrono::time_point<std::chrono::system_clock> current_time =
         std::chrono::system_clock::now();
     if (batch_size > 0) {
-      const VersionedModelId &cur_model = keys[0].model_;
-      const int cur_replica_id = keys[0].replica_id_;
+      InflightMessage &first_message = keys[0];
+      const VersionedModelId &cur_model = first_message.model_;
+      const int cur_replica_id = first_message.replica_id_;
+      auto task_latency = current_time - first_message.send_time_;
+      long task_latency_micros =
+          std::chrono::duration_cast<std::chrono::microseconds>(task_latency)
+              .count();
+
       std::shared_ptr<ModelContainer> processing_container =
           active_containers_->get_model_replica(cur_model, cur_replica_id);
 
@@ -521,31 +527,15 @@ class TaskExecutor {
         (*cur_model_metric).throughput_->mark(batch_size);
         (*cur_model_metric).num_predictions_->increment(batch_size);
         (*cur_model_metric).batch_size_->insert(batch_size);
+        (*cur_model_metric)
+            .latency_->insert(static_cast<int64_t>(task_latency_micros));
       }
       for (int batch_num = 0; batch_num < batch_size; ++batch_num) {
         InflightMessage completed_msg = keys[batch_num];
-        process_completed_message(completed_msg,
-                                  parsed_response.outputs_[batch_num],
-                                  current_time, cur_model_metric);
+        cache_->put(completed_msg.model_, completed_msg.query_id_,
+                    Output{deserialized_output, {completed_msg.model_}});
       }
     }
-  }
-
-  void process_completed_message(
-      InflightMessage &completed_msg,
-      const std::shared_ptr<OutputData> &deserialized_output,
-      std::chrono::time_point<std::chrono::system_clock> &current_time,
-      boost::optional<ModelMetrics> cur_model_metric) {
-    auto task_latency = current_time - completed_msg.send_time_;
-    long task_latency_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(task_latency)
-            .count();
-    if (cur_model_metric) {
-      (*cur_model_metric)
-          .latency_->insert(static_cast<int64_t>(task_latency_micros));
-    }
-    cache_->put(completed_msg.model_, completed_msg.query_id_,
-               Output{deserialized_output, {completed_msg.model_}});
   }
 };
 
