@@ -22,9 +22,10 @@ class Client:
 
 	active = False
 
-	def __init__(self, clipper_host, clipper_port):
+	def __init__(self, clipper_host, clipper_send_port, clipper_recv_port):
 		self.clipper_host = clipper_host
-		self.clipper_port = clipper_port
+		self.send_port = clipper_send_port
+		self.recv_port = clipper_recv_port
 		self.request_queue = Queue()
 		self.recv_count = 0
 
@@ -46,13 +47,18 @@ class Client:
 
 	def _run(self):
 		global active
-		clipper_address = "tcp://{0}:{1}".format(self.clipper_host, self.clipper_port)
-		context = zmq.Context()
-		socket = context.socket(zmq.DEALER)
-		poller = zmq.Poller()
-		poller.register(socket, zmq.POLLIN)
+		clipper_recv_address = "tcp://{0}:{1}".format(self.clipper_host, self.recv_port)
+		clipper_send_address = "tcp://{0}:{1}".format(self.clipper_host, self.send_port)
+		context = zmq.Context(2)
+		recv_socket = context.socket(zmq.DEALER)
+		send_socket = context.socket(zmq.DEALER)
 
-		socket.connect(clipper_address)
+		poller = zmq.Poller()
+		poller.register(recv_socket, zmq.POLLIN)
+		poller.register(send_socket, zmq.POLLIN)
+
+		recv_socket.connect(clipper_recv_address)
+		send_socket.connect(clipper_send_address)
 		while active:
 			if self.request_queue.empty():
 				receivable_sockets = dict(poller.poll(1000))

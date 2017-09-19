@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
   // conf.set_task_execution_threadpool_size(options["threadpool_size"].as<int>());
   conf.ready();
 
-  zmq_frontend::ServerImpl server("0.0.0.0", 4455);
+  zmq_frontend::ServerImpl server("0.0.0.0", 7000, 7001);
 
   using namespace std::chrono_literals;
   while (true) {

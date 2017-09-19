@@ -2,9 +2,9 @@
 
 #include <mutex>
 
-#include <zmq.hpp>
 #include <folly/ProducerConsumerQueue.h>
 #include <boost/functional/hash.hpp>
+#include <zmq.hpp>
 
 #include <clipper/config.hpp>
 #include <clipper/datatypes.hpp>
@@ -19,31 +19,34 @@
 namespace zmq_frontend {
 
 FrontendRPCService::FrontendRPCService()
-    : response_queue_(std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(RESPONSE_QUEUE_SIZE)),
+    : response_queue_(
+          std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
+              RESPONSE_QUEUE_SIZE)),
       prediction_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)),
-      active_(false) {
+      active_(false) {}
 
-}
+FrontendRPCService::~FrontendRPCService() { stop(); }
 
-FrontendRPCService::~FrontendRPCService() {
-  stop();
-}
-
-void FrontendRPCService::start(const std::string address, int port) {
+void FrontendRPCService::start(const std::string address, int send_port, int recv_port) {
   active_ = true;
-  rpc_thread_ = std::thread([this, address, port]() {
-    manage_service(address, port);
+  rpc_send_thread_ = std::thread([this, address, send_port]() {
+    manage_send_service(address, send_port);
+  });
+  rpc_recv_thread_ = std::thread([this, address, recv_port]() {
+    manage_recv_service(address, recv_port);
   });
 }
 
 void FrontendRPCService::stop() {
-  if(active_) {
+  if (active_) {
     active_ = false;
-    rpc_thread_.join();
+    rpc_send_thread_.join();
+    rpc_recv_thread_.join();
   }
 }
 
-void FrontendRPCService::add_application(std::string name, std::function<void(FrontendRPCRequest)> app_function) {
+void FrontendRPCService::add_application(
+    std::string name, std::function<void(FrontendRPCRequest)> app_function) {
   std::lock_guard<std::mutex> lock(app_functions_mutex_);
   app_functions_.emplace(name, app_function);
 }
@@ -53,39 +56,58 @@ void FrontendRPCService::send_response(FrontendRPCResponse response) {
   response_queue_->write(response);
 }
 
-void FrontendRPCService::manage_service(const std::string ip, int port) {
-  std::string address = "tcp://" + ip + ":" + std::to_string(port);
-  // Mapping from request id to ZMQ routing ID
-  std::unordered_map<size_t, const std::vector<uint8_t>> outstanding_requests;
-  size_t request_id = 0;
-
+void FrontendRPCService::manage_send_service(const std::string ip, int port) {
+  std::string send_address = "tcp://" + ip + ":" + std::to_string(send_port);
   zmq::context_t context(1);
   zmq::socket_t socket(context, ZMQ_ROUTER);
-  socket.bind(address);
+  socket.bind(send_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   while(active_) {
-    if(response_queue_->isEmpty()) {
-      zmq_poll(items, 1, 1);
-      if (items[0].revents & ZMQ_POLLIN) {
-        receive_request(socket, outstanding_requests, request_id);
-        for (int i = 0; i < NUM_REQUESTS_RECV - 1; i++) {
-          zmq_poll(items, 1, 0);
-          if (items[0].revents & ZMQ_POLLIN) {
-            receive_request(socket, outstanding_requests, request_id);
-          }
-        }
-      }
-    } else {
-      for (int i = 0; i < NUM_REQUESTS_RECV; i++) {
-        zmq_poll(items, 1, 0);
-        if (items[0].revents & ZMQ_POLLIN) {
-          receive_request(socket, outstanding_requests, request_id);
-        }
-      }
+    zmq_poll(items, 1, 1);
+    if (items[0].revents & ZMQ_POLLIN) {
+      handle_new_connection(socket);
     }
-    send_responses(socket, outstanding_requests);
+    send_responses(socket, NUM_RESPONSES_SEND);
   }
   shutdown_service(socket);
+}
+
+void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
+  std::string recv_address = "tcp://" + ip + ":" + std::to_string(recv_port);
+  zmq::context_t context(1);
+  zmq::socket_t socket(context, ZMQ_ROUTER);
+  socket.bind(recv_address);
+  zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
+  while(active_) {
+    zmq_poll(items, 1, 1);
+    if (items[0].revents & ZMQ_POLLIN) {
+      receive_request(socket, request_id);
+    }
+  }
+  shutdown_service(socket);
+}
+
+void FrontendRPCService::handle_new_connection(zmq::socket_t &socket, int &client_id) {
+  zmq::message_t msg_routing_identity;
+  zmq::message_t msg_delimiter;
+  zmq::message_t msg_establish_connection;
+
+  socket.recv(&msg_routing_identity, 0);
+  socket.recv(&msg_delimiter, 0);
+  socket.recv(&msg_establish_connection, 0);
+
+  const vector<uint8_t> routing_id(
+      (uint8_t *)msg_routing_identity.data(),
+      (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
+  int curr_client_id = client_id++;
+  std::unique_lock<std::mutex> lock(client_routing_mutex_);
+  client_routing_map_.emplace(curr_client_id, std::move(routing_id));
+
+  zmq::message_t msg_client_id(sizeof(int));
+  memcpy(msg_client_id.data(), &client_id, sizeof(int));
+  socket.send(msg_routing_identity, 0);
+  socket.send("", 0);
+  socket.send(msg_client_id, 0);
 }
 
 void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
@@ -97,49 +119,57 @@ void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
   socket.close();
 }
 
-void FrontendRPCService::receive_request(zmq::socket_t &socket,
-                                         std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests,
-                                         size_t& request_id) {
+void FrontendRPCService::receive_request(zmq::socket_t &socket, size_t &request_id) {
   zmq::message_t msg_routing_identity;
   zmq::message_t msg_delimiter;
+  zmq::message_t msg_client_id;
   zmq::message_t msg_app_name;
   zmq::message_t msg_data_type;
   zmq::message_t msg_data_size_typed;
 
   socket.recv(&msg_routing_identity, 0);
   socket.recv(&msg_delimiter, 0);
+  socket.recv(&msg_client_id, 0);
   socket.recv(&msg_app_name, 0);
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
 
-  std::string app_name(static_cast<char*>(msg_app_name.data()), msg_app_name.size());
-  DataType input_type = static_cast<DataType>(static_cast<int*>(msg_data_type.data())[0]);
-  int input_size_typed = static_cast<int*>(msg_data_size_typed.data())[0];
+  std::string app_name(static_cast<char *>(msg_app_name.data()),
+                       msg_app_name.size());
+  DataType input_type =
+      static_cast<DataType>(static_cast<int *>(msg_data_type.data())[0]);
+  int input_size_typed = static_cast<int *>(msg_data_size_typed.data())[0];
 
   std::shared_ptr<clipper::Input> input;
-  switch(input_type) {
+  switch (input_type) {
     case DataType::Bytes: {
-      std::shared_ptr<uint8_t> data(static_cast<uint8_t *>(malloc(input_size_typed)), free);
+      std::shared_ptr<uint8_t> data(
+          static_cast<uint8_t *>(malloc(input_size_typed)), free);
       socket.recv(data.get(), input_size_typed, 0);
       input = std::make_shared<ByteVector>(data, input_size_typed);
     } break;
     case DataType::Ints: {
-      std::shared_ptr<int> data(static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
+      std::shared_ptr<int> data(
+          static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
       socket.recv(data.get(), input_size_typed * sizeof(int), 0);
       input = std::make_shared<IntVector>(data, input_size_typed);
     } break;
     case DataType::Floats: {
-      std::shared_ptr<float> data(static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
+      std::shared_ptr<float> data(
+          static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
       socket.recv(data.get(), input_size_typed * sizeof(float), 0);
       input = std::make_shared<FloatVector>(data, input_size_typed);
     } break;
     case DataType::Doubles: {
-      std::shared_ptr<double> data(static_cast<double *>(malloc(input_size_typed * sizeof(double))), free);
+      std::shared_ptr<double> data(
+          static_cast<double *>(malloc(input_size_typed * sizeof(double))),
+          free);
       socket.recv(data.get(), input_size_typed * sizeof(double), 0);
       input = std::make_shared<DoubleVector>(data, input_size_typed);
     } break;
     case DataType::Strings: {
-      std::shared_ptr<char> data(static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
+      std::shared_ptr<char> data(
+          static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
       socket.recv(data.get(), input_size_typed * sizeof(char), 0);
       input = std::make_shared<SerializableString>(data, input_size_typed);
     } break;
@@ -154,21 +184,21 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
 
   std::lock_guard<std::mutex> lock(app_functions_mutex_);
   auto app_functions_search = app_functions_.find(app_name);
-  if(app_functions_search == app_functions_.end()) {
-    log_error_formatted(LOGGING_TAG_ZMQ_FRONTEND,
-                        "Received a request for an unknown application with name {}",
-                        app_name);
+  if (app_functions_search == app_functions_.end()) {
+    log_error_formatted(
+        LOGGING_TAG_ZMQ_FRONTEND,
+        "Received a request for an unknown application with name {}", app_name);
   } else {
     auto app_function = app_functions_search->second;
 
     int req_id = request_id;
     request_id++;
 
-    const vector<uint8_t> routing_id(
-        (uint8_t *)msg_routing_identity.data(),
-        (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
+    int client_id = static_cast<int *>(msg_client_id.data())[0];
 
-    outstanding_requests.emplace(req_id, std::move(routing_id));
+    std::unique_lock<std::mutex> lock(outstanding_requests_mutex_);
+    outstanding_requests_.emplace(req_id, client_id);
+    lock.release();
 
     // Submit the function call with the request to a threadpool!!!
     prediction_executor_->add([app_function, input, req_id]() {
@@ -177,35 +207,51 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket,
   }
 }
 
-void FrontendRPCService::send_responses(zmq::socket_t &socket,
-                                        std::unordered_map<size_t, const std::vector<uint8_t>>& outstanding_requests) {
-  size_t num_responses = NUM_RESPONSES_SEND;
-  while(!response_queue_->isEmpty() && num_responses > 0) {
-    FrontendRPCResponse* response = response_queue_->frontPtr();
-    auto routing_identity_search = outstanding_requests.find(response->second);
-    if(routing_identity_search == outstanding_requests.end()) {
+void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
+  while (!response_queue_->isEmpty() && num_responses > 0) {
+    FrontendRPCResponse *response = response_queue_->frontPtr();
+    std::unique_lock<std::mutex> reqs_lock(outstanding_requests_mutex_);
+    auto client_id_search = outstanding_requests_.find(response->second);
+    if (client_id_search == outstanding_requests_.end()) {
       std::stringstream ss;
       ss << "Received a response for a request with id " << response->second
+         << " that has no associated client identity";
+      throw std::runtime_error(ss.str());
+    }
+
+    int client_id = client_id_search->second;
+    outstanding_requests.erase(response->second);
+    reqs_lock.release();
+
+    std::unique_lock<std::mutex> routing_lock(client_routing_mutex_);
+    auto routing_id_search = client_routing_map_.find(client_id);
+    if (routing_id_search == client_routing_map_.end()) {
+      std::stringstream ss;
+      ss << "Received a response associated with a client id " << client_id
          << " that has no associated routing identity";
       throw std::runtime_error(ss.str());
     }
 
-    const std::vector<uint8_t> &routing_id = routing_identity_search->second;
+    const std::vector<uint8_t>& routing_id = routing_id_search->second;
+    routing_lock.release();
+
     int output_type = static_cast<int>(response->first.y_hat_->type());
 
-    // TODO(czumar): If this works, include other relevant output data (default bool, default expl, etc)
+    // TODO(czumar): If this works, include other relevant output data (default
+    // bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
-    socket.send(response->first.y_hat_->get_data(), response->first.y_hat_->byte_size());
+    socket.send(response->first.y_hat_->get_data(),
+                response->first.y_hat_->byte_size());
 
-    // Remove the response from the outbound queue now that we're done processing it
+    // Remove the response from the outbound queue now that we're done
+    // processing it
     response_queue_->popFront();
     // Remove the oustanding request from the map
-    outstanding_requests.erase(response->second);
 
     num_responses--;
   }
 }
 
-} // namespace zmq_frontend
+}  // namespace zmq_frontend

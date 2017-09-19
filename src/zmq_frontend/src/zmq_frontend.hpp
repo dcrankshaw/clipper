@@ -1,12 +1,12 @@
 #include <cassert>
+#include <cstring>
 #include <iostream>
-#include <sstream>
 #include <memory>
+#include <sstream>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
-#include <cstring>
-#include <tuple>
 
 #include <folly/futures/Future.h>
 
@@ -80,7 +80,7 @@ class AppMetrics {
         default_pred_ratio_(
             clipper::metrics::MetricsRegistry::get_metrics()
                 .create_ratio_counter("app:" + app_name +
-                    ":default_prediction_ratio")) {}
+                                      ":default_prediction_ratio")) {}
   ~AppMetrics() = default;
 
   AppMetrics(const AppMetrics&) = default;
@@ -99,14 +99,14 @@ class AppMetrics {
 
 class ServerImpl {
  public:
-  ServerImpl(const std::string ip, int port)
+  ServerImpl(const std::string ip, int send_port, int recv_port)
       : rpc_service_(std::make_shared<FrontendRPCService>()),
         query_processor_(),
         futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
     // Init Clipper stuff
 
     // Start the frontend rpc service
-    rpc_service_->start(ip, port);
+    rpc_service_->start(ip, send_port, recv_port);
 
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
@@ -297,8 +297,10 @@ class ServerImpl {
 
     AppMetrics app_metrics(name);
 
-    auto predict_fn = [this, name, application_input_type = input_type, policy, latency_slo_micros,
-        app_metrics](FrontendRPCRequest request) {
+    auto predict_fn = [
+      this, name, application_input_type = input_type, policy,
+      latency_slo_micros, app_metrics
+    ](FrontendRPCRequest request) {
       try {
         std::vector<std::string> models = get_linked_models_for_app(name);
         std::vector<VersionedModelId> versioned_models;
@@ -314,9 +316,9 @@ class ServerImpl {
 
         long uid = 0;
         size_t request_id = request.second;
-        auto prediction =
-            query_processor_.predict(Query{name, uid, request.first, latency_slo_micros,
-                                           policy, versioned_models});
+        auto prediction = query_processor_.predict(
+            Query{name, uid, request.first, latency_slo_micros, policy,
+                  versioned_models});
 
         prediction.via(futures_executor_.get())
             .then([this, app_metrics, request_id](Response r) {
@@ -329,7 +331,8 @@ class ServerImpl {
               app_metrics.latency_->insert(r.duration_micros_);
               app_metrics.num_predictions_->increment(1);
 
-              rpc_service_->send_response(std::make_pair(std::move(r.output_), request_id));
+              rpc_service_->send_response(
+                  std::make_pair(std::move(r.output_), request_id));
             })
             .onError([request_id](const std::exception& e) {
               clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
@@ -395,4 +398,4 @@ class ServerImpl {
   std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
 };
 
-} // namespace zmq_frontend
+}  // namespace zmq_frontend
