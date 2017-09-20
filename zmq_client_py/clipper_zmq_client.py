@@ -131,9 +131,10 @@ class Client:
 			time.sleep(.001)
 
 		while not self.request_queue.empty():
-			app_name, input_item = self.request_queue.get()
+			request_id, app_name, input_item = self.request_queue.get()
 			socket.send("", zmq.SNDMORE)
 			socket.send(struct.pack("<I", self.client_id), zmq.SNDMORE)
+			socket.send(struct.pack("<I", request_id), zmq.SNDMORE)
 			socket.send_string(app_name, zmq.SNDMORE)
 			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
