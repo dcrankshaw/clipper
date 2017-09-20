@@ -107,8 +107,8 @@ void FrontendRPCService::handle_new_connection(zmq::socket_t &socket, int &clien
 
   zmq::message_t msg_client_id(sizeof(int));
   memcpy(msg_client_id.data(), &client_id, sizeof(int));
-  socket.send(msg_routing_identity, 0);
-  socket.send("", 0);
+  socket.send(msg_routing_identity, 0, ZMQ_SNDMORE);
+  socket.send("", 0, ZMQ_SNDMORE);
   socket.send(msg_client_id, 0);
 }
 
