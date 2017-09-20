@@ -57,7 +57,7 @@ void FrontendRPCService::send_response(FrontendRPCResponse response) {
 }
 
 void FrontendRPCService::manage_send_service(const std::string ip, int port) {
-  std::string send_address = "tcp://" + ip + ":" + std::to_string(send_port);
+  std::string send_address = "tcp://" + ip + ":" + std::to_string(port);
   zmq::context_t context(1);
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(send_address);
@@ -73,11 +73,12 @@ void FrontendRPCService::manage_send_service(const std::string ip, int port) {
 }
 
 void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
-  std::string recv_address = "tcp://" + ip + ":" + std::to_string(recv_port);
+  std::string recv_address = "tcp://" + ip + ":" + std::to_string(port);
   zmq::context_t context(1);
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(recv_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
+  int request_id = 0;
   while(active_) {
     zmq_poll(items, 1, 1);
     if (items[0].revents & ZMQ_POLLIN) {
@@ -220,7 +221,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     }
 
     int client_id = client_id_search->second;
-    outstanding_requests.erase(response->second);
+    outstanding_requests_.erase(response->second);
     reqs_lock.release();
 
     std::unique_lock<std::mutex> routing_lock(client_routing_mutex_);
