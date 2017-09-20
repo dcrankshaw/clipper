@@ -28,7 +28,7 @@ def run(proc_num):
 	Note: Throughput logging is performed by the ZMQ Frontend Client
 	(clipper_zmq_client.py)
 	"""
-	client = Client("localhost", 7001, 7000)
+	client = Client("localhost", 4456, 4455)
 	client.start()
 	while True:
 		client.send_request(app_name, np.array(np.random.rand(CIFAR_SIZE_DOUBLES), dtype=np.float64))
