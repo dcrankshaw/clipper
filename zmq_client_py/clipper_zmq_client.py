@@ -92,11 +92,9 @@ class Client:
 
 		socket.connect(clipper_send_address)
 		while active:
-			if not self.client_id:
+			if self.client_id is None:
 				time.sleep(.001)
 			else:
-				print("HERE!!")
-				print(self.client_id)
 				self._send_requests(socket)
 
 	def _handle_new_connection(self, socket):
@@ -104,7 +102,6 @@ class Client:
 		socket.recv()
 		client_id_bytes = socket.recv()
 		self.client_id = struct.unpack("<I", client_id_bytes)[0]
-		print("CLIENT ID: {}".format(self.client_id))
 
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
