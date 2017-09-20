@@ -44,7 +44,7 @@ class FrontendRPCService {
   void manage_recv_service(const std::string ip, int port);
   void handle_new_connection(zmq::socket_t &socket, int &client_id);
   void shutdown_service(zmq::socket_t &socket);
-  void receive_request(zmq::socket_t &socket, size_t &request_id);
+  void receive_request(zmq::socket_t &socket, int &request_id);
   void send_responses(zmq::socket_t &socket, size_t num_responses);
 
   std::mutex response_queue_insertion_mutex_;

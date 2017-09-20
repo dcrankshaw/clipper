@@ -62,10 +62,11 @@ void FrontendRPCService::manage_send_service(const std::string ip, int port) {
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(send_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
+  int client_id = 0;
   while(active_) {
     zmq_poll(items, 1, 1);
     if (items[0].revents & ZMQ_POLLIN) {
-      handle_new_connection(socket);
+      handle_new_connection(socket, client_id);
     }
     send_responses(socket, NUM_RESPONSES_SEND);
   }
@@ -120,7 +121,7 @@ void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
   socket.close();
 }
 
-void FrontendRPCService::receive_request(zmq::socket_t &socket, size_t &request_id) {
+void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id) {
   zmq::message_t msg_routing_identity;
   zmq::message_t msg_delimiter;
   zmq::message_t msg_client_id;
