@@ -49,7 +49,8 @@ class Client:
 		global active
 		if active:
 			active = False
-			self.thread.join()
+			self.recv_thread.join()
+			self.send_thread.join()
 
 	def send_request(self, app_name, input_item, callback=None):
 		self.request_queue.put((app_name, input_item))
