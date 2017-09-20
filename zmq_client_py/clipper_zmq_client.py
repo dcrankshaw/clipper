@@ -36,6 +36,9 @@ class Client:
 		self.send_port = clipper_send_port
 		self.recv_port = clipper_recv_port
 		self.client_id = None
+		self.request_id = 0
+		self.outstanding_requests = {}
+		self.request_lock = Lock()
 		self.request_queue = Queue()
 
 	def start(self):
@@ -54,7 +57,11 @@ class Client:
 			self.send_thread.join()
 
 	def send_request(self, app_name, input_item, callback=None):
-		self.request_queue.put((app_name, input_item))
+		self.request_lock.acquire()
+		self.outstanding_requests[self.request_id] = callback
+		self.request_queue.put((self.request_id, app_name, input_item))
+		self.request_id += 1
+		self.request_lock.release()
 
 	def _run_recv(self):
 		global active
@@ -105,8 +112,19 @@ class Client:
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
 		socket.recv()
+		request_id_bytes = socket.recv()
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
+
+		request_id = struct.unpack("<I", request_id_bytes)
+		data_type = struct.unpack("<I", data_type_bytes)
+		output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
+
+		self.request_lock.acquire()
+		if request_id in self.outstanding_requests.keys() and self.outstanding_requests[request_id] is not None:
+			self.outstanding_requests[request_id](output)
+			del self.outstanding_requests[request_id]
+		self.request_lock.release()
 
 	def _send_requests(self, socket):
 		if self.request_queue.empty():
@@ -120,3 +138,15 @@ class Client:
 			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
+
+	def _clipper_type_to_dtype(self, cl_type):
+		if cl_type == DATA_TYPE_BYTES:
+			return np.int8
+		elif cl_type == DATA_TYPE_INTS:
+			return np.int32
+		elif cl_type == DATA_TYPE_FLOATS:
+			return np.float32
+		elif cl_type == DATA_TYPE_DOUBLES:
+			return np.float64
+		elif cl_type == DATA_TYPE_STRINGS:
+			return np.str_

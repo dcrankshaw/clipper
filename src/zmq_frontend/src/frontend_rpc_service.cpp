@@ -79,11 +79,10 @@ void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(recv_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
-  int request_id = 0;
   while(active_) {
     zmq_poll(items, 1, 1);
     if (items[0].revents & ZMQ_POLLIN) {
-      receive_request(socket, request_id);
+      receive_request(socket);
     }
   }
   shutdown_service(socket);
@@ -122,10 +121,11 @@ void FrontendRPCService::shutdown_service(zmq::socket_t &socket) {
   socket.close();
 }
 
-void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id) {
+void FrontendRPCService::receive_request(zmq::socket_t &socket) {
   zmq::message_t msg_routing_identity;
   zmq::message_t msg_delimiter;
   zmq::message_t msg_client_id;
+  zmq::message_t msg_request_id;
   zmq::message_t msg_app_name;
   zmq::message_t msg_data_type;
   zmq::message_t msg_data_size_typed;
@@ -133,6 +133,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id)
   socket.recv(&msg_routing_identity, 0);
   socket.recv(&msg_delimiter, 0);
   socket.recv(&msg_client_id, 0);
+  socket.recv(&msg_request_id, 0);
   socket.recv(&msg_app_name, 0);
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
@@ -194,14 +195,13 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id)
   } else {
     auto app_function = app_functions_search->second;
 
-    int req_id = request_id;
-    request_id++;
+    int request_id = static_cast<int *>(msg_request_id.data())[0];
 
     int client_id = static_cast<int *>(msg_client_id.data())[0];
 
     // Submit the function call with the request to a threadpool!!!
-    prediction_executor_->add([app_function, input, req_id, client_id]() {
-      app_function(std::make_tuple(input, req_id, client_id));
+    prediction_executor_->add([app_function, input, request_id, client_id]() {
+      app_function(std::make_tuple(input, request_id, client_id));
     });
   }
 }
@@ -230,6 +230,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     // bool, default expl, etc)
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
+    socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
     socket.send(output.y_hat_->get_data(),
                 output.y_hat_->byte_size());
