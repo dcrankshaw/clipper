@@ -102,6 +102,8 @@ class Client:
 		socket.recv()
 		client_id_bytes = socket.recv()
 		self.client_id = struct.unpack("<I", client_id_bytes)
+		print("NEW CONNECTION!")
+		print(self.client_id)
 
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
