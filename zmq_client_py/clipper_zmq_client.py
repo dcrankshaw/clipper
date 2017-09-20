@@ -35,6 +35,7 @@ class Client:
 		self.clipper_host = clipper_host
 		self.send_port = clipper_send_port
 		self.recv_port = clipper_recv_port
+		self.client_id = None
 		self.request_queue = Queue()
 
 	def start(self):
