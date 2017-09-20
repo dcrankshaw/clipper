@@ -213,7 +213,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     int request_id = std::get<1>(*response);
     int client_id = std::get<2>(*response);
 
-    std::unique_lock<std::mutex> routing_lock(client_routing_mutex_);
+    std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
     auto routing_id_search = client_routing_map_.find(client_id);
     if (routing_id_search == client_routing_map_.end()) {
       std::stringstream ss;
@@ -223,7 +223,6 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     }
 
     const std::vector<uint8_t>& routing_id = routing_id_search->second;
-    routing_lock.release();
 
     int output_type = static_cast<int>(output.y_hat_->type());
 
