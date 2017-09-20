@@ -93,7 +93,7 @@ class Client:
 		socket.connect(clipper_send_address)
 		while active:
 			if not self.client_id:
-				time.sleep(1000)
+				time.sleep(.001)
 			else:
 				self._send_requests(socket)
 
@@ -112,7 +112,7 @@ class Client:
 
 	def _send_requests(self, socket):
 		if self.request_queue.empty():
-			time.sleep(1000)
+			time.sleep(.001)
 
 		while not self.request_queue.empty():
 			app_name, input_item = self.request_queue.get()
