@@ -102,7 +102,6 @@ class Client:
 		socket.recv()
 		client_id_bytes = socket.recv()
 		self.client_id = struct.unpack("<I", client_id_bytes)[0]
-		print(self.client_id)
 
 	def _receive_response(self, socket):
 		# Receive delimiter between routing identity and content
@@ -115,7 +114,7 @@ class Client:
 		if self.request_queue.empty():
 			time.sleep(1000)
 
-		while (not self.request_queue.empty()) and i > 0:
+		while not self.request_queue.empty():
 			app_name, input_item = self.request_queue.get()
 			socket.send("", zmq.SNDMORE)
 			socket.send(struct.pack("<I", self.client_id), zmq.SNDMORE)
