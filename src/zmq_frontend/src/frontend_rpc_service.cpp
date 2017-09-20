@@ -198,13 +198,9 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id)
 
     int client_id = static_cast<int *>(msg_client_id.data())[0];
 
-    std::unique_lock<std::mutex> lock(outstanding_requests_mutex_);
-    outstanding_requests_.emplace(req_id, client_id);
-    lock.release();
-
     // Submit the function call with the request to a threadpool!!!
-    prediction_executor_->add([app_function, input, req_id]() {
-      app_function(std::make_pair(input, req_id));
+    prediction_executor_->add([app_function, input, req_id, client_id]() {
+      app_function(std::make_tuple(input, req_id, client_id));
     });
   }
 }
@@ -212,18 +208,9 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket, int &request_id)
 void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
   while (!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse *response = response_queue_->frontPtr();
-    std::unique_lock<std::mutex> reqs_lock(outstanding_requests_mutex_);
-    auto client_id_search = outstanding_requests_.find(response->second);
-    if (client_id_search == outstanding_requests_.end()) {
-      std::stringstream ss;
-      ss << "Received a response for a request with id " << response->second
-         << " that has no associated client identity";
-      throw std::runtime_error(ss.str());
-    }
-
-    int client_id = client_id_search->second;
-    outstanding_requests_.erase(response->second);
-    reqs_lock.release();
+    Output &output = std::get<0>(*response);
+    int request_id = std::get<1>(*response);
+    int client_id = std::get<2>(*response);
 
     std::unique_lock<std::mutex> routing_lock(client_routing_mutex_);
     auto routing_id_search = client_routing_map_.find(client_id);
@@ -244,8 +231,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
-    socket.send(response->first.y_hat_->get_data(),
-                response->first.y_hat_->byte_size());
+    socket.send(output.y_hat_->get_data(),
+                output.y_hat_->byte_size());
 
     // Remove the response from the outbound queue now that we're done
     // processing it

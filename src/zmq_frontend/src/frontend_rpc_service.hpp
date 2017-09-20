@@ -3,7 +3,7 @@
 
 #include <mutex>
 
-#include <folly/ProducerConsumerQueue.h>
+#include <folly/MPMCQueue.h>
 #include <wangle/concurrent/CPUThreadPoolExecutor.h>
 #include <clipper/datatypes.hpp>
 #include <zmq.hpp>
@@ -19,11 +19,11 @@ constexpr size_t RESPONSE_QUEUE_SIZE = 50000;
 constexpr size_t NUM_REQUESTS_RECV = 100;
 constexpr size_t NUM_RESPONSES_SEND = 1000;
 
-// Pair of input and request id
-typedef std::pair<std::shared_ptr<Input>, int> FrontendRPCRequest;
-// Pair of output and request id. Request id should match the id of a
-// FrontendRPCRequest object
-typedef std::pair<Output, int> FrontendRPCResponse;
+// Tuple of input, request id, client id
+typedef std::tuple<std::shared_ptr<Input>, int, int> FrontendRPCRequest;
+// Tuple of output, request id, client id. Request id and client ids
+// should match corresponding ids of a FrontendRPCRequest object
+typedef std::tuple<Output, int, int> FrontendRPCResponse;
 
 class FrontendRPCService {
  public:
@@ -53,13 +53,10 @@ class FrontendRPCService {
   std::shared_ptr<wangle::CPUThreadPoolExecutor> prediction_executor_;
   std::atomic_bool active_;
   std::mutex app_functions_mutex_;
-  std::mutex outstanding_requests_mutex_;
   std::mutex client_routing_mutex_;
   // Mapping from app name to prediction function
   std::unordered_map<std::string, std::function<void(FrontendRPCRequest)>>
       app_functions_;
-  // Mapping from message id to client id
-  std::unordered_map<size_t, size_t> outstanding_requests_;
   // Mapping from client id to routing id
   std::unordered_map<size_t, const std::vector<uint8_t>> client_routing_map_;
   std::thread rpc_send_thread_;

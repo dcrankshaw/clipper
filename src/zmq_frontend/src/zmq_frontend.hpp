@@ -315,13 +315,14 @@ class ServerImpl {
         }
 
         long uid = 0;
-        size_t request_id = request.second;
+        int request_id = std::get<1>(request);
+        int client_id = std::get<2>(request);
         auto prediction = query_processor_.predict(
-            Query{name, uid, request.first, latency_slo_micros, policy,
+            Query{name, uid, std::get<0>(request), latency_slo_micros, policy,
                   versioned_models});
 
         prediction.via(futures_executor_.get())
-            .then([this, app_metrics, request_id](Response r) {
+            .then([this, app_metrics, request_id, client_id](Response r) {
               // Update metrics
               if (r.output_is_default_) {
                 app_metrics.default_pred_ratio_->increment(1, 1);
@@ -332,7 +333,7 @@ class ServerImpl {
               app_metrics.num_predictions_->increment(1);
 
               rpc_service_->send_response(
-                  std::make_pair(std::move(r.output_), request_id));
+                  std::make_tuple(std::move(r.output_), request_id, client_id));
             })
             .onError([request_id](const std::exception& e) {
               clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
