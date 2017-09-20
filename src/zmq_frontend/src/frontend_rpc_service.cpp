@@ -224,7 +224,7 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
     const std::vector<uint8_t>& routing_id = routing_id_search->second;
     routing_lock.release();
 
-    int output_type = static_cast<int>(response->first.y_hat_->type());
+    int output_type = static_cast<int>(output.y_hat_->type());
 
     // TODO(czumar): If this works, include other relevant output data (default
     // bool, default expl, etc)
