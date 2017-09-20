@@ -95,6 +95,8 @@ class Client:
 			if not self.client_id:
 				time.sleep(.001)
 			else:
+				print("HERE!!")
+				print(self.client_id)
 				self._send_requests(socket)
 
 	def _handle_new_connection(self, socket):
