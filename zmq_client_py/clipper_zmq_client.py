@@ -73,7 +73,6 @@ class Client:
 		while active:
 			timeout = 1000 if connected else 5000
 			receivable_sockets = dict(poller.poll(timeout))
-			print(receivable_sockets)
 			if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 				if connected:
 					self._receive_response(socket)
@@ -108,7 +107,6 @@ class Client:
 		socket.recv()
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
-		print("RECEIVED RESPONSE!")
 
 	def _send_requests(self, socket):
 		if self.request_queue.empty():
@@ -122,4 +120,3 @@ class Client:
 			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
-			print("Sent request!")
