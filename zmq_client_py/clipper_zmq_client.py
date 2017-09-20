@@ -122,3 +122,4 @@ class Client:
 			socket.send(struct.pack("<I", DATA_TYPE_DOUBLES), zmq.SNDMORE)
 			socket.send(struct.pack("<I", len(input_item)), zmq.SNDMORE)
 			socket.send(input_item)
+			print("Sent request!")
