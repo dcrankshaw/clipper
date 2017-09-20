@@ -66,7 +66,7 @@ class Client:
 
 		socket.connect(clipper_recv_address)
 		# Send a blank message to establish a connection
-		socket.send("", ZMQ.SNDMORE)
+		socket.send("", zmq.SNDMORE)
 		socket.send("")
 		connected = False
 		while active:
@@ -85,6 +85,7 @@ class Client:
 		clipper_send_address = "tcp://{0}:{1}".format(self.clipper_host, self.send_port)
 		context = zmq.Context()
 		socket = context.socket(zmq.DEALER)
+		poller = zmq.Poller()
 		poller.register(socket, zmq.POLLIN)
 
 		socket.connect(clipper_send_address)
