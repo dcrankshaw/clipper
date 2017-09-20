@@ -65,9 +65,7 @@ class Client:
 		poller = zmq.Poller()
 		poller.register(socket, zmq.POLLIN)
 
-		print("HERE RECV")
 		socket.connect(clipper_recv_address)
-		print("CONNECTED RECV")
 		# Send a blank message to establish a connection
 		socket.send("", zmq.SNDMORE)
 		socket.send("")
@@ -75,6 +73,7 @@ class Client:
 		while active:
 			timeout = 1000 if connected else 5000
 			receivable_sockets = dict(poller.poll(timeout))
+			print(receivable_sockets)
 			if socket in receivable_sockets and receivable_sockets[socket] == zmq.POLLIN:
 				if connected:
 					self._receive_response(socket)
