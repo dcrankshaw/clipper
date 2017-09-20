@@ -103,7 +103,7 @@ void FrontendRPCService::handle_new_connection(zmq::socket_t &socket, int &clien
       (uint8_t *)msg_routing_identity.data() + msg_routing_identity.size());
   int curr_client_id = client_id;
   client_id++;
-  std::unique_lock<std::mutex> lock(client_routing_mutex_);
+  std::lock_guard<std::mutex> lock(client_routing_mutex_);
   client_routing_map_.emplace(curr_client_id, std::move(routing_id));
 
   zmq::message_t msg_client_id(sizeof(int));
