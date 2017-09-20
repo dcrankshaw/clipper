@@ -65,7 +65,9 @@ class Client:
 		poller = zmq.Poller()
 		poller.register(socket, zmq.POLLIN)
 
+		print("HERE RECV")
 		socket.connect(clipper_recv_address)
+		print("CONNECTED RECV")
 		# Send a blank message to establish a connection
 		socket.send("", zmq.SNDMORE)
 		socket.send("")
@@ -89,7 +91,9 @@ class Client:
 		poller = zmq.Poller()
 		poller.register(socket, zmq.POLLIN)
 
+		print("HERE SEND")
 		socket.connect(clipper_send_address)
+		print("CONNECTED SEND")
 		while active:
 			if not self.client_id:
 				time.sleep(1000)
