@@ -118,9 +118,10 @@ class Client:
 
 		request_id = struct.unpack("<I", request_id_bytes)[0]
 		data_type = struct.unpack("<I", data_type_bytes)[0]
-		print(output_data)
-		print(len(output_data))
-		output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
+		if data_type == DATA_TYPE_STRINGS:
+			output = output_data
+		else:
+			output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
 
 		self.request_lock.acquire()
 		if request_id in self.outstanding_requests.keys() and self.outstanding_requests[request_id] is not None:
