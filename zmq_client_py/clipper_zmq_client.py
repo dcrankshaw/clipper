@@ -118,6 +118,7 @@ class Client:
 
 		request_id = struct.unpack("<I", request_id_bytes)
 		data_type = struct.unpack("<I", data_type_bytes)
+		print("DATA TYPE: {}".format(data_type))
 		output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
 
 		self.request_lock.acquire()
