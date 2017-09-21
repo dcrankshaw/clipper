@@ -1,0 +1,53 @@
+FROM nvidia/cuda:7.5-cudnn6-devel-ubuntu14.04
+
+RUN mkdir -p /model \
+    && apt-get update \
+    && apt-get install -y libzmq3-dev \
+    && apt-get install -y python-dev \
+    && apt-get install -y python-pip \
+    && pip install pyzmq
+
+RUN apt-get install -y libblas-dev liblapack-dev
+
+RUN apt-get install -y gfortran
+
+RUN pip install numpy scipy
+
+RUN pip install Theano
+
+RUN apt-get install -y git
+
+RUN apt-get install -y software-properties-common \
+  && add-apt-repository ppa:george-edison55/cmake-3.x \
+  && apt-get update \
+  && apt-get install -y cmake
+
+RUN pip install Cython
+  
+RUN pip install nose
+
+RUN git clone https://github.com/Theano/libgpuarray.git \
+	&& cd libgpuarray \
+	&& git checkout tags/v0.6.2 -b v0.6.2 \
+	&& mkdir Build \
+	&& cd Build \
+	&& cmake .. -DCMAKE_INSTALL_PREFIX=~/.local -DCMAKE_BUILD_TYPE=Release \
+	&& make \
+	&& make install \
+	&& cd .. \
+	&& echo "export CPATH=$CPATH:/root/.local/include" >> ~/.bashrc \
+	&& echo "export LIBRARY_PATH=$LIBRARY_PATH:/root/.local/lib" >> ~/.bashrc \
+	&& echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/.local/lib" >> ~/.bashrc \
+	&& ldconfig \
+  && python setup.py build_ext -L /root/.local/lib -I /root/.local/include/ \
+	&& python setup.py install
+
+ENV LIBRARY_PATH=$LIBRARY_PATH:/libgpuarray/pygpu/
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/.local/lib
+ENV CPATH=/usr/local/cuda-7.5/include
+
+RUN cp ./usr/lib/x86_64-linux-gnu/libcudnn.so.6 /usr/local/cuda-7.5/lib64
+RUN mv /usr/include/cudnn.h /usr/local/cuda/include
+
+RUN echo '[global]\ndevice=cuda0\n[cuda]\nroot="/usr/local/cuda-7.5"\n[dnn]\ninclude_path="/usr/local/cuda-7.5/include"\nlibrary_path="/usr/local/cuda-7.5/lib64"\n' >> ~/.theanorc
+RUN echo '[gcc]\ncxxflags=-I/root/.local/include\n' >> ~/.theanorc

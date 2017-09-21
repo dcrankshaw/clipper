@@ -15,8 +15,6 @@ DATA_TYPE_FLOATS = 2
 DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
 
-NUM_RESPONSES_RECV = 10
-
 class Client:
 
 	active = False

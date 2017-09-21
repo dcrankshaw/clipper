@@ -1,0 +1,13 @@
+FROM tensorflow/tensorflow:latest-gpu
+
+RUN mkdir -p /model \
+    && apt-get update \
+    && apt-get install -y libzmq-dev \
+    && apt-get install -y python-pip \
+    && pip install pyzmq
+
+ENV CLIPPER_MODEL_PATH=/model.mod
+
+WORKDIR /container
+
+COPY __init__.py rpc.py /container/
