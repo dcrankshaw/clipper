@@ -157,7 +157,7 @@ class Client:
 		elif cl_type == DATA_TYPE_DOUBLES:
 			return np.float64
 		elif cl_type == DATA_TYPE_STRINGS:
-			return np.str_
+			return str
 
 	def _dtype_to_clipper_type(self, dtype):
 		if dtype == np.int8:
