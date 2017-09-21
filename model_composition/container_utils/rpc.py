@@ -9,11 +9,11 @@ import socket
 import sys
 from collections import deque
 
-INPUT_TYPE_BYTES = 0
-INPUT_TYPE_INTS = 1
-INPUT_TYPE_FLOATS = 2
-INPUT_TYPE_DOUBLES = 3
-INPUT_TYPE_STRINGS = 4
+DATA_TYPE_BYTES = 0
+DATA_TYPE_INTS = 1
+DATA_TYPE_FLOATS = 2
+DATA_TYPE_DOUBLES = 3
+DATA_TYPE_STRINGS = 4
 
 REQUEST_TYPE_PREDICT = 0
 REQUEST_TYPE_FEEDBACK = 1
@@ -37,8 +37,19 @@ EVENT_HISTORY_RECEIVED_CONTAINER_METADATA = 4
 EVENT_HISTORY_SENT_CONTAINER_CONTENT = 5
 EVENT_HISTORY_RECEIVED_CONTAINER_CONTENT = 6
 
-MAXIMUM_UTF_8_CHAR_LENGTH_BYTES = 4
 BYTES_PER_INT = 4
+BYTES_PER_FLOAT = 4
+BYTES_PER_BYTE = 1
+BYTES_PER_CHAR = 1
+
+# A mapping from python output data types
+# to their corresponding clipper data types for serialization
+SUPPORTED_OUTPUT_TYPES_MAPPING = {
+    np.dtype(np.uint8): DATA_TYPE_BYTES,
+    np.dtype(np.int32): DATA_TYPE_INTS,
+    np.dtype(np.float32): DATA_TYPE_FLOATS,
+    str: DATA_TYPE_STRINGS,
+}
 
 
 def string_to_input_type(input_str):
@@ -50,42 +61,42 @@ def string_to_input_type(input_str):
     string_strs = ["s", "strings", "string", "strs", "str"]
 
     if any(input_str == s for s in byte_strs):
-        return INPUT_TYPE_BYTES
+        return DATA_TYPE_BYTES
     elif any(input_str == s for s in int_strs):
-        return INPUT_TYPE_INTS
+        return DATA_TYPE_INTS
     elif any(input_str == s for s in float_strs):
-        return INPUT_TYPE_FLOATS
+        return DATA_TYPE_FLOATS
     elif any(input_str == s for s in double_strs):
-        return INPUT_TYPE_DOUBLES
+        return DATA_TYPE_DOUBLES
     elif any(input_str == s for s in string_strs):
-        return INPUT_TYPE_STRINGS
+        return DATA_TYPE_STRINGS
     else:
         return -1
 
 
 def input_type_to_dtype(input_type):
-    if input_type == INPUT_TYPE_BYTES:
+    if input_type == DATA_TYPE_BYTES:
         return np.int8
-    elif input_type == INPUT_TYPE_INTS:
+    elif input_type == DATA_TYPE_INTS:
         return np.int32
-    elif input_type == INPUT_TYPE_FLOATS:
+    elif input_type == DATA_TYPE_FLOATS:
         return np.float32
-    elif input_type == INPUT_TYPE_DOUBLES:
+    elif input_type == DATA_TYPE_DOUBLES:
         return np.float64
-    elif input_type == INPUT_TYPE_STRINGS:
+    elif input_type == DATA_TYPE_STRINGS:
         return np.str_
 
 
 def input_type_to_string(input_type):
-    if input_type == INPUT_TYPE_BYTES:
+    if input_type == DATA_TYPE_BYTES:
         return "bytes"
-    elif input_type == INPUT_TYPE_INTS:
+    elif input_type == DATA_TYPE_INTS:
         return "ints"
-    elif input_type == INPUT_TYPE_FLOATS:
+    elif input_type == DATA_TYPE_FLOATS:
         return "floats"
-    elif input_type == INPUT_TYPE_DOUBLES:
+    elif input_type == DATA_TYPE_DOUBLES:
         return "doubles"
-    elif input_type == INPUT_TYPE_STRINGS:
+    elif input_type == DATA_TYPE_STRINGS:
         return "string"
 
 
@@ -127,7 +138,6 @@ class Server(threading.Thread):
             predict response
         """
         predict_fn = self.get_prediction_function()
-        total_length = 0
         outputs = predict_fn(prediction_request.inputs)
         # Type check the outputs:
         if not type(outputs) == list:
@@ -136,14 +146,27 @@ class Server(threading.Thread):
             raise PredictionError(
                 "Expected model to return %d outputs, found %d outputs" %
                 (len(prediction_request.inputs), len(outputs)))
-        if not type(outputs[0]) == str:
-            raise PredictionError("Model must return a list of strs. Found %s"
-                                  % type(outputs[0]))
-        for o in outputs:
-            total_length += len(o)
+
+        outputs_type = type(outputs[0])
+        if outputs_type == np.ndarray:
+            outputs_type = outputs[0].dtype
+        if not outputs_type in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
+            raise PredictionError(
+                "Model outputs list contains outputs of invalid type: {}!".
+                format(outputs_type))
+
+        if outputs_type == str:
+            for i in range(0, len(outputs)):
+                outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
+        else:
+            for i in range(0, len(outputs)):
+                outputs[i] = outputs[i].tobytes()
+
+        total_length_elements = sum(len(o) for o in outputs)
+
         response = PredictionResponse(prediction_request.msg_id,
-                                      len(prediction_request.inputs),
-                                      total_length)
+                                      len(outputs), total_length_elements,
+                                      outputs_type)
         for output in outputs:
             response.add_output(output)
 
@@ -161,15 +184,15 @@ class Server(threading.Thread):
         return response
 
     def get_prediction_function(self):
-        if self.model_input_type == INPUT_TYPE_INTS:
+        if self.model_input_type == DATA_TYPE_INTS:
             return self.model.predict_ints
-        elif self.model_input_type == INPUT_TYPE_FLOATS:
+        elif self.model_input_type == DATA_TYPE_FLOATS:
             return self.model.predict_floats
-        elif self.model_input_type == INPUT_TYPE_DOUBLES:
+        elif self.model_input_type == DATA_TYPE_DOUBLES:
             return self.model.predict_doubles
-        elif self.model_input_type == INPUT_TYPE_BYTES:
+        elif self.model_input_type == DATA_TYPE_BYTES:
             return self.model.predict_bytes
-        elif self.model_input_type == INPUT_TYPE_STRINGS:
+        elif self.model_input_type == DATA_TYPE_STRINGS:
             return self.model.predict_strings
         else:
             print(
@@ -277,7 +300,7 @@ class Server(threading.Thread):
                                         int(input_type))))
                             raise
 
-                        if input_type == INPUT_TYPE_STRINGS:
+                        if input_type == DATA_TYPE_STRINGS:
                             # If we're processing string inputs, we delimit them using
                             # the null terminator included in their serialized representation,
                             # ignoring the extraneous final null terminator by
@@ -354,10 +377,10 @@ class PredictionRequest:
         return self.inputs
 
 
-class PredictionResponse():
+class PredictionResponse:
     output_buffer = bytearray(1024)
 
-    def __init__(self, msg_id, num_outputs, total_string_length):
+    def __init__(self, msg_id, num_outputs, content_length, py_output_type):
         """
         Parameters
         ----------
@@ -366,16 +389,19 @@ class PredictionResponse():
             for which this is a response
         num_outputs : int
             The number of outputs to be included in the prediction response
-        max_outputs_size_bytes:
-            The total length of the string content
+        content_length: int
+            The total length of all outputs, in bytes
+        py_output_type : type
+            The python data type of output element content
         """
         self.msg_id = msg_id
         self.num_outputs = num_outputs
-        self.expand_buffer_if_necessary(
-            total_string_length * MAXIMUM_UTF_8_CHAR_LENGTH_BYTES)
+        self.output_type = SUPPORTED_OUTPUT_TYPES_MAPPING[py_output_type]
+        self.expand_buffer_if_necessary(num_outputs, content_length)
+
         self.memview = memoryview(self.output_buffer)
         struct.pack_into("<I", self.output_buffer, 0, num_outputs)
-        self.string_content_end_position = BYTES_PER_INT + (
+        self.content_end_position = BYTES_PER_INT + (
             BYTES_PER_INT * num_outputs)
         self.current_output_sizes_position = BYTES_PER_INT
 
@@ -383,16 +409,16 @@ class PredictionResponse():
         """
         Parameters
         ----------
-        output : string
+        output : str
+            A byte-serialized output or utf-8 encoded string
         """
-        output = unicode(output, "utf-8").encode("utf-8")
         output_len = len(output)
         struct.pack_into("<I", self.output_buffer,
                          self.current_output_sizes_position, output_len)
         self.current_output_sizes_position += BYTES_PER_INT
-        self.memview[self.string_content_end_position:
-                     self.string_content_end_position + output_len] = output
-        self.string_content_end_position += output_len
+        self.memview[self.content_end_position:
+                     self.content_end_position + output_len] = output
+        self.content_end_position += output_len
 
     def send(self, socket, event_history):
         socket.send("", flags=zmq.SNDMORE)
@@ -400,13 +426,17 @@ class PredictionResponse():
             struct.pack("<I", MESSAGE_TYPE_CONTAINER_CONTENT),
             flags=zmq.SNDMORE)
         socket.send(self.msg_id, flags=zmq.SNDMORE)
-        socket.send(struct.pack("<I", self.string_content_end_position), flags=zmq.SNDMORE)
-        socket.send(self.output_buffer[0:self.string_content_end_position])
+        socket.send(struct.pack("<I", self.output_type), flags=zmq.SNDMORE)
+        socket.send(
+            struct.pack("<I", self.content_end_position), flags=zmq.SNDMORE)
+        socket.send(self.output_buffer[0:self.content_end_position])
         event_history.insert(EVENT_HISTORY_SENT_CONTAINER_CONTENT)
 
-    def expand_buffer_if_necessary(self, size):
-        if len(self.output_buffer) < size:
-            self.output_buffer = bytearray(size * 2)
+    def expand_buffer_if_necessary(self, num_outputs, content_length_bytes):
+        new_size_bytes = BYTES_PER_INT + (
+            BYTES_PER_INT * num_outputs) + content_length_bytes
+        if len(self.output_buffer) < new_size_bytes:
+            self.output_buffer = bytearray(new_size_bytes * 2)
 
 
 class FeedbackRequest():
