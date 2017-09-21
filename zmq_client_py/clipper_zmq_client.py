@@ -116,8 +116,8 @@ class Client:
 		data_type_bytes = socket.recv()
 		output_data = socket.recv()
 
-		request_id = struct.unpack("<I", request_id_bytes)
-		data_type = struct.unpack("<I", data_type_bytes)
+		request_id = struct.unpack("<I", request_id_bytes)[0]
+		data_type = struct.unpack("<I", data_type_bytes)[0]
 		print("DATA TYPE: {}".format(data_type))
 		output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
 
