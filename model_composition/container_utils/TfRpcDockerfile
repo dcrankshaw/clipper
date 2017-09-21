@@ -10,4 +10,4 @@ ENV CLIPPER_MODEL_PATH=/model.mod
 
 WORKDIR /container
 
-COPY impl/__init__.py impl/rpc.py /container/
+COPY __init__.py rpc.py /container/
