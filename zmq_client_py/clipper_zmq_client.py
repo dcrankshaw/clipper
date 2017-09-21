@@ -137,7 +137,7 @@ class Client:
 			input_type = type(input_item)
 			if input_type == np.ndarray:
 				input_type = input_item.dtype
-			clipper_input_type = _dtype_to_clipper_type(input_type)
+			clipper_input_type = self._dtype_to_clipper_type(input_type)
 
 			socket.send("", zmq.SNDMORE)
 			socket.send(struct.pack("<I", self.client_id), zmq.SNDMORE)
