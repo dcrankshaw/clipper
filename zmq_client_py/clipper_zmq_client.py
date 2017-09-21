@@ -172,4 +172,3 @@ class Client:
 			return DATA_TYPE_STRINGS
 		else:
 			return DATA_TYPE_INVALID
-
