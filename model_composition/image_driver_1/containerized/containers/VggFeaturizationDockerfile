@@ -1,0 +1,10 @@
+FROM model-comp/tf-rpc:latest
+
+WORKDIR /container
+
+COPY impl/vgg_feats_container.py /container/
+COPY vgg_feats_model_data/ /model
+
+ENV CLIPPER_MODEL_PATH=/model/vgg_feats_graph_def.pb
+
+CMD ["python", "/container/vgg_feats_container.py"]
