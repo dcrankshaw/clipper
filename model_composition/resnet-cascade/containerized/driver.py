@@ -10,8 +10,9 @@ from multiprocessing import Process, Queue
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from datetime import datetime
-import argparse
-import json
+# from threading import Thread
+# import argparse
+# import json
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -33,16 +34,13 @@ def run(proc_num, results_queue):
     channels = 3
     logger.info("Generating random inputs")
     xs = [np.random.random((height, width, channels)).flatten().astype(np.float32)
-          for _ in range(10000)]
+          for _ in range(1000)]
     logger.info("Starting predictions")
     predictor = Predictor()
-    for x in xs:
-        # x = np.random.random((height, width, channels)).flatten().astype(np.float32)
-        # logger.info("sending prediction")
-        predictor.predict(x)
+    idx = 0
+    while len(predictor.stats["thrus"]) < 30:
+        predictor.predict(xs[idx % len(xs)])
         time.sleep(0.005)
-    # let the experiment run for 15 more seconds
-    time.sleep(15)
     results_queue.put(predictor.stats)
 
 
@@ -135,19 +133,15 @@ def setup_clipper(alexnet_config):
     return cl, [alexnet_config]
 
 
-def run_experiment(num_clients, config, experiment_name):
+def run_experiment(config, experiment_name):
     cl, configs = setup_clipper(config)
     client_metrics_queue = Queue()
-    processes = []
-    for i in range(num_clients):
-        p = Process(target=run, args=('%d'.format(i), client_metrics_queue))
-        p.start()
-        processes.append(p)
+    i = 0
+    p = Process(target=run, args=('%d'.format(i), client_metrics_queue))
+    p.start()
 
-    client_metrics = []
-    for p in processes:
-        p.join()
-        client_metrics.append(client_metrics_queue.get())
+    p.join()
+    client_metrics = client_metrics_queue.get()
 
     driver_utils.save_results(configs, cl, client_metrics, experiment_name)
 
@@ -160,10 +154,10 @@ if __name__ == "__main__":
     # parser.add_argument('--num_clients', type=int, default=1)
     # args = parser.parse_args()
 
-    num_clients = 3
+    # num_clients = 3
 
-    for num_reps in range(1, 5):
-        for batch_size in [1, 2, 4, 8, 16, 32]:
+    for num_reps in reversed(range(1, 3)):
+        for batch_size in reversed([1, 2, 4, 8, 16, 32]):
             alexnet_config = driver_utils.HeavyNodeConfig("alexnet",
                                                           "floats",
                                                           "model-comp/pytorch-alexnet",
@@ -172,4 +166,4 @@ if __name__ == "__main__":
                                                           gpus=range(num_reps),
                                                           batch_size=batch_size,
                                                           num_replicas=num_reps)
-            run_experiment(num_clients, alexnet_config, "replication_and_batch_size_take_2")
+            run_experiment(alexnet_config, "replication_and_batch_size_take_2")
