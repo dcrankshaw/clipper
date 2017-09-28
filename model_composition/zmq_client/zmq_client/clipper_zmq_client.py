@@ -8,7 +8,7 @@ import sys
 
 from futures_then import ThenableFuture as Future
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock, Thread
+from threading import RLock, Thread
 from Queue import Queue
 
 DATA_TYPE_INVALID = -1
@@ -17,6 +17,8 @@ DATA_TYPE_INTS = 1
 DATA_TYPE_FLOATS = 2
 DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
+
+logger = logging.getLogger(__name__)
 
 class Client:
 
@@ -39,7 +41,7 @@ class Client:
 		self.client_id = None
 		self.request_id = 0
 		self.outstanding_requests = {}
-		self.request_lock = Lock()
+		self.request_lock = RLock()
 		self.request_queue = Queue()
 		self.futures_executor = ThreadPoolExecutor(max_workers=1)
 
