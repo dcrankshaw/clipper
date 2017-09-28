@@ -6,7 +6,7 @@ import numpy as np
 import time
 from clipper_admin import ClipperConnection, DockerContainerManager
 # from datetime import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from datetime import datetime
@@ -28,7 +28,7 @@ DATA_TYPE_DOUBLES = 3
 DATA_TYPE_STRINGS = 4
 
 
-def run(proc_num, configs):
+def run(proc_num, results_queue):
     height, width = 299, 299
     channels = 3
     logger.info("Generating random inputs")
@@ -41,9 +41,10 @@ def run(proc_num, configs):
         # logger.info("sending prediction")
         predictor.predict(x)
         time.sleep(0.005)
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-    cl.connect()
-    driver_utils.save_results(configs, cl, predictor.stats, "gpu_and_batch_size_experiments")
+    # let the experiment run for 15 more seconds
+    time.sleep(15)
+    results_queue.put(predictor.stats)
+
 
 class InflightReq(object):
 
@@ -131,7 +132,24 @@ def setup_clipper(alexnet_config):
     # setup_heavy_node(cl, "res152", "floats", "model-comp/pytorch-res152", gpus=[2])
     time.sleep(10)
     logger.info("Clipper is set up")
-    return [alexnet_config]
+    return cl, [alexnet_config]
+
+
+def run_experiment(num_clients, config, experiment_name):
+    cl, configs = setup_clipper(config)
+    client_metrics_queue = Queue()
+    processes = []
+    for i in range(num_clients):
+        p = Process(target=run, args=('%d'.format(i), client_metrics_queue))
+        p.start()
+        processes.append(p)
+
+    client_metrics = []
+    for p in processes:
+        p.join()
+        client_metrics.append(client_metrics_queue.get())
+
+    driver_utils.save_results(configs, cl, client_metrics, experiment_name)
 
 
 if __name__ == "__main__":
@@ -139,10 +157,12 @@ if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description='Resnet-Cascade-Driver')
     # parser.add_argument('--setup', action='store_true')
     # parser.add_argument('--run', action='store_true')
-    # parser.add_argument('--num_procs', type=int, default=1)
+    # parser.add_argument('--num_clients', type=int, default=1)
     # args = parser.parse_args()
 
-    for num_reps in range(1,5):
+    num_clients = 3
+
+    for num_reps in range(1, 5):
         for batch_size in [1, 2, 4, 8, 16, 32]:
             alexnet_config = driver_utils.HeavyNodeConfig("alexnet",
                                                           "floats",
@@ -152,13 +172,4 @@ if __name__ == "__main__":
                                                           gpus=range(num_reps),
                                                           batch_size=batch_size,
                                                           num_replicas=num_reps)
-            configs = setup_clipper(alexnet_config)
-            processes = []
-            # for i in range(args.num_procs):
-            i = 0
-            p = Process(target=run, args=('%d'.format(i), configs))
-            p.start()
-            processes.append(p)
-
-            for p in processes:
-                p.join()
+            run_experiment(num_clients, alexnet_config, "replication_and_batch_size_take_2")
