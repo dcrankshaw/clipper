@@ -6,7 +6,6 @@ import time
 import base64
 import logging
 
-from concurrent.futures import ThreadPoolExecutor
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
 from io import BytesIO
@@ -157,16 +156,16 @@ class ModelBenchmarker(object):
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
 
     def run(self, duration_seconds=120):
-        prediction_executor = ThreadPoolExecutor(max_workers=1)
         logger.info("Generating random inputs")
         inputs = [self.input_generator_fn() for _ in range(2000)]
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
-            prediction_executor.submit(predictor.predict, self.config.name, input_item)
+            predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
         while True:
+            print("Waiting")
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 2000):
                 break
