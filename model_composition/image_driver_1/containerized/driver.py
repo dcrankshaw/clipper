@@ -67,7 +67,6 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=VGG_FEATS_IMAGE_NAME,
                                             allocated_cpus=[6,7,14,15],
                                             cpus_per_replica=2,
-                                            slo=1000000000,
                                             gpus=[0],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
@@ -163,12 +162,9 @@ class ModelBenchmarker(object):
         start_time = datetime.now()
         predictor = Predictor()
         last_prediction_task_future = None
-        tasks_sent = 0
         for input_item in inputs:
             last_prediction_task_future = predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
-            tasks_sent += 1
-        print("TASKS SENT: {}".format(tasks_sent))
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 5000):

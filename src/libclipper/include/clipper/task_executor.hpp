@@ -166,9 +166,7 @@ class ModelQueue {
   std::vector<PredictTask> get_batch(
       std::function<int(Deadline)> &&get_batch_size) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
-    remove_tasks_with_elapsed_deadlines();
     queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
-    remove_tasks_with_elapsed_deadlines();
     Deadline deadline = queue_.top().first;
     int max_batch_size = get_batch_size(deadline);
     std::vector<PredictTask> batch;
