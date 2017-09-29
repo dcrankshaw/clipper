@@ -6,7 +6,7 @@ import time
 import base64
 import logging
 
-from conurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
 from io import BytesIO
