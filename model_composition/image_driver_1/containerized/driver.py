@@ -67,7 +67,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=VGG_FEATS_IMAGE_NAME,
                                             allocated_cpus=range(14,21),
                                             cpus_per_replica=2,
-                                            gpus=None,
+                                            gpus=[1],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -77,7 +77,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=INCEPTION_FEATS_IMAGE_NAME,
                                             allocated_cpus=[7],
                                             cpus_per_replica=1,
-                                            gpus=[1],
+                                            gpus=[2],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -87,7 +87,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=VGG_SVM_IMAGE_NAME,
                                             allocated_cpus=[6],
                                             cpus_per_replica=1,
-                                            gpus=[0],
+                                            gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -97,7 +97,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=LGBM_IMAGE_NAME,
                                             allocated_cpus=[22,23],
                                             cpus_per_replica=2,
-                                            gpus=None,
+                                            gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
