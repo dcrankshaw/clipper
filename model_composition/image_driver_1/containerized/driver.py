@@ -127,8 +127,6 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        print(end_time - self.start_time)
-        print(self.num_complete)
         thru = float(self.num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
@@ -140,7 +138,6 @@ class Predictor(object):
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
-            print(output)
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
