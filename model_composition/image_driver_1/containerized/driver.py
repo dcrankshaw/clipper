@@ -156,7 +156,7 @@ class ModelBenchmarker(object):
 
     def run(self):
         logger.info("Generating random inputs")
-        inputs = [self.input_generator_fn() for _ in range(10000)]
+        inputs = [self.input_generator_fn() for _ in range(1000)]
         logger.info("Starting predictions")
         predictor = Predictor()
         for input_item in inputs:
