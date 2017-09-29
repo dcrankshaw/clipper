@@ -12,7 +12,7 @@ from io import BytesIO
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
-from multiprocessing import process
+from multiprocessing import Process
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -82,7 +82,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             num_replicas=num_replicas)
 
     elif model_name == VGG_SVM_MODEL_APP_NAME:
-        return driver_utils.HeavyNodeConfig(name=VGG_FEATS_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=VGG_SVM_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=VGG_SVM_IMAGE_NAME,
                                             allocated_cpus=[6],
