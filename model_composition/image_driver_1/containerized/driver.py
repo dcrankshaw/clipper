@@ -139,7 +139,6 @@ class Predictor(object):
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
-            print(output)
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
@@ -164,6 +163,7 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
+            print("HERE")
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
