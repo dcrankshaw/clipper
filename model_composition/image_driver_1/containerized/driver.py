@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
     processes = []
     for i in range(args.num_procs):
-        p = Process(target=benchmarker.run, args=())
+        p = Process(target=benchmarker.run, args=(120,))
         p.start()
         processes.append(p)
 
