@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import time
 import base64
+import logging
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
