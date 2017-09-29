@@ -80,7 +80,7 @@ if __name__ == "__main__":
             file=sys.stdout)
         sys.exit(1)
 
-    gpu_mem_frac = 1.0
+    gpu_mem_frac = .9
     if "CLIPPER_GPU_MEM_FRAC" in os.environ:
         gpu_mem_frac = float(os.environ["CLIPPER_GPU_MEM_FRAC"])
     else:

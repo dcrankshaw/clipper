@@ -138,6 +138,7 @@ class Predictor(object):
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
+            print(output)
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
