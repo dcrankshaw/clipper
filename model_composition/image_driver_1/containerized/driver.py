@@ -150,7 +150,6 @@ class Predictor(object):
 
 class ModelBenchmarker(object):
     def __init__(self, config):
-        print("CONFIG NAME: {}".format(config.name))
         self.model_app_name = config.name
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.model_app_name)
 
@@ -160,7 +159,8 @@ class ModelBenchmarker(object):
         logger.info("Starting predictions")
         predictor = Predictor()
         for input_item in inputs:
-            predictor.predict(model_app_name=self.model_app_name, input_item=input_item)
+            print("APP NAME TYPE: {}".format(type(self.model_app_name)))
+            predictor.predict(self.model_app_name, input_item=input_item)
             time.sleep(0.005)
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
