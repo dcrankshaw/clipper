@@ -150,6 +150,7 @@ class Predictor(object):
 
 class ModelBenchmarker(object):
     def __init__(self, config):
+        print("CONFIG NAME: {}".format(config.name))
         self.model_app_name = config.name
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.model_app_name)
 
