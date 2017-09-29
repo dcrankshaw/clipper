@@ -144,6 +144,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
+            print(self.total_num_complete)
             if self.batch_num_complete % 50 == 0:
                 self.print_stats()
                 self.init_stats()
@@ -163,7 +164,6 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            print("HERE")
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
