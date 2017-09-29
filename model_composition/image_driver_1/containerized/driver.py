@@ -143,7 +143,7 @@ class Predictor(object):
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
             self.num_complete += 1
-            if self.num_complete % 200 == 0:
+            if self.num_complete % 50 == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -154,14 +154,20 @@ class ModelBenchmarker(object):
         self.config = config
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
 
-    def run(self):
+    def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
         inputs = [self.input_generator_fn() for _ in range(1000)]
         logger.info("Starting predictions")
+        start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
+        while True:
+            curr_time = datetime.now()
+            if (curr_time - start_time).total_seconds() > duration_seconds:
+                break
+            time.sleep(1)
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
