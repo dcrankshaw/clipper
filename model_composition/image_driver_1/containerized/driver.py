@@ -67,6 +67,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
                                             model_image=VGG_FEATS_IMAGE_NAME,
                                             allocated_cpus=[6,7,14,15],
                                             cpus_per_replica=2,
+                                            slo=1000000000,
                                             gpus=[0],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
