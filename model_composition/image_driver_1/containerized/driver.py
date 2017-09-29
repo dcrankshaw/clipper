@@ -157,7 +157,7 @@ class ModelBenchmarker(object):
 
     def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
-        inputs = [self.input_generator_fn() for _ in range(1000)]
+        inputs = [self.input_generator_fn() for _ in range(2000)]
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
@@ -167,7 +167,7 @@ class ModelBenchmarker(object):
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
-            if (curr_time - start_time).total_seconds() > duration_seconds or predictor.total_num_complete == 1000:
+            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 2000):
                 break
             time.sleep(1)
 
