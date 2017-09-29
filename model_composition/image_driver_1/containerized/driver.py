@@ -45,7 +45,7 @@ CLIPPER_RECV_PORT = 4455
 
 ########## Setup ##########
 
-def setup_clipper(config)
+def setup_clipper(config):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.stop_all()
     cl.start_clipper(
@@ -206,17 +206,19 @@ if __name__ == "__main__":
     if args.model_name not in VALID_MODEL_NAMES:
         raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
 
-    for num_replicas in range(1,5):
-        for batch_size in [1,2,3,4,8,16,32]:
-            model_config = get_heavy_node_config(model_name=args.model_name, batch_size=batch_size, num_replicas=num_replicas) 
-            setup_clipper(model_config)
-            benchmarker = ModelBenchmarker(model_config)
+    batch_size, num_replicas = 4, 1
 
-            processes = []
-            for i in range(args.num_procs):
-                p = Process(target=benchmarker.run, args=())
-                p.start()
-                processes.append(p)
+    # for num_replicas in range(1,5):
+    #     for batch_size in [1,2,3,4,8,16,32]:
+    model_config = get_heavy_node_config(model_name=args.model_name, batch_size=batch_size, num_replicas=num_replicas) 
+    setup_clipper(model_config)
+    benchmarker = ModelBenchmarker(model_config)
 
-            for p in processes:
-                p.join()
+    processes = []
+    for i in range(args.num_procs):
+        p = Process(target=benchmarker.run, args=())
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
