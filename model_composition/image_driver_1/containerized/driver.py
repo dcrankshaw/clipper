@@ -9,7 +9,7 @@ from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
-from containerization_utils.zmq_client import Client
+from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import process
 
