@@ -84,7 +84,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
     elif model_name == VGG_SVM_MODEL_APP_NAME:
         return driver_utils.HeavyNodeConfig(name=VGG_FEATS_MODEL_APP_NAME,
                                             input_type="floats",
-                                            model_image=VGG_SVM_MODEL_APP_NAME,
+                                            model_image=VGG_SVM_IMAGE_NAME,
                                             allocated_cpus=[6],
                                             cpus_per_replica=1,
                                             gpus=[0],
