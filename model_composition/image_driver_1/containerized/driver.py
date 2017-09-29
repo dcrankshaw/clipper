@@ -135,7 +135,7 @@ class Predictor(object):
                                                                        mean=mean,
                                                                        thru=thru))
 
-    def predict(model_app_name, input_item):
+    def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
             end_time = datetime.now()
@@ -159,8 +159,7 @@ class ModelBenchmarker(object):
         logger.info("Starting predictions")
         predictor = Predictor()
         for input_item in inputs:
-            print("APP NAME TYPE: {}".format(type(self.model_app_name)))
-            predictor.predict(self.model_app_name, input_item=input_item)
+            predictor.predict(model_app_name=self.model_app_name, input_item=input_item)
             time.sleep(0.005)
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
