@@ -204,6 +204,8 @@ if __name__ == "__main__":
     parser.add_argument('-n, --num_procs', type=int, default=1, help='The number of benchmarking processes')
     parser.add_argument('-m, --model_name', type=str, help="The name of the model to benchmark")
 
+    args = parser.parse_args()
+
     if args.model_name not in VALID_MODEL_NAMES:
         raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
 
