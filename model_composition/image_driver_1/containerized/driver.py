@@ -161,18 +161,15 @@ class ModelBenchmarker(object):
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
-        last_task_future = None
+        last_prediction_task_future = None
         for input_item in inputs:
-            last_task_future = predictor.predict(model_app_name=self.config.name, input_item=input_item)
+            last_prediction_task_future = predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
-        # while True:
-        #     curr_time = datetime.now()
-        #     if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 5000):
-        #         break
-        #     time.sleep(1)
-
-        last_output = last_task_future.result()
-        print("LAST: {}".format(last_output))
+        while True:
+            curr_time = datetime.now()
+            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 5000):
+                break
+            time.sleep(1)
 
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
