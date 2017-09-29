@@ -65,9 +65,9 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
         return driver_utils.HeavyNodeConfig(name=VGG_FEATS_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=VGG_FEATS_IMAGE_NAME,
-                                            allocated_cpus=range(14,21),
+                                            allocated_cpus=[6,7,14,15],
                                             cpus_per_replica=2,
-                                            gpus=[1],
+                                            gpus=[0],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -75,9 +75,9 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
         return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS_MODEL_APP_NAME,
                                             input_type="strings",
                                             model_image=INCEPTION_FEATS_IMAGE_NAME,
-                                            allocated_cpus=[7],
+                                            allocated_cpus=range(16,19),
                                             cpus_per_replica=1,
-                                            gpus=[2],
+                                            gpus=[0],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -85,8 +85,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
         return driver_utils.HeavyNodeConfig(name=VGG_SVM_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=VGG_SVM_IMAGE_NAME,
-                                            allocated_cpus=[6],
-                                            cpus_per_replica=1,
+                                            allocated_cpus=range(20,27),
+                                            cpus_per_replica=2,
                                             gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
@@ -95,8 +95,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas):
         return driver_utils.HeavyNodeConfig(name=LGBM_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=LGBM_IMAGE_NAME,
-                                            allocated_cpus=[22,23],
-                                            cpus_per_replica=2,
+                                            allocated_cpus=range(28,31),
+                                            cpus_per_replica=1,
                                             gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
