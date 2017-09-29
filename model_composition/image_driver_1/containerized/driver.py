@@ -171,7 +171,8 @@ class ModelBenchmarker(object):
         #         break
         #     time.sleep(1)
 
-        last_task_future.result()
+        last_output = last_task_future.result()
+        print("LAST: {}".format(last_output))
 
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
