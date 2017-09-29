@@ -115,10 +115,11 @@ class Predictor(object):
             "thrus": [],
             "p99_lats": [],
             "mean_lats": []}
+        self.total_num_complete = 0
 
     def init_stats(self):
         self.latencies = []
-        self.num_complete = 0
+        self.batch_num_complete = 0
         self.cur_req_id = 0
         self.start_time = datetime.now()
 
@@ -127,7 +128,7 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.num_complete) / (end_time - self.start_time).total_seconds()
+        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
@@ -142,8 +143,9 @@ class Predictor(object):
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
-            self.num_complete += 1
-            if self.num_complete % 50 == 0:
+            self.total_num_complete += 1
+            self.batch_num_complete += 1
+            if self.batch_num_complete % 50 == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -165,7 +167,7 @@ class ModelBenchmarker(object):
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
-            if (curr_time - start_time).total_seconds() > duration_seconds:
+            if (curr_time - start_time).total_seconds() > duration_seconds or predictor.total_num_complete == 1000:
                 break
             time.sleep(1)
 
@@ -209,6 +211,7 @@ class ModelBenchmarker(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-n', '--num_procs', type=int, default=1, help='The number of benchmarking processes')
+    parser.add_argument('-d', '--duration_seconds', type=int, default=120, help='The maximum duration of the benchmarking process')
     parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark")
 
     args = parser.parse_args()
@@ -226,7 +229,7 @@ if __name__ == "__main__":
 
     processes = []
     for i in range(args.num_procs):
-        p = Process(target=benchmarker.run, args=(120,))
+        p = Process(target=benchmarker.run, args=(args.duration_seconds,))
         p.start()
         processes.append(p)
 
