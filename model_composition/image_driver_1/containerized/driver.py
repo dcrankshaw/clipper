@@ -259,7 +259,7 @@ if __name__ == "__main__":
 
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
-    cpus_per_replica_confs = args.cpus_per_replica_nums or default_cpus_per_replica_confs
+    cpus_per_replica_confs = args.cpus_per_replica_nums if args.cpus_per_repica_nums else default_cpus_per_replica_confs
 
 
     for num_replicas in replica_num_confs:
