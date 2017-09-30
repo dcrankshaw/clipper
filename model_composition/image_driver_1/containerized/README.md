@@ -55,26 +55,91 @@ The driver accepts the following arguments:
   
 - **num_replicas**: The "number of replicas" configurations to benchmark. Each configuration will be benchmarked separately.
   * If unspecified, the driver will benchmark a single "number of replicas" configuration of size `1`
+  
+- **model_cpus**: The cpu cores on which model replicas should be run. Clipper will automatically handle the placement of each replica on one or more of these cpu cores (as specified by **cpus_per_replica**).
 
-### Example
-As an example, consider the following driver command:
+- **cpus_per_replica_nums**: The "number of cpu cores per replica" configurations to benchmark. Each configuration will be benchmarked
+separately.
 
-```sh
-$ python driver.py --duration_seconds 120 --model_name vgg --num_replicas 1 2 3 4 --batch_sizes 1 2 4 8 16 32
-```
+- **model_gpus**: The set of gpus on which to run replicas of the provided model. If you're running multiple replicas of
+a model on GPUs, **each replica must have its own GPU**. Any replicas that don't have their own GPU will be executed on 
+one or more of the CPU cores specified by **model_cpus**.
 
-This command specifies `4` different replica configurations and `6` batch size configurations. Therefore, a total of
-`4 * 6 = 24` benchmarking iterations will occur (one for each combination of configurations). Each iteration will last a maximum
-of 120 seconds and will use the VGG model.
+
+### Examples
+
+1. As an example, consider the following driver command:
+
+   ```sh
+   $ python driver.py --duration_seconds 120 --model_name vgg --num_replicas 1 2 3 4 --batch_sizes 1 2 4 8 16 32 \
+                      --model_cpus 20 21 22 23 24 25 26 27 --cpus_per_replica_nums 1,2
+   ```
+
+   This command specifies that:
+
+   1. The VGG model will be benchmarked using cpus `20-27`
+   
+   2. `4` different "number of replicas" and `6` different "batch size" configurations will be benchmarked
+   
+   3. `2` different "number of cpu cores per replica" configurations will be benchmarked
+      - Note that we cannot experiment with more than `max(num_replicas) / |model_cpus|` cpu cores per replica.
+      - This means that, for this example, `max(cpus_per_replica_nums) = 2 cores` 
+        (as reflected in the **cpus_per_replica_num** argument)
+
+   4. Therefore, a total of `4 * 6 * 2 = 48` iterations lasting 120 seconds will occur (one for each configuration)
+
+2. The last command benchmarked the VGG model on various CPU configurations. However, this model may perform better on a GPU.
+Therefore, we might also run the following driver command:
+
+ 
+   ```sh
+   $ python driver.py --duration_seconds 120 --model_name vgg --num_replicas 1 2 3 4 --batch_sizes 1 2 4 8 16 32 \
+                      --model_gpus 0,1 --model_cpus 20 21 22 23 --cpus_per_replica_nums 2
+   ```  
+
+   This command specifies that:
+   
+   1. As before, the VGG model will be benchmarked
+   
+   2. As before, `4` different "number of replicas" and `6` different "batch size" configurations will be benchmarked
+   
+   3. When the number of replicas exceeds the number of model gpus (`2`), two replicas will be run on GPUs 
+      (one on GPU 0 and one on GPU 1), and the remaining replicas will be run on CPU cores `20-23`
+      
+   4. Each CPU-bound replica will be allocated `2` CPU cores.
 
 ### Avoiding CPU resource conflicts
+When you're running replicas of a CPU-intensive model on a set of cores, `C = {c_1, ..., c_n}`, you want to avoid
+starting other processes on these cores (or model performance might suffer). Therefore, you need to **make sure of two things**:
 
+1. The set of cpu cores, `C`, allocated to the model (via **model_cpus**) does NOT intersect with the set of cpu cores allocated
+to other pieces of Clipper's infrastructure. Therefore, **avoid using the following cpu cores**:
+
+   * Core 0: The CPU core allocated to [Redis](https://redis.io/topics/introduction) (Clipper's configuration database)
+   * Core 8: The CPU core allocated to Clipper's management frontend
+   * Cores 1-5, 9-13: The CPU cores allocated to Clipper's ZMQ frontend
+   
+   Note: These core numbers are [configured in the driver ](https://github.com/dcrankshaw/clipper/blob/e2e292c0637327fed73df6a689df6f67677c0330/model_composition/image_driver_1/containerized/driver.py#L54-L56), and you can easily change them if necessary.
+   
+2. The benchmarking driver ([driver.py](driver.py)) is not executed on any CPU cores present in `C = {c_1, ..., c_n}`. 
+   To make sure of this, you can use [numactl](https://linux.die.net/man/8/numactl) to control the allocation of CPU cores
+   to the driver. **The driver should be allocated at least 4 cores**.
+   
+   For example, consider the second driver command from the previous section. We specified via **model_cpus** that
+   replicas of the VGG model were allocated CPU cores 20-23. Therefore, we should have used `numactl` to run ([driver.py](driver.py))
+   on a different set of cores as follows:
+   
+   ```sh
+   $ numactl -C 24,25,26,27 python driver.py --duration_seconds 120 --model_name vgg --num_replicas 1 2 3 4 \
+                                             --batch_sizes 1 2 4 8 16 32 --model_gpus 0,1 --model_cpus 20 21 22 23 \
+                                             --cpus_per_replica_nums 2
+   ```
 
 ## Monitoring the benchmarking process
 Once you've started a benchmark, there are some useful tools and logs that you can use to monitor behavior.
 
 ### Monitoring CPU usage
-If you're running a CPU-intensive model on a set of cores, `{c_1, ..., c_n}`, you can use [htop](http://hisham.hm/htop/)
+If you're running replicas of a CPU-intensive model on a set of cores, `{c_1, ..., c_n}`, you can use [htop](http://hisham.hm/htop/)
 to monitor for higher activity on those cores. 
 
 ### Monitoring GPU usage
