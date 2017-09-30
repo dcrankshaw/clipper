@@ -83,10 +83,10 @@ If you're benchmarking the VGG or Inception models on a GPU, you can make sure t
 
 If no tasks are running on the GPU, the output of `nvidia-smi` will look similar to the following:
 
-![Image of Unused Nvidia-Smi](nvidia-smi-unused.jpg)
+![Image of Unused Nvidia-Smi](imgs/nvidia-smi-unused.jpg)
 
 In contrast, if tasks are running, you should see non-zero (hopefully high) memory and utilization, as well as one or more active processes (Note: This output was obtained from a machine with 2 GPUs):
 
-![Image of Used Nvidia-Smi](nvidia-smi-used.jpg)
+![Image of Used Nvidia-Smi](imgs/nvidia-smi-used.jpg)
 
 
