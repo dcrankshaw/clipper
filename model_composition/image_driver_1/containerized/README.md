@@ -1,11 +1,25 @@
 # Image Driver 1
 
 ## Background
+First, here's a quick review of some relevant terminology:
+
+* [**(Docker) Container**](https://www.docker.com/what-container): A self-contained virtual system for running software
+
+* **Model**: A machine learning model implemented in one of several prominent frameworks (Tensorflow, Scikit, PyTorch, Theano, etc).
+
+* **Replica**: A copy of a **model**. In practice, this is a single **container** running the model's code and dependencies.
+
+* **Prediction Request**: A query sent to Clipper containing an application-specific input. For benchmarking purposes, each 
+prediction request will contain an input of the type expected by the model being benchmarked (i.e. a 299x299x3 numpy array for 
+the the VGG image featurization model).
+
+* **Client**: Module of code for sending prediction requests to Clipper. Effectively, the driver file that you'll be using to benchmark models is a client.
+
+* **Frontend**: A piece of Clipper's infrastructure that communicates with **clients** and or **replicas**. (For more information, see the [Clipper design doc](https://docs.google.com/document/d/1Ghc-CAKXzzRshSa6FlonFa5ttmtHRAqFwMg7vhuJakw/edit)).
 
 This driver makes use of 4 heavyweight models: A VGG model for image featurization, an Inception V3 model for image featurization, 
 an SVM with Kernel PCA for feature classification, and a light boosted gradient model (LGBM) for feature classification. The driver file,
-[driver.py](driver.py), will help you benchmark each of this models with Clipper in isolation (one model at a time). The remaining sections
-of this README will get you started with the benchmarking process.
+[driver.py](driver.py), will help you benchmark each of this models with Clipper in isolation (one model at a time). The remaining sections of this README will get you started with the benchmarking process.
 
 ## Activate your Clipper Anaconda environment
 Before proceeding, make sure to activate your Anaconda environment if it is not already activated. This can be done by running:
