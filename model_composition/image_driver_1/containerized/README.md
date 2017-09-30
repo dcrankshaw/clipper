@@ -119,7 +119,7 @@ to other pieces of Clipper's infrastructure. Therefore, **avoid using the follow
    * Core 8: The CPU core allocated to Clipper's management frontend
    * Cores 1-5, 9-13: The CPU cores allocated to Clipper's ZMQ frontend
    
-   Note: These core numbers are [configured in the driver ](https://github.com/dcrankshaw/clipper/blob/e2e292c0637327fed73df6a689df6f67677c0330/model_composition/image_driver_1/containerized/driver.py#L54-L56), and you can easily change them if necessary.
+   **Note:** These core numbers are [configured in the driver ](https://github.com/dcrankshaw/clipper/blob/e2e292c0637327fed73df6a689df6f67677c0330/model_composition/image_driver_1/containerized/driver.py#L54-L56), and you can easily change them if necessary.
    
 2. The benchmarking driver ([driver.py](driver.py)) is not executed on any CPU cores present in `C = {c_1, ..., c_n}`. 
    To make sure of this, you can use [numactl](https://linux.die.net/man/8/numactl) to control the allocation of CPU cores
