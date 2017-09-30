@@ -247,8 +247,7 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--cpus_per_replica_nums', type=int, help="Configurations for the number of cpu cores allocated to each replica of the model")
     parser.add_argument('-g', '--model_gpus', type=int, help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
 
-    args = parser.parse_args(),
-
+    args = parser.parse_args()
 
     if args.model_name not in VALID_MODEL_NAMES:
         raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
