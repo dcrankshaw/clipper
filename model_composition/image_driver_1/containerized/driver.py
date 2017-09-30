@@ -60,44 +60,72 @@ def setup_clipper(config):
     logger.info("Clipper is set up!")
     return config
 
-def get_heavy_node_config(model_name, batch_size, num_replicas):
+def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
     if model_name == VGG_FEATS_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 2
+        if not allocated_cpus:
+            allocated_cpus = [6,7,14,15]
+        if not allocated_gpus:
+            allocated_gpus = [0]
+
         return driver_utils.HeavyNodeConfig(name=VGG_FEATS_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=VGG_FEATS_IMAGE_NAME,
-                                            allocated_cpus=[6,7,14,15],
-                                            cpus_per_replica=2,
-                                            gpus=[0],
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
     elif model_name == INCEPTION_FEATS_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 1
+        if not allocated_cpus:
+            allocated_cpus = range(16,19)
+        if not allocated_gpus:
+            allocated_gpus = [0]
+
         return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS_MODEL_APP_NAME,
                                             input_type="strings",
                                             model_image=INCEPTION_FEATS_IMAGE_NAME,
-                                            allocated_cpus=range(16,19),
-                                            cpus_per_replica=1,
-                                            gpus=[0],
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
     elif model_name == VGG_SVM_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 2
+        if not allocated_cpus:
+            allocated_cpus = range(20,27)
+        if not allocated_gpus:
+            allocated_gpus = []
+
         return driver_utils.HeavyNodeConfig(name=VGG_SVM_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=VGG_SVM_IMAGE_NAME,
-                                            allocated_cpus=range(20,27),
-                                            cpus_per_replica=2,
-                                            gpus=[],
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
     elif model_name == LGBM_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 1
+        if not allocated_cpus:
+            allocated_cpus = [28,29]
+        if not allocated_gpus:
+            allocated_gpus = []
+
         return driver_utils.HeavyNodeConfig(name=LGBM_MODEL_APP_NAME,
                                             input_type="floats",
                                             model_image=LGBM_IMAGE_NAME,
-                                            allocated_cpus=range(28,29),
-                                            cpus_per_replica=1,
-                                            gpus=[],
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
@@ -211,28 +239,40 @@ class ModelBenchmarker(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-n', '--num_procs', type=int, default=1, help='The number of benchmarking processes')
-    parser.add_argument('-d', '--duration_seconds', type=int, default=120, help='The maximum duration of the benchmarking process')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark")
+    parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
+    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'svm, 'inception', 'lgbm'")
+    parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
+    parser.add_argument('-p', '--cpus_per_replica_nums', type=int, help="Configurations for the number of cpu cores allocated to each replica of the model")
+    parser.add_argument('-g', '--model_gpus', type=int, help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
 
     args = parser.parse_args()
 
     if args.model_name not in VALID_MODEL_NAMES:
         raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
 
-    batch_size, num_replicas = 4, 1
+    default_batch_size_confs = [2]
+    default_replica_num_confs = [1]
+    default_cpus_per_replica_confs = [None]
 
-    # for num_replicas in range(1,5):
-    #     for batch_size in [1,2,3,4,8,16,32]:
-    model_config = get_heavy_node_config(model_name=args.model_name, batch_size=batch_size, num_replicas=num_replicas) 
-    setup_clipper(model_config)
-    benchmarker = ModelBenchmarker(model_config)
+    batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
+    replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
+    cpus_per_replica_confs = args.cpus_per_replica_nums or default_cpus_per_replica_confs
 
-    processes = []
-    for i in range(args.num_procs):
-        p = Process(target=benchmarker.run, args=(args.duration_seconds,))
-        p.start()
-        processes.append(p)
 
-    for p in processes:
-        p.join()
+    for num_replicas in replica_num_confs:
+        for cpus_per_replica in cpus_per_replica_confs:
+            for batch_size in batch_size_confs:
+                model_config = get_heavy_node_config(model_name=args.model_name, 
+                                                     batch_size=batch_size, 
+                                                     num_replicas=num_replicas,
+                                                     cpus_per_replica=cpus_per_replica,
+                                                     allocated_cpus=args.model_cpus,
+                                                     allocated_gpus=args.model_gpus)
+                setup_clipper(model_config)
+                benchmarker = ModelBenchmarker(model_config)
+
+                p = Process(target=benchmarker.run, args=(args.duration_seconds,))
+                p.start()
+                p.join()
