@@ -185,7 +185,7 @@ class ModelBenchmarker(object):
 
     def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
-        inputs = [self.input_generator_fn() for _ in range(5000)]
+        inputs = [self.input_generator_fn() for _ in range(10000)]
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
@@ -195,7 +195,7 @@ class ModelBenchmarker(object):
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
-            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 5000):
+            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
                 break
             time.sleep(1)
 
@@ -247,7 +247,8 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--cpus_per_replica_nums', type=int, help="Configurations for the number of cpu cores allocated to each replica of the model")
     parser.add_argument('-g', '--model_gpus', type=int, help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
 
-    args = parser.parse_args()
+    args = parser.parse_args(),
+
 
     if args.model_name not in VALID_MODEL_NAMES:
         raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
@@ -268,8 +269,7 @@ if __name__ == "__main__":
                                                      batch_size=batch_size, 
                                                      num_replicas=num_replicas,
                                                      cpus_per_replica=cpus_per_replica,
-                                                     allocated_cpus=args.model_cpus,
-                                                     allocated_gpus=args.model_gpus)
+                                                     allocated_cpus=args.model_cpus                                                     allocated_gpus=args.model_gpus)
                 setup_clipper(model_config)
                 benchmarker = ModelBenchmarker(model_config)
 
