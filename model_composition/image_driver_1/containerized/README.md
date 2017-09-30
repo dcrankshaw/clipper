@@ -96,7 +96,7 @@ one or more of the CPU cores specified by **model_cpus**.
    2. `4` different "number of replicas" and `6` different "batch size" configurations will be benchmarked
    
    3. `2` different "number of cpu cores per replica" configurations will be benchmarked
-      - Note that we cannot experiment with more than `max(num_replicas) / |model_cpus|` cpu cores per replica.
+      - Note that we cannot experiment with more than `|model_cpus| / max(num_replicas)` cpu cores per replica.
       - This means that, for this example, `max(cpus_per_replica_nums) = 2 cores` 
         (as reflected in the **cpus_per_replica_num** argument)
 
