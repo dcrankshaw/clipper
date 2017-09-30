@@ -269,7 +269,8 @@ if __name__ == "__main__":
                                                      batch_size=batch_size, 
                                                      num_replicas=num_replicas,
                                                      cpus_per_replica=cpus_per_replica,
-                                                     allocated_cpus=args.model_cpus                                                     allocated_gpus=args.model_gpus)
+                                                     allocated_cpus=args.model_cpus,                               
+                                                     allocated_gpus=args.model_gpus)
                 setup_clipper(model_config)
                 benchmarker = ModelBenchmarker(model_config)
 
