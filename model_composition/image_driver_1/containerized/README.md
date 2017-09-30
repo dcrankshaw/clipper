@@ -41,6 +41,8 @@ $ ./containers/build_docker_images.sh
 
 ## Benchmarking with [driver.py](driver.py)
 
+### The Driver API
+
 The driver accepts the following arguments:
 - **model_name**: The name of the model to benchmark. Must be one of the following: `vgg`, `inception`, `svm`, `lgbm`
   * This argument is REQUIRED
@@ -65,9 +67,23 @@ This command specifies `4` different replica configurations and `6` batch size c
 `4 * 6 = 24` benchmarking iterations will occur (one for each combination of configurations). Each iteration will last a maximum
 of 120 seconds and will use the VGG model.
 
+### Avoiding CPU resource conflicts
+
+
 ## Monitoring the benchmarking process
 Once you've started a benchmark, there are some useful tools and logs that you can use to monitor behavior.
+
+### Monitoring CPU usage
+If you're running a CPU-intensive model
 
 ### Monitoring GPU usage
 If you're benchmarking the VGG or Inception models on a GPU, you can make sure that the model is using the GPU via the 
 [nvidia-smi](http://developer.download.nvidia.com/compute/cuda/6_0/rel/gdk/nvidia-smi.331.38.pdf) command.
+
+If no tasks are running on the GPU, the output of `nvidia-smi` will look similar to the following:
+
+In contrast, if tasks are running, you should see non-zero (hopefully high) memory and utilization, as well as one or more active processes (Note: This output was obtained from a machine with 2 GPUs):
+
+![Image of Used Nvidia-Smi]()
+
+
