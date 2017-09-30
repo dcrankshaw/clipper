@@ -74,7 +74,8 @@ of 120 seconds and will use the VGG model.
 Once you've started a benchmark, there are some useful tools and logs that you can use to monitor behavior.
 
 ### Monitoring CPU usage
-If you're running a CPU-intensive model
+If you're running a CPU-intensive model on a set of cores, `{c_1, ..., c_n}`, you can use [htop](http://hisham.hm/htop/)
+to monitor for higher activity on those cores. 
 
 ### Monitoring GPU usage
 If you're benchmarking the VGG or Inception models on a GPU, you can make sure that the model is using the GPU via the 
@@ -82,8 +83,10 @@ If you're benchmarking the VGG or Inception models on a GPU, you can make sure t
 
 If no tasks are running on the GPU, the output of `nvidia-smi` will look similar to the following:
 
+![Image of Unused Nvidia-Smi](nvidia-smi-unused.jpg)
+
 In contrast, if tasks are running, you should see non-zero (hopefully high) memory and utilization, as well as one or more active processes (Note: This output was obtained from a machine with 2 GPUs):
 
-![Image of Used Nvidia-Smi]()
+![Image of Used Nvidia-Smi](nvidia-smi-used.jpg)
 
 
