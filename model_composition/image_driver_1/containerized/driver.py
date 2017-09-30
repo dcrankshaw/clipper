@@ -273,6 +273,6 @@ if __name__ == "__main__":
                 setup_clipper(model_config)
                 benchmarker = ModelBenchmarker(model_config)
 
-                p = Process(target=benchmarker.run, args=(args.duration_seconds,))
+                p = Process(target=benchmarker.run, args=(args.duration,))
                 p.start()
                 p.join()
