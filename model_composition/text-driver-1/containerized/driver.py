@@ -168,7 +168,8 @@ class ModelBenchmarker(object):
         reviews_len = len(self.reviews)
         inputs = []
         for _ in range(num_inputs):
-            review = np.random.randint(reviews_len)
+            review_idx = np.random.randint(reviews_len)
+            review = self.reviews[review_idx]
             # Keep the first 200 words of the review,
             # or extend the review to exactly 200 words
             if len(review) < 200:
