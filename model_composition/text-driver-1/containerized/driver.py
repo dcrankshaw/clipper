@@ -146,7 +146,8 @@ class ModelBenchmarker(object):
 
     def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
-        inputs = self._gen_inputs(num_inputs=5000)
+        inputs_generator_fn = self._get_inputs_generator_fn(self.config.name)
+        inputs = inputs_generator_fn()
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
@@ -164,7 +165,7 @@ class ModelBenchmarker(object):
         cl.connect()
         driver_utils.save_results([self.config], cl, predictor.stats, "gpu_and_batch_size_experiments")
 
-    def _gen_inputs(self, num_inputs=5000):
+    def _gen_inputs(self, num_inputs=5000, input_length=200):
         reviews_len = len(self.reviews)
         inputs = []
         for _ in range(num_inputs):
@@ -172,14 +173,19 @@ class ModelBenchmarker(object):
             review = self.reviews[review_idx]
             # Keep the first 200 words of the review,
             # or extend the review to exactly 200 words
-            if len(review) < 200:
-                expansion_factor = int(math.ceil(200.0/len(review)))
+            if len(review) < input_length:
+                expansion_factor = int(math.ceil(float(input_length)/len(review)))
                 for i in range(expansion_factor):
                     review = review + " " + review
-            review = review[:200]
+            review = review[:input_length]
             inputs.append(review)
         return inputs
 
+    def _get_inputs_generator_fn(self, model_name):
+        if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
+            return lambda : _gen_inputs(self, num_inputs=5000, input_length=10)
+        elif model_name == LSTM_MODEL_APP_NAME:
+            return lambda : _gen_inputs(self, num_inputs=5000, input_length=200)
 
     def _load_reviews(self):
         base_path = os.path.join(CURR_DIR, "workload_data/aclImdb/test/")
