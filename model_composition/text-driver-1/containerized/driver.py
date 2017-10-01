@@ -61,9 +61,9 @@ def setup_clipper(config):
 def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
     if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
         if not cpus_per_replica:
-            cpus_per_replica = 2
+            cpus_per_replica = 5
         if not allocated_cpus:
-            allocated_cpus = [6,7,14,15]
+            allocated_cpus = [6,7,14,15,16,17,18,19,20,21]
         if not allocated_gpus:
             allocated_gpus = [0]
 
@@ -80,7 +80,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
         if not cpus_per_replica:
             cpus_per_replica = 2
         if not allocated_cpus:
-            allocated_cpus = range(16,19)
+            allocated_cpus = range(22,26)
         if not allocated_gpus:
             allocated_gpus = [0]
 
