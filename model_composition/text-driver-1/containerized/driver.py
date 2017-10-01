@@ -14,6 +14,8 @@ from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from datetime import datetime
 
+CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%y-%m-%d:%H:%M:%S',
@@ -179,7 +181,7 @@ class ModelBenchmarker(object):
 
 
     def _load_reviews(self):
-        base_path = "/home/ubuntu/clipper/model_composition/text-driver-1/workload_data/aclImdb/test/"
+        base_path = os.path.join(CURR_DIR, "workload_data/aclImdb/test/")
         reviews = []
         pos_path = os.path.join(base_path, "pos")
         for rev_file in os.listdir(pos_path):
