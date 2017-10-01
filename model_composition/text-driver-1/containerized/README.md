@@ -180,7 +180,6 @@ $ python driver.py -m Autocompletion -d 240
 17-10-01:11:29:22 INFO     [driver.py:128] p99: 142.72486163, mean: 129.4620815, thruput: 0.143901823844
 17-10-01:11:29:52 INFO     [driver.py:128] p99: 172.2696268, mean: 157.7014405, thruput: 0.135019711528
 17-10-01:11:30:19 INFO     [driver.py:128] p99: 199.27033834, mean: 186.19206475, thruput: 0.148347235633
-...
 ```
 
 If you don't find this to be the case, try reducing the [client sleep delay between requests](https://github.com/dcrankshaw/clipper/blob/4809caaccc7c6d646b19c51bcb54c6efdfa3a59c/model_composition/image_driver_1/containerized/driver.py#L195).
@@ -280,7 +279,6 @@ an example path output and its corresponding log file contents:
             }
         ], 
         "ratio_counters": [
-            {
                 "app:autocompletion:default_prediction_ratio": {
                     "ratio": "0.98999354422207875"
                 }
