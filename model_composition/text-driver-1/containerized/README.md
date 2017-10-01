@@ -168,7 +168,20 @@ In order to maximize model throughput, the size of the batches of data being rec
 batch size specified in the driver arguments. To ensure this, the client asynchronously sends as many requests to Clipper as possible 
 and receives responses asynchronously on a separate thread. Accordingly, you should always observe that the **p99 latency** is 
 monotonically increasing as the benchmark continues. This indicates that the request queue for the benchmarked model is growing 
-in size and, therefore, that the model is processing data in batches of the maximum size.
+in size and, therefore, that the model is processing data in batches of the maximum size. As an example, the following log output from a 240 second Autocompletion model benchmark indicates increasing **p99 latency**, as expected:
+
+```sh
+$ python driver.py -m Autocompletion -d 240
+...
+17-10-01:11:27:33 INFO     [driver.py:128] p99: 33.43901594, mean: 20.32625275, thruput: 0.0802275767533
+17-10-01:11:28:01 INFO     [driver.py:128] p99: 61.28287884, mean: 48.00527775, thruput: 0.14359085108
+17-10-01:11:28:28 INFO     [driver.py:128] p99: 88.09220002, mean: 75.09067, thruput: 0.149092322215
+17-10-01:11:28:54 INFO     [driver.py:128] p99: 114.95396658, mean: 101.9338465, thruput: 0.148793271687
+17-10-01:11:29:22 INFO     [driver.py:128] p99: 142.72486163, mean: 129.4620815, thruput: 0.143901823844
+17-10-01:11:29:52 INFO     [driver.py:128] p99: 172.2696268, mean: 157.7014405, thruput: 0.135019711528
+17-10-01:11:30:19 INFO     [driver.py:128] p99: 199.27033834, mean: 186.19206475, thruput: 0.148347235633
+...
+```
 
 If you don't find this to be the case, try reducing the [client sleep delay between requests](https://github.com/dcrankshaw/clipper/blob/4809caaccc7c6d646b19c51bcb54c6efdfa3a59c/model_composition/image_driver_1/containerized/driver.py#L195).
    
@@ -178,11 +191,127 @@ an example path output and its corresponding log file contents:
 
 ```sh
 ...
-17-10-01:00:13:13 INFO     [driver_utils.py:78] Saved results to /home/ubuntu/clipper/model_composition/text-driver-1/containerized/gpu_and_batch_size_experiments/results-171001_001313.json
+17-10-01:11:30:43 INFO     [driver_utils.py:78] Saved results to /home/ubuntu/clipper/model_composition/text-driver-1/containerized/containers/gpu_and_batch_size_experiments/results-171001_113043.json
 ```
 
-Note that, for shorter durations, Clipper's model throughput metric indicates lower throughput than the benchmark client. This is expected behavior due to the temporal sensitivity of the meter implementation. For durations longer than 60 seconds, the one-minute rate should more closely reflect client throughput. Additionally, application latency should be substantially higher than model latency 
-due to the addition of network latencies as well as queueing delay in the calculation.
+```sh
+"clipper_metrics": {
+        "histograms": [
+            {
+                "internal:rpc_request_queueing_delay": {
+                    "p99": "0", 
+                    "min": "0", 
+                    "max": "0", 
+                    "p95": "0", 
+                    "std_dev": "0", 
+                    "size": "0", 
+                    "p50": "0", 
+                    "unit": "microseconds", 
+                    "mean": "0"
+                }
+            }, 
+            {
+                "app:autocompletion:prediction_latency": {
+                    "p99": "6908820.67999679245986", 
+                    "min": "48", 
+                    "max": "213149462", 
+                    "p95": "124", 
+                    "std_dev": "12825463.2065747056558", 
+                    "size": "3098", 
+                    "p50": "63", 
+                    "unit": "microseconds", 
+                    "mean": "1130072.63653970303426"
+                }
+            }, 
+            {
+                "model:autocompletion:1:prediction_latency": {
+                    "p99": "15263529", 
+                    "min": "6772473", 
+                    "max": "15263529", 
+                    "p95": "15263529", 
+                    "std_dev": "1771837.06846696857724", 
+                    "size": "16", 
+                    "p50": "13475110", 
+                    "unit": "microseconds", 
+                    "mean": "13331528.5625"
+                }
+            }, 
+            {
+                "model:autocompletion:1:batch_size": {
+                    "p99": "2", 
+                    "min": "1", 
+                    "max": "2", 
+                    "p95": "2", 
+                    "std_dev": "0.242061459137963555326", 
+                    "size": "16", 
+                    "p50": "2", 
+                    "unit": "queries", 
+                    "mean": "1.9375"
+                }
+            }
+        ], 
+        "meters": [
+            {
+                "internal:aggregate_model_throughput": {
+                    "rate": "0.11635991109937636", 
+                    "rate_1min": "0.13476890495589583", 
+                    "rate_15min": "0.030561587378950025", 
+                    "unit": "events per second", 
+                    "rate_5min": "0.07319926023803669"
+                }
+            }, 
+            {
+                "app:autocompletion:prediction_throughput": {
+                    "rate": "0", 
+                    "rate_1min": "0", 
+                    "rate_15min": "0", 
+                    "unit": "events per second", 
+                    "rate_5min": "0"
+                }
+            }, 
+            {
+                "model:autocompletion:1:prediction_throughput": {
+                    "rate": "0.13806024289873781", 
+                    "rate_1min": "0.13990653107328124", 
+                    "rate_15min": "0.030654007502839354", 
+                    "unit": "events per second", 
+                    "rate_5min": "0.073852336049088557"
+                }
+            }
+        ], 
+        "ratio_counters": [
+            {
+                "app:autocompletion:default_prediction_ratio": {
+                    "ratio": "0.98999354422207875"
+                }
+            }, 
+            {
+                "model:autocompletion:1:cache_hit_ratio": {
+                    "ratio": "0"
+                }
+            }
+        ], 
+        "counters": [
+            {
+                "internal:aggregate_num_predictions": {
+                    "count": "5000"
+                }
+            }, 
+            {
+                "app:autocompletion:num_predictions": {
+                    "count": "3098"
+                }
+            }, 
+            {
+                "model:autocompletion:1:num_predictions": {
+                    "count": "31"
+                }
+            }
+        ]
+    }
+```
+
+Note that, for shorter durations, Clipper's model throughput metric (`model:autocompletion:1:prediction_throughput` in this case) indicates lower throughput than the benchmark client. This is expected behavior due to the temporal sensitivity of the meter implementation. For durations longer than 60 seconds, the one-minute rate should more closely reflect client throughput. Additionally, application latency (`app:autocompletion:prediction_latency` in this case) should be substantially higher than model latency (`model:autocompletion:1:prediction_latency` in this case) due to the addition of network latencies as well as queueing delay in the calculation.
 
 ### Monitoring CPU usage
 If you're running replicas of a CPU-intensive model on a set of cores, `{c_1, ..., c_n}`, you can use [htop](http://hisham.hm/htop/)
@@ -202,6 +331,66 @@ In contrast, if tasks are running, you should see non-zero (hopefully high) memo
 
 ### Examining Docker log output
 At any time during the benchmark, you can view log output for model replicas and frontends via their respective containers.
-First, run `docker ps` to obtain a list of actively running containers.
+First, run `docker ps` to obtain a list of actively running containers. Here's an example output during an Autocompletion benchmark:
 
-To view log output for a container with id `ID`, you would simply invoke the command `docker logs ID`.
+```sh
+$ docker ps
+
+CONTAINER ID        IMAGE                                 COMMAND                  CREATED             STATUS              PORTS                                                                              NAMES
+7b1f902efede        model-comp/tf-autocomplete            "python /container..."   8 minutes ago       Up 8 minutes        6006/tcp, 8888/tcp                                                                 confident_engelbart
+74ab449d38b1        clipper/zmq_frontend:develop          "/clipper/release/..."   9 minutes ago       Up 9 minutes        0.0.0.0:1337->1337/tcp, 0.0.0.0:4455-4456->4455-4456/tcp, 0.0.0.0:7000->7000/tcp   query_frontend-97391
+0e07108a459e        clipper/management_frontend:develop   "/clipper/release/..."   9 minutes ago       Up 9 minutes        0.0.0.0:1338->1338/tcp                                                             mgmt_frontend-2842
+763ffa6d385d        redis:alpine                          "docker-entrypoint..."   9 minutes ago       Up 9 minutes        6379/tcp, 0.0.0.0:6380->6380/tcp                                                   redis-49237
+```
+
+To view log output for the first (and only) Autocompletion replica in this example, you would simply invoke the `docker logs` command and specify the **container id** corresponding to the container with image name `model-comp/tf-autocomplete` as follows:
+
+```sh
+$ docker logs 7b1f902efede
+...
+Got start of message 3
+recv: 46.000000 us, parse: 80.000000 us, handle: 14.403434 seconds
+Got start of message 4
+recv: 39.000000 us, parse: 83.000000 us, handle: 13.450372 seconds
+Got start of message 5
+recv: 36.000000 us, parse: 90.000000 us, handle: 13.418978 seconds
+Got start of message 6
+recv: 31.000000 us, parse: 69.000000 us, handle: 13.407186 seconds
+Got start of message 7
+recv: 41.000000 us, parse: 70.000000 us, handle: 13.461464 seconds
+Got start of message 8
+recv: 54.000000 us, parse: 66.000000 us, handle: 13.418092 seconds
+Got start of message 9
+recv: 34.000000 us, parse: 80.000000 us, handle: 14.345080 seconds
+Got start of message 10
+recv: 31.000000 us, parse: 88.000000 us, handle: 13.448275 seconds
+Got start of message 11
+recv: 31.000000 us, parse: 71.000000 us, handle: 14.360992 seconds
+Got start of message 12
+recv: 43.000000 us, parse: 78.000000 us, handle: 15.261852 seconds
+Got start of message 13
+recv: 42.000000 us, parse: 71.000000 us, handle: 13.458964 seconds
+Got start of message 14
+recv: 57.000000 us, parse: 111.000000 us, handle: 13.501522 seconds
+Got start of message 15
+recv: 32.000000 us, parse: 69.000000 us, handle: 13.485586 seconds
+Got start of message 16
+recv: 37.000000 us, parse: 66.000000 us, handle: 15.066274 seconds
+Got start of message 17
+recv: 33.000000 us, parse: 69.000000 us, handle: 15.331963 seconds
+Got start of message 18
+recv: 34.000000 us, parse: 86.000000 us, handle: 13.509217 seconds
+Got start of message 19
+recv: 35.000000 us, parse: 70.000000 us, handle: 13.476204 seconds
+Got start of message 20
+recv: 32.000000 us, parse: 63.000000 us, handle: 13.461252 seconds
+Got start of message 21
+recv: 34.000000 us, parse: 71.000000 us, handle: 15.185721 seconds
+Got start of message 22
+recv: 34.000000 us, parse: 71.000000 us, handle: 13.378648 seconds
+Got start of message 23
+recv: 33.000000 us, parse: 62.000000 us, handle: 14.365849 seconds
+...
+```
+
+From the logs, you can see that the model replica is actively processing messages with an average per-batch latency of roughly 14 seconds.
