@@ -136,7 +136,7 @@ class Predictor(object):
 
     def __init__(self):
         self.outstanding_reqs = {}
-        self.client = Client("localhost", 4456, 4455)
+        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
@@ -189,9 +189,8 @@ class ModelBenchmarker(object):
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
-        last_prediction_task_future = None
         for input_item in inputs:
-            last_prediction_task_future = predictor.predict(model_app_name=self.config.name, input_item=input_item)
+            predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
         while True:
             curr_time = datetime.now()
