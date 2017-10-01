@@ -178,7 +178,7 @@ class ModelBenchmarker(object):
         return inputs
 
 
-    def _load_reviews():
+    def _load_reviews(self):
         base_path = "/home/ubuntu/clipper/model_composition/text-driver-1/workload_data/aclImdb/test/"
         reviews = []
         pos_path = os.path.join(base_path, "pos")
