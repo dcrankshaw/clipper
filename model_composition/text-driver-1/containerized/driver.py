@@ -176,7 +176,7 @@ class ModelBenchmarker(object):
                 expansion_factor = int(math.ceil(200.0/len(review)))
                 for i in range(expansion_factor):
                     review = review + " " + review
-            review = self.reviews[rand_review][:200]
+            review = review[:200]
             inputs.append(review)
         return inputs
 
