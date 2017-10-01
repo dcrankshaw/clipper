@@ -5,6 +5,7 @@ import os
 import logging
 import numpy as np
 import time
+import math
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
@@ -169,7 +170,7 @@ class ModelBenchmarker(object):
             # Keep the first 200 words of the review,
             # or extend the review to exactly 200 words
             if len(review) < 200:
-                expansion_factor = ceil(float(200)/len(review))
+                expansion_factor = int(math.ceil(200.0/len(review)))
                 for i in range(expansion_factor):
                     review = review + " " + review
             review = self.reviews[rand_review][:200]
