@@ -32,9 +32,9 @@ class HeavyNodeConfig(object):
         return json.dumps(self.__dict__)
 
 
-def setup_heavy_node(clipper_conn, config):
+def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
     clipper_conn.register_application(name=config.name,
-                                      default_output="TIMEOUT",
+                                      default_output=default_output,
                                       slo_micros=config.slo,
                                       input_type=config.input_type)
 

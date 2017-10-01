@@ -40,6 +40,8 @@ CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
 CLIPPER_RECV_PORT = 4455
 
+DEFAULT_OUTPUT = "TIMEOUT"
+
 ########## Setup ##########
 
 def setup_clipper(config):
@@ -51,7 +53,7 @@ def setup_clipper(config):
         mgmt_cpu_str="8",
         query_cpu_str="1-5,9-13")
     time.sleep(10)
-    driver_utils.setup_heavy_node(cl, config)
+    driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
     return config
@@ -128,6 +130,8 @@ class Predictor(object):
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
+            if output == DEFAULT_OUTPUT:
+                return
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
