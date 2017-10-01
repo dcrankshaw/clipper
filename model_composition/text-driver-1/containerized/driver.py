@@ -183,9 +183,9 @@ class ModelBenchmarker(object):
 
     def _get_inputs_generator_fn(self, model_name):
         if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
-            return lambda : _gen_inputs(self, num_inputs=5000, input_length=10)
+            return lambda : self._gen_inputs(num_inputs=5000, input_length=10)
         elif model_name == LSTM_MODEL_APP_NAME:
-            return lambda : _gen_inputs(self, num_inputs=5000, input_length=200)
+            return lambda : self._gen_inputs(num_inputs=5000, input_length=200)
 
     def _load_reviews(self):
         base_path = os.path.join(CURR_DIR, "workload_data/aclImdb/test/")
