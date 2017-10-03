@@ -253,7 +253,7 @@ class ModelBenchmarker(object):
         vgg_input = np.array(vgg_img, dtype=np.float32)
         return vgg_input.flatten()
 
-    def _get_vgg_svm_input(self):
+    def _get_vgg_classifier_input(self):
         return np.array(np.random.rand(4096), dtype=np.float32)
 
     def _get_inception_input(self):
@@ -272,8 +272,8 @@ class ModelBenchmarker(object):
     def _get_input_generator_fn(self, model_app_name):
         if model_app_name == VGG_FEATS_MODEL_APP_NAME:
             return self._get_vgg_feats_input
-        elif model_app_name == VGG_SVM_MODEL_APP_NAME:
-            return self._get_vgg_svm_input
+        elif model_app_name in [VGG_KPCA_SVM_MODEL_APP_NAME, VGG_KERNEL_SVM_MODEL_APP_NAME, VGG_ELASTIC_NET_MODEL_APP_NAME]:
+            return self._get_vgg_classifier_input
         elif model_app_name == INCEPTION_FEATS_MODEL_APP_NAME:
             return self._get_inception_input
         elif model_app_name == LGBM_MODEL_APP_NAME:
@@ -282,7 +282,7 @@ class ModelBenchmarker(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic_net', 'inception', 'lgbm'")
+    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic-net', 'inception', 'lgbm'")
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
