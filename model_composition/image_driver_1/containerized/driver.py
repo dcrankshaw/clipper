@@ -29,7 +29,7 @@ INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 LGBM_MODEL_APP_NAME = "lgbm"
 
 VGG_FEATS_IMAGE_NAME = "model-comp/vgg-feats"
-VGG_SVM_IMAGE_NAME = "model-comp/vgg-svm"
+VGG_SVM_IMAGE_NAME = "model-comp/kpca-svm"
 INCEPTION_FEATS_IMAGE_NAME = "model-comp/inception-feats"
 LGBM_IMAGE_NAME = "model-comp/lgbm"
 

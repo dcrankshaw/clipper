@@ -19,6 +19,8 @@ time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
 cd $DIR
 # Build model-specific images
 time docker build -t model-comp/vgg-feats -f VggFeaturizationDockerfile ./
-time docker build -t model-comp/vgg-svm -f VggSvmDockerfile ./
+time docker build -t model-comp/kpca-svm -f VggKpcaSvmDockerfile ./
+time docker build -t model-comp/kernel-svm -f VggKernelSvmDockerfile ./
+time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
 time docker build -t model-comp/inception-feats -f InceptionFeaturizationDockerfile ./
 time docker build -t model-comp/lgbm -f LgbmDockerfile ./

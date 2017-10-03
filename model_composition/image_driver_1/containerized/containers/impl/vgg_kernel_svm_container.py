@@ -5,9 +5,9 @@ import rpc
 import pickle
 import numpy as np
 
-from kpca_svm_model import KpcaSvmModel
+from kernel_svm_model import KernelSvmModel
 
-class VggSvmContainer(rpc.ModelContainerBase):
+class KernelSvmContainer(rpc.ModelContainerBase):
 
 	def __init__(self, ks_model_path):
 		ks_model_file = open(ks_model_path, "rb")
@@ -23,7 +23,7 @@ class VggSvmContainer(rpc.ModelContainerBase):
 		return [np.array(item, dtype=np.float32) for item in all_classifications]
 
 if __name__ == "__main__":
-	print("Starting VGG SVM Container")
+	print("Starting VGG Kernel SVM Container")
 	try:
 		model_name = os.environ["CLIPPER_MODEL_NAME"]
 	except KeyError:
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 		print("Connecting to Clipper with default port: 7000")
 
 	input_type = "floats"
-	container = VggSvmContainer(ks_model_path)
+	container = KernelSvmContainer(ks_model_path)
 	rpc_service = rpc.RPCService()
 	rpc_service.start(container, ip, port, model_name, model_version,
 					  input_type)
