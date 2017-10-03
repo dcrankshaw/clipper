@@ -18,7 +18,12 @@ the the VGG image featurization model).
 * **Frontend**: A piece of Clipper's infrastructure that communicates with **clients** and or **replicas**. (For more information, see the [Clipper design doc](https://docs.google.com/document/d/1Ghc-CAKXzzRshSa6FlonFa5ttmtHRAqFwMg7vhuJakw/edit)).
 
 This driver makes use of 4 heavyweight models: A VGG model for image featurization, an Inception V3 model for image featurization, 
-an SVM with Kernel PCA for feature classification, and a light boosted gradient model (LGBM) for feature classification. The driver file,
+a light boosted gradient model (LGBM) for feature classification, and one of the following for feature classification:
+ * An SVM that performs kernel PCA for preprocessing
+ * A kernel SVM
+ * An [elastic net](http://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html) logistic regression model
+
+The driver file,
 [driver.py](driver.py), will help you benchmark each of this models with Clipper in isolation (one model at a time). The remaining sections of this README will get you started with the benchmarking process.
 
 ## Activate your Clipper Anaconda environment
@@ -58,7 +63,7 @@ $ ./containers/build_docker_images.sh
 ### The Driver API
 
 The driver accepts the following arguments:
-- **model_name**: The name of the model to benchmark. Must be one of the following: `vgg`, `inception`, `svm`, `lgbm`
+- **model_name**: The name of the model to benchmark. Must be one of the following: `vgg`, `inception`, `lgbm`, `kpca-svm`, `kernel-svm`, `elastic-net`
   * This argument is REQUIRED
   
 - **duration**: The duration for which each iteration of the benchmark should run, in seconds
