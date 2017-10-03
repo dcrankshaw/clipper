@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 # Models and applications for each heavy node
 # will share the same name
 VGG_FEATS_MODEL_APP_NAME = "vgg"
-VGG_KPCA_SVM_MODEL_APP_NAME = "kpca_svm"
-VGG_KERNEL_SVM_MODEL_APP_NAME = "kernel_svm"
-VGG_ELASTIC_NET_MODEL_APP_NAME = "elastic_net"
+VGG_KPCA_SVM_MODEL_APP_NAME = "kpca-svm"
+VGG_KERNEL_SVM_MODEL_APP_NAME = "kernel-svm"
+VGG_ELASTIC_NET_MODEL_APP_NAME = "elastic-net"
 INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 LGBM_MODEL_APP_NAME = "lgbm"
 
