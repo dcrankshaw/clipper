@@ -1,0 +1,10 @@
+FROM model-comp/py-rpc:latest
+
+WORKDIR /container
+
+COPY deps/kpca_svm_model.py impl/vgg_kpca_svm_container.py /container/
+COPY kpca_svm_model_data/ /model
+
+ENV CLIPPER_MODEL_PATH=/model/kpca_svm_trained.sav
+
+CMD ["python", "/container/vgg_kpca_svm_container.py"]
