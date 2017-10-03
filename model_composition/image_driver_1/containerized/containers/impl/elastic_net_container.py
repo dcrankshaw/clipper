@@ -10,7 +10,7 @@ from elastic_net_model import ElasticNetModel
 class ElasticNetContainer(rpc.ModelContainerBase):
 
 	def __init__(self, en_model_path):
-		en_model_file = open(ks_model_path, "rb")
+		en_model_file = open(en_model_path, "rb")
 		self.en_model = pickle.load(en_model_file)
 		en_model_file.close()
 
