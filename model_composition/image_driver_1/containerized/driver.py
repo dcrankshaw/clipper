@@ -24,18 +24,24 @@ logger = logging.getLogger(__name__)
 # Models and applications for each heavy node
 # will share the same name
 VGG_FEATS_MODEL_APP_NAME = "vgg"
-VGG_SVM_MODEL_APP_NAME = "svm"
+VGG_KPCA_SVM_MODEL_APP_NAME = "kpca_svm"
+VGG_KERNEL_SVM_MODEL_APP_NAME = "kernel_svm"
+VGG_ELASTIC_NET_MODEL_APP_NAME = "elastic_net"
 INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 LGBM_MODEL_APP_NAME = "lgbm"
 
 VGG_FEATS_IMAGE_NAME = "model-comp/vgg-feats"
-VGG_SVM_IMAGE_NAME = "model-comp/kpca-svm"
+VGG_KPCA_SVM_IMAGE_NAME = "model-comp/kpca-svm"
+VGG_KERNEL_SVM_IMAGE_NAME = "model-comp/kernel-svm"
+VGG_ELASTIC_NET_IMAGE_NAME = "model-comp/elastic-net"
 INCEPTION_FEATS_IMAGE_NAME = "model-comp/inception-feats"
 LGBM_IMAGE_NAME = "model-comp/lgbm"
 
 VALID_MODEL_NAMES = [
     VGG_FEATS_MODEL_APP_NAME,
-    VGG_SVM_MODEL_APP_NAME,
+    VGG_KPCA_SVM_MODEL_APP_NAME,
+    VGG_KERNEL_SVM_MODEL_APP_NAME,
+    VGG_ELASTIC_NET_MODEL_APP_NAME,
     INCEPTION_FEATS_MODEL_APP_NAME,
     LGBM_MODEL_APP_NAME
 ]
@@ -97,7 +103,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
 
-    elif model_name == VGG_SVM_MODEL_APP_NAME:
+    elif model_name == VGG_KPCA_SVM_MODEL_APP_NAME:
         if not cpus_per_replica:
             cpus_per_replica = 2
         if not allocated_cpus:
@@ -105,14 +111,47 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
         if not allocated_gpus:
             allocated_gpus = []
 
-        return driver_utils.HeavyNodeConfig(name=VGG_SVM_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=VGG_KPCA_SVM_MODEL_APP_NAME,
                                             input_type="floats",
-                                            model_image=VGG_SVM_IMAGE_NAME,
+                                            model_image=VGG_KPCA_SVM_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas)
+
+    elif model_name == VGG_KERNEL_SVM_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 1
+        if not allocated_cpus:
+            allocated_cpus = range(20,27)
+        if not allocated_gpus:
+            allocated_gpus = []
+        return driver_utils.HeavyNodeConfig(name=VGG_KERNEL_SVM_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=VGG_KERNEL_SVM_IMAGE_NAME,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas)
+
+    elif model_name == VGG_ELASTIC_NET_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 1
+        if not allocated_cpus:
+            allocated_cpus = range(20,27)
+        if not allocated_gpus:
+            allocated_gpus = []
+        return driver_utils.HeavyNodeConfig(name=VGG_ELASTIC_NET_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=VGG_ELASTIC_NET_IMAGE_NAME,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas)        
+
 
     elif model_name == LGBM_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -243,7 +282,7 @@ class ModelBenchmarker(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'svm, 'inception', 'lgbm'")
+    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic_net', 'inception', 'lgbm'")
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
