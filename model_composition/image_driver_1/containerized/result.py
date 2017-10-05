@@ -1,5 +1,6 @@
 """ Parse the results in dir gpu_and_batch_size_experiments/"""
 import glob
+import os
 import json
 import numpy as np
 

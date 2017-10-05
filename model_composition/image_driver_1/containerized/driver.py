@@ -195,7 +195,8 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            time.sleep(0.005)
+            # time.sleep(0.005)
+            time.sleep(0)
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
