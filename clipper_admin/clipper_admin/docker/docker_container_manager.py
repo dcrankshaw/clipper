@@ -198,7 +198,7 @@ class DockerContainerManager(ContainerManager):
             env = os.environ.copy()
             cmd = ["nvidia-docker", "run", "-d",
                    "--network=%s" % self.docker_network]
-            if gpu_num:
+            if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
                     name=name, version=version, gpu_num=gpu_num))
                 env["NV_GPU"] = str(gpu_num)
