@@ -16,7 +16,7 @@ class HeavyNodeConfig(object):
                  cpus_per_replica,
                  slo=500000,
                  num_replicas=1,
-                 gpus=None,
+                 gpus=[],
                  batch_size=1,
                  use_nvidia_docker=False):
         self.name = name
