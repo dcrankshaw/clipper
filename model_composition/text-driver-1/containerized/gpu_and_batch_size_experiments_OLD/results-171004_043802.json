@@ -1,0 +1,144 @@
+{
+    "client_metrics": {
+        "thrus": [], 
+        "p99_lats": [], 
+        "mean_lats": []
+    }, 
+    "node_configs": [
+        {
+            "model_image": "model-comp/theano-lstm", 
+            "name": "lstm", 
+            "cpus_per_replica": 3, 
+            "input_type": "strings", 
+            "batch_size": 1, 
+            "num_replicas": 1, 
+            "slo": 500000, 
+            "allocated_cpus": [
+                9, 
+                10, 
+                11, 
+                12, 
+                13, 
+                14, 
+                15
+            ], 
+            "gpus": [
+                0
+            ]
+        }
+    ], 
+    "clipper_metrics": {
+        "histograms": [
+            {
+                "internal:rpc_request_queueing_delay": {
+                    "p99": "0", 
+                    "min": "0", 
+                    "max": "0", 
+                    "p95": "0", 
+                    "std_dev": "0", 
+                    "size": "0", 
+                    "p50": "0", 
+                    "unit": "microseconds", 
+                    "mean": "0"
+                }
+            }, 
+            {
+                "app:lstm:prediction_latency": {
+                    "p99": "84", 
+                    "min": "39", 
+                    "max": "730", 
+                    "p95": "77", 
+                    "std_dev": "16.964896816633558219", 
+                    "size": "4096", 
+                    "p50": "54", 
+                    "unit": "microseconds", 
+                    "mean": "56.76953125"
+                }
+            }, 
+            {
+                "model:lstm:1:prediction_latency": {
+                    "p99": "0", 
+                    "min": "0", 
+                    "max": "0", 
+                    "p95": "0", 
+                    "std_dev": "0", 
+                    "size": "0", 
+                    "p50": "0", 
+                    "unit": "microseconds", 
+                    "mean": "0"
+                }
+            }, 
+            {
+                "model:lstm:1:batch_size": {
+                    "p99": "0", 
+                    "min": "0", 
+                    "max": "0", 
+                    "p95": "0", 
+                    "std_dev": "0", 
+                    "size": "0", 
+                    "p50": "0", 
+                    "unit": "queries", 
+                    "mean": "0"
+                }
+            }
+        ], 
+        "meters": [
+            {
+                "internal:aggregate_model_throughput": {
+                    "rate": "0", 
+                    "rate_1min": "0", 
+                    "rate_15min": "0", 
+                    "unit": "events per second", 
+                    "rate_5min": "0"
+                }
+            }, 
+            {
+                "app:lstm:prediction_throughput": {
+                    "rate": "0", 
+                    "rate_1min": "0", 
+                    "rate_15min": "0", 
+                    "unit": "events per second", 
+                    "rate_5min": "0"
+                }
+            }, 
+            {
+                "model:lstm:1:prediction_throughput": {
+                    "rate": "0", 
+                    "rate_1min": "0", 
+                    "rate_15min": "0", 
+                    "unit": "events per second", 
+                    "rate_5min": "0"
+                }
+            }
+        ], 
+        "ratio_counters": [
+            {
+                "app:lstm:default_prediction_ratio": {
+                    "ratio": "1"
+                }
+            }, 
+            {
+                "model:lstm:1:cache_hit_ratio": {
+                    "ratio": "nan"
+                }
+            }
+        ], 
+        "counters": [
+            {
+                "internal:aggregate_num_predictions": {
+                    "count": "5000"
+                }
+            }, 
+            {
+                "app:lstm:num_predictions": {
+                    "count": "5000"
+                }
+            }, 
+            {
+                "model:lstm:1:num_predictions": {
+                    "count": "0"
+                }
+            }
+        ]
+    }
+}
