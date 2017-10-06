@@ -97,8 +97,8 @@ one or more of the CPU cores specified by **model_cpus**.
 1. As an example, consider the following driver command:
 
    ```sh
-   $ python driver.py --duration_seconds 120 --model_name vgg --num_replicas 1 2 3 4 --batch_sizes 1 2 4 8 16 32 \
-                      --model_cpus 20 21 22 23 24 25 26 27 --cpus_per_replica_nums 1,2
+   $ python driver.py --duration 120 --model_name vgg --num_replicas 1 2 3 4 --batch_sizes 1 2 4 8 16 32 \
+                      --model_cpus 20 21 22 23 24 25 26 27 --cpus_per_replica_nums 1 2
    ```
 
    This command specifies that:

@@ -60,8 +60,8 @@ def setup_clipper(config):
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
-        mgmt_cpu_str="8",
-        query_cpu_str="1-5,9-13")
+        mgmt_cpu_str="0",
+        query_cpu_str="1-4")
     time.sleep(10)
     driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
@@ -236,7 +236,8 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            time.sleep(0.005)
+            # time.sleep(0.005)
+            time.sleep(0)
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
