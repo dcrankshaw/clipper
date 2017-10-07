@@ -85,6 +85,9 @@ one or more of the CPU cores specified by **model_cpus**.
   * If unspecified, the set of gpus allocated depends on the specified model. You can view and modify these defaults
   [in the driver program](https://github.com/dcrankshaw/clipper/blob/4809caaccc7c6d646b19c51bcb54c6efdfa3a59c/model_composition/image_driver_1/containerized/driver.py#L70).
   * Note: This option can be used with either the LSTM or the Autocompletion model, as both support GPU execution.
+  
+- **num_clients**: The number of concurrent client processes to run. This can help increase the request rate in order to saturate high throughput models.
+  * If unspecified, this argument has a default value of `1`
 
 
 ### Examples
