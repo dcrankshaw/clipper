@@ -291,7 +291,8 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
     parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
     parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
-
+    parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
+    
     args = parser.parse_args()
 
     if args.model_name not in VALID_MODEL_NAMES:
@@ -318,6 +319,10 @@ if __name__ == "__main__":
                 setup_clipper(model_config)
                 benchmarker = ModelBenchmarker(model_config)
 
-                p = Process(target=benchmarker.run, args=(args.duration,))
-                p.start()
-                p.join()
+                processes = []
+                for _ in range(num_clients):
+                    p = Process(target=benchmarker.run, args=(args.duration,))
+                    p.start()
+                    processes.append(p)
+                for p in processes:
+                    p.join()
