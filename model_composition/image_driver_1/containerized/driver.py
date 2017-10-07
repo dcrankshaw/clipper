@@ -320,7 +320,7 @@ if __name__ == "__main__":
                 benchmarker = ModelBenchmarker(model_config)
 
                 processes = []
-                for _ in range(num_clients):
+                for _ in range(args.num_clients):
                     p = Process(target=benchmarker.run, args=(args.duration,))
                     p.start()
                     processes.append(p)
