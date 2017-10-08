@@ -49,13 +49,8 @@ def extend_hparams(hparams, source_vocab_path, target_vocab_path):
     num_residual_layers = 0
   hparams.add_hparam("num_residual_layers", num_residual_layers)
 
-  ## Vocab
-  # Get vocab file names first
-  if hparams.vocab_prefix:
-    src_vocab_file = source_vocab_path
-    tgt_vocab_file = target_vocab_path
-  else:
-    raise ValueError("hparams.vocab_prefix must be provided.")
+  src_vocab_file = source_vocab_path
+  tgt_vocab_file = target_vocab_path
 
   # Source vocab
   src_vocab_size, src_vocab_file = vocab_utils.check_vocab(
