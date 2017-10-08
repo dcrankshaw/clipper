@@ -79,18 +79,6 @@ def extend_hparams(hparams, source_vocab_path, target_vocab_path):
   hparams.add_hparam("src_vocab_file", src_vocab_file)
   hparams.add_hparam("tgt_vocab_file", tgt_vocab_file)
 
-  # Check out_dir
-  if not tf.gfile.Exists(hparams.out_dir):
-    utils.print_out("# Creating output directory %s ..." % hparams.out_dir)
-    tf.gfile.MakeDirs(hparams.out_dir)
-
-  # Evaluation
-  for metric in hparams.metrics:
-    hparams.add_hparam("best_" + metric, 0)  # larger is better
-    best_metric_dir = os.path.join(hparams.out_dir, "best_" + metric)
-    hparams.add_hparam("best_" + metric + "_dir", best_metric_dir)
-    tf.gfile.MakeDirs(best_metric_dir)
-
   return hparams
 
 
