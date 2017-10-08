@@ -8,9 +8,9 @@ import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
 
-from .utils import iterator_utils
-from .utils import misc_utils as utils
-from .utils import vocab_utils
+import iterator_utils
+import misc_utils as utils
+import vocab_utils
 
 
 __all__ = [
