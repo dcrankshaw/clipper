@@ -20,3 +20,4 @@ cd $DIR
 # Build model-specific images
 time docker build -t model-comp/theano-lstm -f TheanoSentimentDockerfile ./
 time docker build -t model-comp/tf-autocomplete -f TfAutoCompleteDockerfile ./
+time docker build -t model-comp/nmt -f NmtDockerfile ./
