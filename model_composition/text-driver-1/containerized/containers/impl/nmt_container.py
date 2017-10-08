@@ -19,7 +19,7 @@ NUM_TRANSLATIONS_PER_INPUT = 1
 # These hyperparameters are required for inference and are not specified
 # by the provided set of JSON-formatted GNMT model hyperparameters
 
-class NMTContainer(rpc.ModelContainerBase)
+class NMTContainer(rpc.ModelContainerBase):
 
   def __init__(self, checkpoint_path, default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path):
     """
