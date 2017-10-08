@@ -39,7 +39,13 @@ class NMTContainer(rpc.ModelContainerBase):
     target_vocab_path : str
       The path of the vocabulary associated with the target text (English)
     """
-    self.sess, self.nmt_model, self.infer_model, self.hparams = self._load_model(checkpoint_path)
+    self.sess, self.nmt_model, self.infer_model, self.hparams = \
+    self._load_model(checkpoint_path, 
+                     default_hparams_path,
+                     model_hparams_path,
+                     source_vocab_path,
+                     target_vocab_path)
+
 
   def predict_strings(self, inputs):
     """
@@ -82,8 +88,13 @@ class NMTContainer(rpc.ModelContainerBase):
     hparams = hparam_utils.extend_hparams(hparams, source_vocab_path, target_vocab_path)
     return hparams
 
-  def _load_model(self, checkpoint_path, hparams_path, source_vocab_path, target_vocab_path):
-    hparams = self._create_hparams(hparams_path, source_vocab_path, target_vocab_path)
+  def _load_model(self, 
+                  checkpoint_path, 
+                  default_hparams_path, 
+                  model_hparams_path, 
+                  source_vocab_path, 
+                  target_vocab_path):
+    hparams = self._create_hparams(default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path)
 
     model_creator = gnmt_model.GNMTModel
     infer_model = model_helper.create_infer_model(model_creator, hparams, scope=None)
