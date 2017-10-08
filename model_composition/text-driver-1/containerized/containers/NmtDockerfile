@@ -1,7 +1,7 @@
 FROM model-comp/tf-rpc:latest
 
-ENV_CLIPPER_SOURCE_VOCAB_PATH=/model/source_vocab.de
-ENV_CLIPPER_TARGET_VOCAB_PATH=/model/target_vocab.en
+ENV CLIPPER_SOURCE_VOCAB_PATH=/model/source_vocab.de
+ENV CLIPPER_TARGET_VOCAB_PATH=/model/target_vocab.en
 ENV CLIPPER_MODEL_CHECKPOINT_PATH=/model/ckpt-*
 ENV CLIPPER_MODEL_DEFAULT_HPARAMS_PATH=/model/default_hparams.json
 ENV CLIPPER_MODEL_HPARAMS_PATH=/model/model_hparams.json
