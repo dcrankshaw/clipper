@@ -101,7 +101,8 @@ class NMTContainer(rpc.ModelContainerBase):
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEM_FRAC)
     sess = tf.Session(graph=infer_model.graph, config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
-    nmt_model = model_helper.load_model(infer_model.model, checkpoint_path, sess, "infer")
+    with sess.as_default():
+      nmt_model = model_helper.load_model(infer_model.model, checkpoint_path, sess, "infer")
 
     return sess, nmt_model, infer_model, hparams
 
