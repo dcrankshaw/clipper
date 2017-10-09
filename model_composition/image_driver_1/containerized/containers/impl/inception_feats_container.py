@@ -17,21 +17,21 @@ class InceptionFeaturizationContainer(rpc.ModelContainerBase):
         self.images_tensor = self._load_inception_model(inception_model_path)
         self.features_tensor = graph.get_tensor_by_name("pool_3:0")
 
-    def predict_strings(self, inputs):
+    def predict_floats(self, inputs):
         """
         Parameters
         ----------
         inputs : list
-            A list of byte-encoded jpeg images,
-            represented a strings
+            A list of 3-channel, 299 x 299 images, each represented
+            as a flattened numpy array
         """
 
-        # For a single input, inception returns a numpy array with dimensions
-        # 1 x 1 x 1 x 2048, so we index into the containing arrays
-        return [self._get_image_features(base64.b64decode(input_img))[0][0] for input_img in inputs]
+        reshaped_inputs = [input_item.reshape(299,299,3) for input_item in inputs]
+        all_img_features = self._get_image_features(reshaped_inputs)
+        return [np.array(item, dtype=np.float32) for item in all_img_features]
 
-    def _get_image_features(self, image):
-        feed_dict = { self.images_tensor : image }
+    def _get_image_features(self, images):
+        feed_dict = { self.images_tensor : images }
         features = self.sess.run(self.features_tensor, feed_dict=feed_dict)
         return features
 
@@ -51,8 +51,8 @@ class InceptionFeaturizationContainer(rpc.ModelContainerBase):
         with tf.device("/gpu:0"):
             # Create placeholder for an arbitrary number
             # of byte-encoded JPEG images
-            images_tensor = tf.placeholder("string")
-            tf.import_graph_def(graph_def, name='', input_map={ "DecodeJpeg/contents:0" : images_tensor})
+            images_tensor = tf.placeholder(tf.float32, shape=[None,299,299,3])
+            tf.import_graph_def(graph_def, name='', input_map={ "ResizeBilinear:0" : images_tensor})
 
         return images_tensor
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     else:
         print("Connecting to Clipper with default port: 7000")
 
-    input_type = "strings"
+    input_type = "floats"
     container = InceptionFeaturizationContainer(model_graph_path, gpu_mem_frac)
     rpc_service = rpc.RPCService()
     rpc_service.start(container, ip, port, model_name, model_version,
