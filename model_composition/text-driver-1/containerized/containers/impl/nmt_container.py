@@ -113,7 +113,7 @@ class NMTContainer(rpc.ModelContainerBase):
     return sess, nmt_model, infer_model, hparams
 
   def _get_translation(self, nmt_outputs, sent_id, tgt_eos, subword_option):
-      """Given batch decoding outputs, select a sentence and turn to text."""
+    """Given batch decoding outputs, select a sentence and turn to text."""
     if tgt_eos: 
       tgt_eos = tgt_eos.encode("utf-8")
     # Select a sentence
