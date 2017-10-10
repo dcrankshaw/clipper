@@ -14,6 +14,7 @@ import hparam_utils
 
 GPU_MEM_FRAC = .95
 
+NMT_TEXT_END = "</s>"
 NUM_TRANSLATIONS_PER_INPUT = 1
 
 # These hyperparameters are required for inference and are not specified
@@ -40,7 +41,7 @@ class NMTContainer(rpc.ModelContainerBase):
       The path of the vocabulary associated with the target text (English)
     """
     self.sess, self.nmt_model, self.infer_model, self.hparams = \
-    self._load_model(checkpoint_path, 
+    self._load_model(checkpoint_path,
                      default_hparams_path,
                      model_hparams_path,
                      source_vocab_path,
@@ -54,23 +55,27 @@ class NMTContainer(rpc.ModelContainerBase):
     inputs : [string]
       A list of strings of German text
     """
+    print(inputs)
     infer_batch_size = len(inputs)
-    sess.run(
-        infer_model.iterator.initializer,
+    self.sess.run(
+        self.infer_model.iterator.initializer,
         feed_dict={
-            self.infer_model.src_placeholder: infer_data,
+            self.infer_model.src_placeholder: inputs,
             self.infer_model.batch_size_placeholder: infer_batch_size
     })
 
     outputs = []
 
-    nmt_outputs, _ = model.decode(sess)
+    nmt_outputs, _ = self.nmt_model.decode(self.sess)
     for output_id in range(infer_batch_size):
       for translation_index in range(NUM_TRANSLATIONS_PER_INPUT):
         output = self._get_translation(nmt_outputs[translation_index],
                                        output_id,
                                        tgt_eos=None,
                                        subword_option=self.hparams.subword_option)
+        end_idx = output.find(NMT_TEXT_END)
+        if end_idx >= 0:
+            output = output[:end_idx]
         outputs.append(output)
 
     print(outputs)
@@ -83,16 +88,17 @@ class NMTContainer(rpc.ModelContainerBase):
     default_hparams_file.close()
     for param in default_hparams:
       partial_hparams.add_hparam(param, default_hparams[param])
+    partial_hparams.set_hparam("num_gpus", 0)
 
     hparams = hparam_utils.load_hparams(model_hparams_path, partial_hparams)
     hparams = hparam_utils.extend_hparams(hparams, source_vocab_path, target_vocab_path)
     return hparams
 
-  def _load_model(self, 
-                  checkpoint_path, 
-                  default_hparams_path, 
-                  model_hparams_path, 
-                  source_vocab_path, 
+  def _load_model(self,
+                  checkpoint_path,
+                  default_hparams_path,
+                  model_hparams_path,
+                  source_vocab_path,
                   target_vocab_path):
     hparams = self._create_hparams(default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path)
 
@@ -101,13 +107,13 @@ class NMTContainer(rpc.ModelContainerBase):
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEM_FRAC)
     sess = tf.Session(graph=infer_model.graph, config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
-    with sess.as_default():
+    with infer_model.graph.as_default():
       nmt_model = model_helper.load_model(infer_model.model, checkpoint_path, sess, "infer")
 
     return sess, nmt_model, infer_model, hparams
 
   def _get_translation(self, nmt_outputs, sent_id, tgt_eos, subword_option):
-    """Given batch decoding outputs, select a sentence and turn to text."""
+      """Given batch decoding outputs, select a sentence and turn to text."""
     if tgt_eos: tgt_eos = tgt_eos.encode("utf-8")
     # Select a sentence
     output = nmt_outputs[sent_id, :].tolist()
@@ -194,10 +200,10 @@ if __name__ == "__main__":
         print("Connecting to Clipper with default port: 7000")
 
     input_type = "strings"
-    container = NMTContainer(model_checkpoint_path, 
-                             model_default_hparams_path, 
-                             model_hparams_path, 
-                             model_source_vocab_path, 
+    container = NMTContainer(model_checkpoint_path,
+                             model_default_hparams_path,
+                             model_hparams_path,
+                             model_source_vocab_path,
                              model_target_vocab_path)
     rpc_service = rpc.RPCService()
     rpc_service.start(container, ip, port, model_name, model_version,
