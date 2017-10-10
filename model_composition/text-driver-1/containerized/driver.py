@@ -54,7 +54,7 @@ def setup_clipper(config):
         query_cpu_str="1-4")
     time.sleep(10)
     driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
-    time.sleep(60)
+    time.sleep(120)
     logger.info("Clipper is set up!")
     return config
 
@@ -65,7 +65,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
         if not allocated_cpus:
             allocated_cpus = [6,7,14,15,16,17,18,19,20,21]
         if not allocated_gpus:
-            allocated_gpus = []
+            allocated_gpus = [0]
 
         return driver_utils.HeavyNodeConfig(name=AUTOCOMPLETION_MODEL_APP_NAME,
                                             input_type="strings",
@@ -160,7 +160,7 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            time.sleep(0.005)
+            time.sleep(0)
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
