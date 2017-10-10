@@ -55,7 +55,6 @@ class NMTContainer(rpc.ModelContainerBase):
     inputs : [string]
       A list of strings of German text
     """
-    print(inputs)
     infer_batch_size = len(inputs)
     self.sess.run(
         self.infer_model.iterator.initializer,
@@ -78,7 +77,6 @@ class NMTContainer(rpc.ModelContainerBase):
             output = output[:end_idx]
         outputs.append(output)
 
-    print(outputs)
     return outputs
 
   def _create_hparams(self, default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path):
@@ -88,7 +86,7 @@ class NMTContainer(rpc.ModelContainerBase):
     default_hparams_file.close()
     for param in default_hparams:
       partial_hparams.add_hparam(param, default_hparams[param])
-    partial_hparams.set_hparam("num_gpus", 0)
+    partial_hparams.set_hparam("num_gpus", 1)
 
     hparams = hparam_utils.load_hparams(model_hparams_path, partial_hparams)
     hparams = hparam_utils.extend_hparams(hparams, source_vocab_path, target_vocab_path)
