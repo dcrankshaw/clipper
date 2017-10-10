@@ -9,7 +9,7 @@ import math
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from datetime import datetime
@@ -167,10 +167,11 @@ class Predictor(object):
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
-    def __init__(self, config):
+    def __init__(self, config, queue):
         self.config = config
         self.loaded_reviews = False
         self.loaded_german = False
+        self.queue = queue
 
     def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
@@ -188,10 +189,7 @@ class ModelBenchmarker(object):
                 break
             time.sleep(1)
 
-
-        cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-        cl.connect()
-        driver_utils.save_results([self.config], cl, predictor.stats, "gpu_and_batch_size_experiments")
+        self.queue.put(predictor.stats)
 
     def _gen_reviews_inputs(self, num_inputs=5000, input_length=200):
         if not self.loaded_reviews:
@@ -298,12 +296,19 @@ if __name__ == "__main__":
                                                      allocated_cpus=args.model_cpus,
                                                      allocated_gpus=args.model_gpus)
                 setup_clipper(model_config)
-                benchmarker = ModelBenchmarker(model_config)
+                queue = Queue()
+                benchmarker = ModelBenchmarker(model_config, queue)
 
                 processes = []
+                all_stats = []
                 for _ in range(args.num_clients):
                     p = Process(target=benchmarker.run, args=(args.duration,))
                     p.start()
                     processes.append(p)
                 for p in processes:
+                    all_stats.append(queue.get())
                     p.join()
+
+                cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+                cl.connect()
+                driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
