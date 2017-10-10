@@ -220,13 +220,14 @@ class ModelBenchmarker(object):
 
         inputs = []
         num_gen_inputs = 0
-        while generated_inputs < num_inputs:
+        while num_gen_inputs < num_inputs:
             idx = np.random.randint(len(self.german_text))
             text = self.german_text[idx]
             words = text.split()
             if len(words) > input_length:
                 words = words[:input_length]
                 inputs.append(" ".join(words))
+                num_gen_inputs += 1
 
         return inputs
 
