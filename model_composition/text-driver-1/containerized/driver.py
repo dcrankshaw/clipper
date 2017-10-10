@@ -27,13 +27,16 @@ logger = logging.getLogger(__name__)
 # will share the same name
 AUTOCOMPLETION_MODEL_APP_NAME = "autocompletion"
 LSTM_MODEL_APP_NAME = "lstm"
+NMT_MODEL_APP_NAME = "nmt"
 
 AUTOCOMPLETION_IMAGE_NAME = "model-comp/tf-autocomplete"
 LSTM_IMAGE_NAME = "model-comp/theano-lstm"
+NMT_IMAGE_NAME = "model-comp/nmt"
 
 VALID_MODEL_NAMES = [
     AUTOCOMPLETION_MODEL_APP_NAME,
     LSTM_MODEL_APP_NAME,
+    NMT_MODEL_APP_NAME
 ]
 
 CLIPPER_ADDRESS = "localhost"
@@ -95,6 +98,24 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True)
 
+    elif model_name == NMT_MODEL_APP_NAME:
+        if not cpus_per_replica:
+            cpus_per_replica = 2
+        if not allocated_cpus:
+            allocated_cpus = range(10,12)
+        if not allocated_gpus:
+            allocated_gpus = []
+
+        return driver_utils.HeavyNodeConfig(name=NMT_MODEL_APP_NAME,
+                                            input_type="strings",
+                                            model_image=NMT_IMAGE_NAME,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True)
+
 ########## Benchmarking ##########
 
 class Predictor(object):
@@ -148,7 +169,8 @@ class Predictor(object):
 class ModelBenchmarker(object):
     def __init__(self, config):
         self.config = config
-        self.reviews = self._load_reviews()
+        self.loaded_reviews = False
+        self.loaded_german = False
 
     def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
@@ -171,7 +193,11 @@ class ModelBenchmarker(object):
         cl.connect()
         driver_utils.save_results([self.config], cl, predictor.stats, "gpu_and_batch_size_experiments")
 
-    def _gen_inputs(self, num_inputs=5000, input_length=200):
+    def _gen_reviews_inputs(self, num_inputs=5000, input_length=200):
+        if not self.loaded_reviews:
+            self.reviews = self._load_reviews()
+            self.loaded_reviews = True
+
         reviews_len = len(self.reviews)
         inputs = []
         for _ in range(num_inputs):
@@ -187,11 +213,38 @@ class ModelBenchmarker(object):
             inputs.append(review)
         return inputs
 
+    def _gen_german_inputs(self, num_inputs=5000, input_length=10):
+        if not self.loaded_german:
+            self.german_text = self.load_german()
+            self.loaded_german = True
+
+        inputs = []
+        num_gen_inputs = 0
+        while generated_inputs < num_inputs:
+            idx = np.random.randint(len(self.german_text))
+            text = self.german_text[idx]
+            words = text.split()
+            if len(words) > input_length:
+                words = words[:input_length]
+                inputs.append(" ".join(words))
+
+        return inputs
+
+
     def _get_inputs_generator_fn(self, model_name):
         if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
-            return lambda : self._gen_inputs(num_inputs=5000, input_length=10)
+            return lambda : self._gen_reviews_inputs(num_inputs=5000, input_length=10)
         elif model_name == LSTM_MODEL_APP_NAME:
-            return lambda : self._gen_inputs(num_inputs=5000, input_length=200)
+            return lambda : self._gen_reviews_inputs(num_inputs=5000, input_length=200)
+        elif model_name == NMT_MODEL_APP_NAME:
+            return lambda : self._gen_german_inputs(num_inputs=5000, input_length=15)
+
+    def _load_german(self):
+        german_data_path = os.path.join(CURR_DIR, "german_text", "german_text.de")
+        german_data_file = open(german_data_path, "rb")
+        german_text = german_data_file.readlines()
+        np.random.shuffle(german_text)
+        return german_text
 
     def _load_reviews(self):
         base_path = os.path.join(CURR_DIR, "workload_data/aclImdb/test/")
@@ -212,7 +265,7 @@ class ModelBenchmarker(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper text driver 1')
     parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'autocompletion', 'lstm'")
+    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'autocompletion', 'lstm', 'nmt'")
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
