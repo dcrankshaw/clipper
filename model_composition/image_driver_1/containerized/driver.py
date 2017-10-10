@@ -8,7 +8,6 @@ import logging
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
-from io import BytesIO
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
@@ -261,11 +260,7 @@ class ModelBenchmarker(object):
 
     def _get_inception_input(self):
         input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        input_img = Image.fromarray(input_img.astype(np.uint8))
-        inmem_inception_jpeg = BytesIO()
-        resized_inception = input_img.resize((299,299)).convert('RGB')
-        inception_input = np.array(resized_inception, dtype=np.float32)
-        return inception_input.flatten()
+        return input_img.flatten()
 
     def _get_lgbm_input(self):
         return np.array(np.random.rand(2048), dtype=np.float32)
