@@ -1,4 +1,4 @@
-FROM model-comp/tf-rpc:latest
+FROM model-comp/tf-1-4-rpc:latest
 
 ENV CLIPPER_SOURCE_VOCAB_PATH=/model/source_vocab.de
 ENV CLIPPER_TARGET_VOCAB_PATH=/model/target_vocab.en

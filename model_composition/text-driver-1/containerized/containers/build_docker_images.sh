@@ -15,6 +15,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR/../../../container_utils/
 time docker build -t model-comp/theano-rpc -f TheanoRpcDockerfile ./
 time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
+time docker build -t model-comp/tf-1-4-rpc -f Tf1-4RpcDockerfile ./
 
 cd $DIR
 # Build model-specific images
