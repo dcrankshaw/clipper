@@ -8,7 +8,7 @@ ENV CLIPPER_MODEL_HPARAMS_PATH=/model/model_hparams.json
 
 COPY nmt_model_data/ /model/
 COPY nmt_deps/ /container/
-COPY impl/nmt_container.py /container/
+COPY nmt_container.py /container/
 
 CMD ["python", "/container/nmt_container.py"]
 
