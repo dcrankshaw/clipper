@@ -5,6 +5,7 @@ import numpy as np
 import time
 import base64
 import logging
+import json
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
@@ -51,45 +52,22 @@ def setup_clipper(config):
     return config
 
 
-def get_heavy_node_config(model_name,
-                          batch_size,
+def get_heavy_node_config(batch_size,
                           num_replicas,
                           cpus_per_replica,
                           allocated_cpus,
                           allocated_gpus):
 
-    if model_name == "alexnet":
-        return driver_utils.HeavyNodeConfig(name="alexnet",
-                                            input_type="floats",
-                                            model_image="model-comp/pytorch-alexnet",
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+    return driver_utils.HeavyNodeConfig(name="inceptionv3-tfserve-compare",
+                                        input_type="strings",
+                                        model_image="model-comp/inceptionv3",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True)
 
-    elif model_name == "res50":
-        return driver_utils.HeavyNodeConfig(name="res50",
-                                            input_type="floats",
-                                            model_image="model-comp/pytorch-res50",
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
-
-    elif model_name == "res152":
-        return driver_utils.HeavyNodeConfig(name="res152",
-                                            input_type="floats",
-                                            model_image="model-comp/pytorch-res152",
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
 
 
 
@@ -137,27 +115,37 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            if self.batch_num_complete % 100 == 0:
+            if self.batch_num_complete % 40 == 0:
                 self.print_stats()
                 self.init_stats()
 
         return self.client.send_request(model_app_name, input_item).then(continuation)
+
+def gen_input():
+    input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+    input_img = Image.fromarray(input_img.astype(np.uint8))
+    inmem_inception_jpeg = BytesIO()
+    resized_inception = input_img.resize((299,299)).convert('RGB')
+    resized_inception.save(inmem_inception_jpeg, format="JPEG")
+    inmem_inception_jpeg.seek(0)
+    inception_input = inmem_inception_jpeg.read()
+    return base64.b64encode(inception_input)
 
 class ModelBenchmarker(object):
     def __init__(self, config):
         self.config = config
 
     def run(self):
-        logger.info("Generating random inputs")
-        inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(10000)]
-        logger.info("Starting predictions")
+        base_inputs = [gen_input() for _ in range(1000)]
+        inputs = [i for _ in range(10) for i in base_inputs]
+
         start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
             # time.sleep(0.005)
             time.sleep(0)
-        while len(predictor.stats["thrus"]) < 15:
+        while len(predictor.stats["thrus"]) < 8:
             time.sleep(1)
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -169,23 +157,23 @@ class ModelBenchmarker(object):
 
 if __name__ == "__main__":
 
-    models = ["alexnet", "res50", "res152"]
 
-    for m in models:
-        for cpus in [1, 2, 3]:
-            for gpus in [0, 1]:
-                for batch_size in [1, 2, 4, 6, 8, 10]:
-                        model_config = get_heavy_node_config(
-                            model_name=m,
-                            batch_size=batch_size,
-                            num_replicas=1,
-                            cpus_per_replica=cpus,
-                            allocated_cpus=range(6,16),
-                            allocated_gpus=range(gpus)
-                        )
-                        setup_clipper(model_config)
-                        benchmarker = ModelBenchmarker(model_config)
+    for cpus in [1, 2, 3]:
+        for gpus in [0,]:
+            for batch_size in [1, 2, 4, 6]:
+                model_config = get_heavy_node_config(
+                    batch_size=batch_size,
+                    num_replicas=1,
+                    cpus_per_replica=cpus,
+                    allocated_cpus=range(6,16),
+                    allocated_gpus=range(gpus)
+                )
+                logger.info("\nStarting trial: {}".format(
+                    json.dumps(model_config.__dict__, indent=4)))
 
-                        p = Process(target=benchmarker.run, args=())
-                        p.start()
-                        p.join()
+                setup_clipper(model_config)
+                benchmarker = ModelBenchmarker(model_config)
+
+                p = Process(target=benchmarker.run, args=())
+                p.start()
+                p.join()

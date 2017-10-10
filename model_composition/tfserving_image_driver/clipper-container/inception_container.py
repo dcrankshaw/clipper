@@ -3,10 +3,12 @@ import sys
 import os
 import rpc
 import base64
+from io import BytesIO
+from PIL import Image
+import json
 
 import numpy as np
 import tensorflow as tf
-
 
 class TensorFlowSavedModelContainer(rpc.ModelContainerBase):
 
@@ -18,8 +20,8 @@ class TensorFlowSavedModelContainer(rpc.ModelContainerBase):
         meta_graph_def = tf.saved_model.loader.load(self.sess,
                                                     [tf.saved_model.tag_constants.SERVING],
                                                     model_path)
-        sigdef = tf.contrib.saved_model.get_signature_def_by_key(meta_graph_def, "serving_default")
-        input_name = sigdef.inputs.get("inputs").name
+        sigdef = tf.contrib.saved_model.get_signature_def_by_key(meta_graph_def, "predict_images")
+        input_name = sigdef.inputs.get("images").name
         scores_name = sigdef.outputs.get("scores").name
         classes_name = sigdef.outputs.get("classes").name
         self.output_tensors = [self.sess.graph.get_tensor_by_name(scores_name),
@@ -30,9 +32,16 @@ class TensorFlowSavedModelContainer(rpc.ModelContainerBase):
     def predict_strings(self, inputs):
         images = [base64.b64decode(input_img) for input_img in inputs]
         feed_dict = {self.input_tensor: images}
-        results = self.sess.run(fetches=self.output_tensors, feed_dict=feed_dict)
-        print(results)
-        return ["done" for _ in range(len(inputs))]
+
+        scores, classes = self.sess.run(fetches=self.output_tensors, feed_dict=feed_dict)
+        outputs = []
+        for s, c in zip(scores, classes):
+            result = {
+                "scores": s.tolist(),
+                "classes": c.tolist()
+            }
+            outputs.append(json.dumps(result))
+        return outputs
 
 
 if __name__ == "__main__":
