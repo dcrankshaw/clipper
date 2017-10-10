@@ -215,7 +215,7 @@ class ModelBenchmarker(object):
 
     def _gen_german_inputs(self, num_inputs=5000, input_length=10):
         if not self.loaded_german:
-            self.german_text = self.load_german()
+            self.german_text = self._load_german()
             self.loaded_german = True
 
         inputs = []
