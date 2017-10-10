@@ -17,9 +17,8 @@ as a python string for the LSTM model)
 
 * **Frontend**: A piece of Clipper's infrastructure that communicates with **clients** and or **replicas**. (For more information, see the [Clipper design doc](https://docs.google.com/document/d/1Ghc-CAKXzzRshSa6FlonFa5ttmtHRAqFwMg7vhuJakw/edit)).
 
-This driver makes use of 2 heavyweight models: An LSTM model for text sentiment analysis (implemented in Theano) and a Tensorflow
-model for text autocompletion. The driver file, [driver.py](driver.py), will help you benchmark each of this models with Clipper in 
-isolation (one model at a time). The remaining sections of this README will get you started with the benchmarking process.
+This driver makes use of 3 heavyweight models: An LSTM model for text sentiment analysis (implemented in Theano), a Tensorflow
+model for text autocompletion, and an NMT sequence model (implemented in Tensorflow). The driver file, [driver.py](driver.py), will help you benchmark each of this models with Clipper in isolation (one model at a time). The remaining sections of this README will get you started with the benchmarking process.
 
 ## Activate your Clipper Anaconda environment
 Before proceeding, make sure to activate your Anaconda environment if it is not already activated. This can be done by running:
@@ -58,7 +57,7 @@ $ ./containers/build_docker_images.sh
 ### The Driver API
 
 The driver accepts the following arguments:
-- **model_name**: The name of the model to benchmark. Must be one of the following: `autocompletion`, `lstm`
+- **model_name**: The name of the model to benchmark. Must be one of the following: `autocompletion`, `lstm`, `nmt`
   * This argument is REQUIRED
   
 - **duration**: The duration for which each iteration of the benchmark should run, in seconds
