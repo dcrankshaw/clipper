@@ -241,7 +241,7 @@ class ModelBenchmarker(object):
             return lambda : self._gen_german_inputs(num_inputs=5000, input_length=15)
 
     def _load_german(self):
-        german_data_path = os.path.join(CURR_DIR, "german_text", "german_text.de")
+        german_data_path = os.path.join(CURR_DIR, "nmt_workload", "german_text.de")
         german_data_file = open(german_data_path, "rb")
         german_text = german_data_file.readlines()
         np.random.shuffle(german_text)
