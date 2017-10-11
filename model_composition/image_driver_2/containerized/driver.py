@@ -200,7 +200,7 @@ class ModelBenchmarker(object):
         return input_img.flatten()
 
     def _get_opencv_svm_input(self):
-        return np.array(np.random.rand(NUM_SIFT_FEATURES) * 10, dtype=np.float32)
+        return np.array(np.random.rand(NUM_SIFT_FEATURES) * 10, dtype=np.int32)
 
     def _get_input_generator_fn(self, model_app_name):
         if model_app_name == INCEPTION_MODEL_APP_NAME:
