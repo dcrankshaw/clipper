@@ -21,7 +21,9 @@ class OpenCvSvmContainer(rpc.ModelContainerBase):
 		   	A list of SIFT feature vectors, each
 		   	represented as numpy array of data type `np.int32`
 		"""
-
+        outputs = self.model.predict(inputs)
+        print(outputs)
+        print(type(outputs))
 		return self.model.predict(inputs)
 
 if __name__ == "__main__":
