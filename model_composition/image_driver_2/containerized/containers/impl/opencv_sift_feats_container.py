@@ -20,12 +20,13 @@ class SIFTFeaturizationContainer(rpc.ModelContainerBase):
 		   	A list of images, each of which is represented
 		   	as a numpy array of floats
 		"""
-        inputs = [input_item.reshape((299,299,3)) for input_item in inputs]
+        inputs = [input_item.astype(np.uint8) for input_item in inputs]
 		return [self._get_keypoints(input_img) for input_img in inputs]
 
 	def _get_keypoints(self, img):
 		grayscale_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 		keypoints, features = self.sift.detectAndCompute(grayscale_img, None)
+        print(features)
 		return np.array(features[:NUM_SIFT_FEATURES], dtype=np.float32)
 
 if __name__ == "__main__":
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     else:
         print("Connecting to Clipper with default port: 7000")
 
-    input_type = "bytes"
+    input_type = "floats"
     container = SIFTFeaturizationContainer()
     rpc_service = rpc.RPCService()
     rpc_service.start(container, ip, port, model_name, model_version,
