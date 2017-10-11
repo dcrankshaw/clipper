@@ -21,7 +21,7 @@ class SIFTFeaturizationContainer(rpc.ModelContainerBase):
             A list of images, each of which is represented
             as a numpy array of floats
         """
-        inputs = [input_item.astype(np.uint8) for input_item in inputs]
+        inputs = [input_item.reshape((299,299,3)).astype(np.uint8) for input_item in inputs]
         return [self._get_keypoints(input_img) for input_img in inputs]
 
     def _get_keypoints(self, img):
