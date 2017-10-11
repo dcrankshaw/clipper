@@ -3,7 +3,7 @@ FROM model-comp/tf-rpc:latest
 COPY impl/inception_container.py /container/
 COPY inception_classifier_data/ /model
 
-RUN apt-get install --yes git && \
+RUN apt-get update && apt-get install --yes git && \
 	git clone https://github.com/tensorflow/tensorflow
 
 ENV CLIPPER_MODEL_PATH=/model/inception_v3.ckpt
