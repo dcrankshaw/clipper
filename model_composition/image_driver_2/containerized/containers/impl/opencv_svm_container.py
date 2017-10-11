@@ -8,23 +8,23 @@ from sklearn.svm import LinearSVC
 
 class OpenCvSvmContainer(rpc.ModelContainerBase):
 
-	def __init__(self, model_path):
-		model_file = open(model_path, "rb")
-		self.model = pickle.load(model_file)
-		model_file.close()
+    def __init__(self, model_path):
+        model_file = open(model_path, "rb")
+        self.model = pickle.load(model_file)
+        model_file.close()
 
-	def predict_ints(self, inputs):
-		"""
-		Parameters
-		----------
-		inputs : list
-		   	A list of SIFT feature vectors, each
-		   	represented as numpy array of data type `np.int32`
-		"""
+    def predict_ints(self, inputs):
+        """
+        Parameters
+        ----------
+        inputs : list
+            A list of SIFT feature vectors, each
+            represented as numpy array of data type `np.int32`
+        """
         outputs = self.model.predict(inputs)
         print(outputs)
         print(type(outputs))
-		return self.model.predict(inputs)
+        return self.model.predict(inputs)
 
 if __name__ == "__main__":
     print("Starting OpenCV SVM Container")
