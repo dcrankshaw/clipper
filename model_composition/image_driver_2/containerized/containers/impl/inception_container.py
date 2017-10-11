@@ -38,16 +38,16 @@ class InceptionClassificationContainer(rpc.ModelContainerBase):
             An image, represented as a flattened 299 x 299 x 3 
             numpy array of floats
         """
-		reshaped_inputs = [input_item.reshape((299, 299, 3)) for input_item in inputs]
-		all_probabilities = self.sess.run([self.all_probabilities], feed_dict={self.inputs: reshaped_inputs})
+        reshaped_inputs = [input_item.reshape((299, 299, 3)) for input_item in inputs]
+        all_probabilities = self.sess.run([self.all_probabilities], feed_dict={self.inputs: reshaped_inputs})
 
-		outputs = []
-		for input_probabilities in all_probabilities[0]:
-			sorted_inds = [i[0] for i in sorted(
-				enumerate(-input_probabilities), key=lambda x:x[1])]
-			outputs.append(str(sorted_inds[0]))
+        outputs = []
+        for input_probabilities in all_probabilities[0]:
+            sorted_inds = [i[0] for i in sorted(
+                enumerate(-input_probabilities), key=lambda x:x[1])]
+            outputs.append(str(sorted_inds[0]))
 
-  		return outputs
+        return outputs
 
 if __name__ == "__main__":
     print("Starting Inception Classification Container")
