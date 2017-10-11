@@ -205,7 +205,7 @@ class ModelBenchmarker(object):
     def _get_input_generator_fn(self, model_app_name):
         if model_app_name == INCEPTION_MODEL_APP_NAME:
             return self._get_inception_input
-        elif model_app_name = OPENCV_FEATS_MODEL_APP_NAME:
+        elif model_app_name == OPENCV_FEATS_MODEL_APP_NAME:
             return self._get_opencv_feats_input
         elif model_app_name == OPENCV_SVM_MODEL_APP_NAME:
             return self._get_opencv_svm_input

@@ -26,7 +26,7 @@ class SIFTFeaturizationContainer(rpc.ModelContainerBase):
 	def _get_keypoints(self, img):
 		grayscale_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 		keypoints, features = self.sift.detectAndCompute(grayscale_img, None)
-		return features[:NUM_SIFT_FEATURES]
+		return np.array(features[:NUM_SIFT_FEATURES], dtype=np.float32)
 
 if __name__ == "__main__":
     print("Starting OpenCV SIFT Featurization Container")

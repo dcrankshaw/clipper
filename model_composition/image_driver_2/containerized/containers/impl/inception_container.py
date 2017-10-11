@@ -7,9 +7,6 @@ import base64
 import tensorflow as tf
 import numpy as np
 
-# Change this to the relative path of tf slim within your docker container
-sys.path.insert(0, os.path.abspath('/tfslim'))
-
 from nets import inception_v3
 from preprocessing import inception_preprocessing
 from datasets import imagenet
@@ -17,7 +14,7 @@ from datasets import imagenet
 image_size = inception_v3.inception_v3.default_image_size
 slim = tf.contrib.slim
 
-class InceptionFeaturizationContainer(rpc.ModelContainerBase):
+class InceptionClassificationContainer(rpc.ModelContainerBase):
 
     def __init__(self, checkpoint_path):
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -91,7 +88,7 @@ if __name__ == "__main__":
         print("Connecting to Clipper with default port: 7000")
 
     input_type = "floats"
-    container = InceptionFeaturizationContainer(model_checkpoint_path)
+    container = InceptionClassificationContainer(model_checkpoint_path)
     rpc_service = rpc.RPCService()
     rpc_service.start(container, ip, port, model_name, model_version,
                       input_type)
