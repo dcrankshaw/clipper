@@ -7,7 +7,7 @@ import base64
 import tensorflow as tf
 import numpy as np
 
-sys.path.append("/tensorflow/models/research/slim")
+sys.path.append("/tf_models/research/slim")
 
 from nets import inception_v3
 from preprocessing import inception_preprocessing
