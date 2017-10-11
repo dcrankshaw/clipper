@@ -62,7 +62,7 @@ if __name__ == "__main__":
     else:
         print("Connecting to Clipper with default port: 7000")
 
-    input_type = "floats"
+    input_type = "ints"
     container = OpenCvSvmContainer(model_path)
     rpc_service = rpc.RPCService()
     rpc_service.start(container, ip, port, model_name, model_version,

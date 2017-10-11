@@ -107,7 +107,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
             allocated_gpus = []
 
         return driver_utils.HeavyNodeConfig(name=OPENCV_SVM_MODEL_APP_NAME,
-                                            input_type="floats",
+                                            input_type="ints",
                                             model_image=OPENCV_SVM_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
