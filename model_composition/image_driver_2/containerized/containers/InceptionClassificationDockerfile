@@ -3,6 +3,8 @@ FROM model-comp/tf-rpc:latest
 COPY impl/inception_container.py /container/
 COPY inception_classifier_data/ /model
 
+WORKDIR /
+
 RUN apt-get update && apt-get install --yes git && \
 	git clone https://github.com/tensorflow/tensorflow
 
