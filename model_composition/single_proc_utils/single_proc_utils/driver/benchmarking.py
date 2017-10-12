@@ -42,17 +42,7 @@ def gen_vgg_featurization_inputs(num_inputs):
 	return [np.random.rand(224, 224, 3) * 255 for i in range(0, num_inputs)]
 
 def gen_inception_featurization_inputs(num_inputs):
-	input_imgs = [np.random.rand(299,299,3) * 255 for i in range(0, num_inputs)]
-	input_imgs = [Image.fromarray(input_img.astype(np.uint8)) for input_img in input_imgs]
-	inception_inputs = []
-	for input_img in input_imgs:
-		inmem_inception_jpeg = BytesIO()
-		resized_inception = input_img.resize((299,299)).convert('RGB')
-		resized_inception.save(inmem_inception_jpeg, format="JPEG")
-		inmem_inception_jpeg.seek(0)
-		inception_input = inmem_inception_jpeg.read()
-		inception_inputs.append(inception_input)
-	return inception_inputs
+	return [np.random.rand(299,299,3) * 255 for i in range(0, num_inputs)]
 
 def gen_inception_classification_inputs(num_inputs):
 	return [np.random.rand(299,299,3) * 255 for i in range(0, num_inputs)]
