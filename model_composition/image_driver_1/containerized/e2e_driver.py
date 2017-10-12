@@ -287,14 +287,14 @@ class DriverBenchmarker(object):
         driver_utils.save_results(self.configs, cl, predictor.stats, "gpu_and_batch_size_experiments")
 
     def _get_vgg_feats_input(self):
-        input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+        input_img = np.array(np.random.rand((299, 299, 3)) * 255, dtype=np.float32)
         input_img = Image.fromarray(input_img.astype(np.uint8))
         vgg_img = input_img.resize((224, 224)).convert('RGB')
         vgg_input = np.array(vgg_img, dtype=np.float32)
         return vgg_input.flatten()
 
     def _get_inception_input(self):
-        return np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+        return np.array(np.random.rand((299, 299, 3)) * 255, dtype=np.float32)
 
 class RequestDelayConfig:
     def __init__(self, request_delay):
