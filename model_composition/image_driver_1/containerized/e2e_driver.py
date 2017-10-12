@@ -98,7 +98,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
             allocated_gpus = [0]
 
         return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS_MODEL_APP_NAME,
-                                            input_type="strings",
+                                            input_type="floats",
                                             model_image=INCEPTION_FEATS_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -294,14 +294,7 @@ class DriverBenchmarker(object):
         return vgg_input.flatten()
 
     def _get_inception_input(self):
-        input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        input_img = Image.fromarray(input_img.astype(np.uint8))
-        inmem_inception_jpeg = BytesIO()
-        resized_inception = input_img.resize((299,299)).convert('RGB')
-        resized_inception.save(inmem_inception_jpeg, format="JPEG")
-        inmem_inception_jpeg.seek(0)
-        inception_input = inmem_inception_jpeg.read()
-        return base64.b64encode(inception_input)
+        return np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
 
 class RequestDelayConfig:
     def __init__(self, request_delay):
