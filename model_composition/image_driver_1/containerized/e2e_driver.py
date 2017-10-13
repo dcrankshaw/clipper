@@ -267,20 +267,19 @@ class DriverBenchmarker(object):
     def __init__(self, configs):
         self.configs = configs
 
-    def run(self, duration_seconds=120, request_delay=.01):
+    def run(self, num_trials, request_delay=.01):
         logger.info("Generating random inputs")
-        inputs = [(self._get_vgg_feats_input(), self._get_inception_input()) for _ in range(5000)]
+        base_inputs = [(self._get_vgg_feats_input(), self._get_inception_input()) for _ in range(1000)]
+        inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor()
         for vgg_feats_input, inception_input in inputs:
             predictor.predict(vgg_feats_input, inception_input)
             time.sleep(request_delay)
-        while True:
-            curr_time = datetime.now()
-            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 5000):
+
+            if len(predictor.stats["thrus"]) > num_trials:
                 break
-            time.sleep(1)
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
@@ -306,7 +305,7 @@ class RequestDelayConfig:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
+    parser.add_argument('-t', '--num_trials', type=int, default=30, help='The number of trials to complete for the benchmarking process')
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
@@ -349,7 +348,7 @@ if __name__ == "__main__":
     setup_clipper(model_configs)
     output_config = RequestDelayConfig(request_delay)
     benchmarker = DriverBenchmarker([output_config] + model_configs)
-    p = Process(target=benchmarker.run, args=(args.duration, request_delay))
+    p = Process(target=benchmarker.run, args=(args.num_trials, request_delay))
     p.start()
     p.join()
 
