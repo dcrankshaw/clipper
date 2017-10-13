@@ -111,6 +111,7 @@ class Predictor(object):
         self.init_stats()
         self.stats = {
             "thrus": [],
+            "all_lats": [],
             "p99_lats": [],
             "mean_lats": []}
         self.total_num_complete = 0
@@ -128,6 +129,7 @@ class Predictor(object):
         end_time = datetime.now()
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
+        self.stats["all_lats"].append(lats.tolist())
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
         logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
@@ -219,9 +221,9 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
-    alexnet_reps = 2
-    res50_reps = 3
-    res152_reps = 3
+    alexnet_reps = 1
+    res50_reps = 1
+    res152_reps = 1
 
     configs = [
         setup_alexnet(batch_size=1,
