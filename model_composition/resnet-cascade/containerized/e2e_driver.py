@@ -143,7 +143,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            if self.batch_num_complete % 100 == 0:
+            if self.batch_num_complete % 200 == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -153,11 +153,12 @@ class Predictor(object):
             else:
                 complete()
 
-        def res18_cont(output):
+        def res50_cont(output):
             if output == DEFAULT_OUTPUT:
                 return
             else:
-                idk = np.random.random() > 0.4336
+                idk = np.random.random() > 0.4633
+                # idk = True
                 if idk:
                     self.client.send_request("res152", input_item).then(res152_cont)
                 else:
@@ -168,8 +169,9 @@ class Predictor(object):
                 return
             else:
                 idk = np.random.random() > 0.192
+                # idk = False
                 if idk:
-                    self.client.send_request("res18", input_item).then(res18_cont)
+                    self.client.send_request("res50", input_item).then(res50_cont)
                 else:
                     complete()
 
@@ -187,11 +189,14 @@ class ModelBenchmarker(object):
         inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         predictor = Predictor()
+        i = 0
         for input_item in inputs:
             predictor.predict(input_item=input_item)
+            # if i % 2 == 0:
             time.sleep(self.delay)
             if len(predictor.stats["thrus"]) > 60:
                 break
+            i += 1
         self.queue.put(predictor.stats)
 
 
@@ -215,8 +220,8 @@ if __name__ == "__main__":
         return [total_gpus.pop() for _ in range(num_gpus)]
 
     alexnet_reps = 2
-    res50_reps = 1
-    res152_reps = 1
+    res50_reps = 3
+    res152_reps = 3
 
     configs = [
         setup_alexnet(batch_size=1,
@@ -247,4 +252,5 @@ if __name__ == "__main__":
 
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade")
+    driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade_DEBUG")
+    # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade")

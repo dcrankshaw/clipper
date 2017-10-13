@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import datetime
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,11 @@ class HeavyNodeConfig(object):
                  model_image,
                  allocated_cpus,
                  cpus_per_replica,
-                 slo=500000,
-                 num_replicas=1,
-                 gpus=[],
-                 batch_size=1,
-                 use_nvidia_docker=False,
+                 num_replicas,
+                 gpus,
+                 batch_size,
+                 use_nvidia_docker,
+                 slo=5000000,
                  input_size=-1):
         self.name = name
         self.input_type = input_type
@@ -31,6 +32,7 @@ class HeavyNodeConfig(object):
         self.batch_size = batch_size
         self.use_nvidia_docker = use_nvidia_docker
         self.input_size = input_size
+        self.instance_type = requests.get("http://169.254.169.254/latest/meta-data/instance-type").text
 
     def to_json(self):
         return json.dumps(self.__dict__)
