@@ -1,6 +1,6 @@
 from __future__ import print_function
-import sys
-import argparse
+# import sys
+# import argparse
 import os
 import logging
 import numpy as np
@@ -8,7 +8,6 @@ import time
 import math
 
 from clipper_admin import ClipperConnection, DockerContainerManager
-from datetime import datetime
 from multiprocessing import Process, Queue
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
@@ -47,6 +46,7 @@ DEFAULT_OUTPUT = "TIMEOUT"
 
 ########## Setup ##########
 
+
 def setup_clipper(config):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.stop_all()
@@ -61,33 +61,16 @@ def setup_clipper(config):
     logger.info("Clipper is set up!")
     return config
 
-def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
-    if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
-        if not cpus_per_replica:
-            cpus_per_replica = 5
-        if not allocated_cpus:
-            allocated_cpus = [6,7,14,15,16,17,18,19,20,21]
-        if not allocated_gpus:
-            allocated_gpus = []
 
-        return driver_utils.HeavyNodeConfig(name=AUTOCOMPLETION_MODEL_APP_NAME,
-                                            input_type="strings",
-                                            model_image=AUTOCOMPLETION_IMAGE_NAME,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+def get_heavy_node_config(model_name,
+                          batch_size,
+                          num_replicas,
+                          cpus_per_replica,
+                          allocated_cpus,
+                          allocated_gpus,
+                          input_size):
 
-    elif model_name == LSTM_MODEL_APP_NAME:
-        if not cpus_per_replica:
-            cpus_per_replica = 2
-        if not allocated_cpus:
-            allocated_cpus = range(22,26)
-        if not allocated_gpus:
-            allocated_gpus = []
-
+    if model_name == LSTM_MODEL_APP_NAME:
         return driver_utils.HeavyNodeConfig(name=LSTM_MODEL_APP_NAME,
                                             input_type="strings",
                                             model_image=LSTM_IMAGE_NAME,
@@ -96,16 +79,11 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            input_size=input_size,
+                                            )
 
     elif model_name == NMT_MODEL_APP_NAME:
-        if not cpus_per_replica:
-            cpus_per_replica = 2
-        if not allocated_cpus:
-            allocated_cpus = range(10,12)
-        if not allocated_gpus:
-            allocated_gpus = []
-
         return driver_utils.HeavyNodeConfig(name=NMT_MODEL_APP_NAME,
                                             input_type="strings",
                                             model_image=NMT_IMAGE_NAME,
@@ -114,9 +92,12 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            input_size=input_size,
+                                            )
 
 ########## Benchmarking ##########
+
 
 class Predictor(object):
 
@@ -152,6 +133,7 @@ class Predictor(object):
 
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
+
         def continuation(output):
             if output == DEFAULT_OUTPUT:
                 return
@@ -166,6 +148,7 @@ class Predictor(object):
 
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
+
 class ModelBenchmarker(object):
     def __init__(self, config, queue):
         self.config = config
@@ -173,20 +156,18 @@ class ModelBenchmarker(object):
         self.loaded_german = False
         self.queue = queue
 
-    def run(self, duration_seconds=120):
+    def run(self):
         logger.info("Generating random inputs")
         inputs_generator_fn = self._get_inputs_generator_fn(self.config.name)
         inputs = inputs_generator_fn()
         logger.info("Starting predictions")
-        start_time = datetime.now()
+        # start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(0.005)
-        while True:
-            curr_time = datetime.now()
-            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
-                break
+
+        while len(predictor.stats["thrus"]) < 15:
             time.sleep(1)
 
         self.queue.put(predictor.stats)
@@ -229,14 +210,15 @@ class ModelBenchmarker(object):
 
         return inputs
 
-
     def _get_inputs_generator_fn(self, model_name):
         if model_name == AUTOCOMPLETION_MODEL_APP_NAME:
-            return lambda : self._gen_reviews_inputs(num_inputs=5000, input_length=10)
+            return lambda: self._gen_reviews_inputs(num_inputs=5000, input_length=10)
         elif model_name == LSTM_MODEL_APP_NAME:
-            return lambda : self._gen_reviews_inputs(num_inputs=5000, input_length=200)
+            return lambda: self._gen_reviews_inputs(num_inputs=5000,
+                                                    input_length=self.config.input_size)
         elif model_name == NMT_MODEL_APP_NAME:
-            return lambda : self._gen_german_inputs(num_inputs=5000, input_length=15)
+            return lambda: self._gen_german_inputs(num_inputs=5000,
+                                                   input_length=self.config.input_size)
 
     def _load_german(self):
         german_data_path = os.path.join(CURR_DIR, "nmt_workload", "german_text.de")
@@ -261,48 +243,31 @@ class ModelBenchmarker(object):
         np.random.shuffle(reviews)
         return reviews
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper text driver 1')
-    parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'autocompletion', 'lstm', 'nmt'")
-    parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
-    parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
-    parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
-    parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
 
-    args = parser.parse_args()
+    model = "nmt"
+    num_clients = 1
 
-    if args.model_name not in VALID_MODEL_NAMES:
-        raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
-
-    default_batch_size_confs = [2]
-    default_replica_num_confs = [1]
-    default_cpus_per_replica_confs = [None]
-
-    batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
-    replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
-    cpus_per_replica_confs = args.cpus_per_replica_nums if args.cpus_per_replica_nums else default_cpus_per_replica_confs
-
-
-    for num_replicas in replica_num_confs:
-        for cpus_per_replica in cpus_per_replica_confs:
-            for batch_size in batch_size_confs:
-                model_config = get_heavy_node_config(model_name=args.model_name,
-                                                     batch_size=batch_size,
-                                                     num_replicas=num_replicas,
-                                                     cpus_per_replica=cpus_per_replica,
-                                                     allocated_cpus=args.model_cpus,
-                                                     allocated_gpus=args.model_gpus)
+    input_size = 40
+    for cpus in [2, 3, 4, 5]:
+        for gpus in [1]:
+            for batch_size in [1, 2, 4, 6, 8, 10, 15, 20, 25]:
+                model_config = get_heavy_node_config(model_name=model,
+                                                    batch_size=batch_size,
+                                                    num_replicas=1,
+                                                    cpus_per_replica=cpus,
+                                                    allocated_cpus=range(6, 16),
+                                                    allocated_gpus=range(gpus),
+                                                    input_size=input_size)
                 setup_clipper(model_config)
                 queue = Queue()
                 benchmarker = ModelBenchmarker(model_config, queue)
 
                 processes = []
                 all_stats = []
-                for _ in range(args.num_clients):
-                    p = Process(target=benchmarker.run, args=(args.duration,))
+                for _ in range(num_clients):
+                    p = Process(target=benchmarker.run)
                     p.start()
                     processes.append(p)
                 for p in processes:
@@ -311,4 +276,39 @@ if __name__ == "__main__":
 
                 cl = ClipperConnection(DockerContainerManager(redis_port=6380))
                 cl.connect()
-                driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
+                driver_utils.save_results([model_config],
+                                        cl,
+                                        all_stats,
+                                        "single_model_prof_%s" % model_config.name)
+
+    input_size = 80
+    for cpus in [1, 2, 3, 4, 5]:
+        for gpus in [1]:
+            for batch_size in [1, 2, 4, 6, 8, 10, 15, 20, 25]:
+                model_config = get_heavy_node_config(model_name=model,
+                                                    batch_size=batch_size,
+                                                    num_replicas=1,
+                                                    cpus_per_replica=cpus,
+                                                    allocated_cpus=range(6, 16),
+                                                    allocated_gpus=range(gpus),
+                                                    input_size=input_size)
+                setup_clipper(model_config)
+                queue = Queue()
+                benchmarker = ModelBenchmarker(model_config, queue)
+
+                processes = []
+                all_stats = []
+                for _ in range(num_clients):
+                    p = Process(target=benchmarker.run)
+                    p.start()
+                    processes.append(p)
+                for p in processes:
+                    all_stats.append(queue.get())
+                    p.join()
+
+                cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+                cl.connect()
+                driver_utils.save_results([model_config],
+                                        cl,
+                                        all_stats,
+                                        "single_model_prof_%s" % model_config.name)
