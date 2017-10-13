@@ -318,7 +318,11 @@ class DockerContainerManager(ContainerManager):
         containers = self.docker_client.containers.list(
             filters={"label": CLIPPER_DOCKER_LABEL})
         for c in containers:
-            c.stop()
+            c.stop(timeout=1)
+        try:
+            self.docker_client.containers.prune()
+        except docker.errors.APIError as e:
+            pass
 
     def get_admin_addr(self):
         return "{host}:{port}".format(

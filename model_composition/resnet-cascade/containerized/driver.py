@@ -1,15 +1,15 @@
-import sys
-import os
-import argparse
+# import sys
+# import os
+# import argparse
 import numpy as np
 import time
-import base64
+# import base64
 import logging
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
-from io import BytesIO
-from PIL import Image
+# from io import BytesIO
+# from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process
@@ -34,7 +34,6 @@ CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
 
-########## Setup ##########
 
 def setup_clipper(config):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -56,7 +55,8 @@ def get_heavy_node_config(model_name,
                           num_replicas,
                           cpus_per_replica,
                           allocated_cpus,
-                          allocated_gpus):
+                          allocated_gpus,
+                          instance_type="p2.8xlarge"):
 
     if model_name == "alexnet":
         return driver_utils.HeavyNodeConfig(name="alexnet",
@@ -67,7 +67,9 @@ def get_heavy_node_config(model_name,
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            instance_type=instance_type
+                                            )
 
     elif model_name == "res50":
         return driver_utils.HeavyNodeConfig(name="res50",
@@ -78,7 +80,9 @@ def get_heavy_node_config(model_name,
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            instance_type=instance_type
+                                            )
 
     elif model_name == "res152":
         return driver_utils.HeavyNodeConfig(name="res152",
@@ -89,11 +93,10 @@ def get_heavy_node_config(model_name,
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            instance_type=instance_type
+                                            )
 
-
-
-########## Benchmarking ##########
 
 class Predictor(object):
 
@@ -129,6 +132,7 @@ class Predictor(object):
 
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
+
         def continuation(output):
             if output == DEFAULT_OUTPUT:
                 return
@@ -143,6 +147,7 @@ class Predictor(object):
 
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
+
 class ModelBenchmarker(object):
     def __init__(self, config):
         self.config = config
@@ -151,7 +156,7 @@ class ModelBenchmarker(object):
         logger.info("Generating random inputs")
         inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(10000)]
         logger.info("Starting predictions")
-        start_time = datetime.now()
+        # start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
@@ -162,30 +167,36 @@ class ModelBenchmarker(object):
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
-        driver_utils.save_results([self.config], cl, predictor.stats, "single_model_prof_%s" % self.config.name)
-
-
+        driver_utils.save_results([self.config],
+                                  cl,
+                                  predictor.stats,
+                                  "single_model_prof_%s" % self.config.name)
 
 
 if __name__ == "__main__":
 
     models = ["alexnet", "res50", "res152"]
 
-    for m in models:
-        for cpus in [1, 2, 3]:
-            for gpus in [0, 1]:
-                for batch_size in [1, 2, 4, 6, 8, 10]:
-                        model_config = get_heavy_node_config(
-                            model_name=m,
-                            batch_size=batch_size,
-                            num_replicas=1,
-                            cpus_per_replica=cpus,
-                            allocated_cpus=range(6,16),
-                            allocated_gpus=range(gpus)
-                        )
-                        setup_clipper(model_config)
-                        benchmarker = ModelBenchmarker(model_config)
+    # for cpus in [1, 2]:
+    cpus = 1
+    for gpus in [1, 0]:
+        for m in models:
+            if gpus == 0 and m is not "alexnet":
+                continue
+            for batch_size in [1, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30]:
+                if gpus == 0 and batch_size > 8:
+                    continue
+                model_config = get_heavy_node_config(
+                    model_name=m,
+                    batch_size=batch_size,
+                    num_replicas=1,
+                    cpus_per_replica=cpus,
+                    allocated_cpus=range(8, 20),
+                    allocated_gpus=range(gpus)
+                )
+                setup_clipper(model_config)
+                benchmarker = ModelBenchmarker(model_config)
 
-                        p = Process(target=benchmarker.run, args=())
-                        p.start()
-                        p.join()
+                p = Process(target=benchmarker.run, args=())
+                p.start()
+                p.join()
