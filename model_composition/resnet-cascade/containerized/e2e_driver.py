@@ -13,6 +13,8 @@ from datetime import datetime
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
+# import json
+import argparse
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -68,7 +70,7 @@ def setup_alexnet(batch_size,
                                         use_nvidia_docker=True)
 
 
-def setup_res18(batch_size,
+def setup_res50(batch_size,
                 num_replicas,
                 cpus_per_replica,
                 allocated_cpus,
@@ -175,25 +177,31 @@ class Predictor(object):
 
 
 class ModelBenchmarker(object):
-    def __init__(self, queue):
+    def __init__(self, queue, delay):
         self.queue = queue
+        self.delay = delay
 
     def run(self):
         logger.info("Generating random inputs")
-        inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(10000)]
+        base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
+        inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(input_item=input_item)
-            time.sleep(0.034)
-            if len(predictor.stats["thrus"]) < 30:
+            time.sleep(self.delay)
+            if len(predictor.stats["thrus"]) > 60:
                 break
         self.queue.put(predictor.stats)
 
 
 if __name__ == "__main__":
 
-    models = ["alexnet", "res50", "res152"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--delay', type=float, help='inter-request delay')
+
+    args = parser.parse_args()
+
     queue = Queue()
 
     total_cpus = range(8, 32)
@@ -206,26 +214,30 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
+    alexnet_reps = 2
+    res50_reps = 1
+    res152_reps = 1
+
     configs = [
         setup_alexnet(batch_size=1,
-                      num_replicas=1,
+                      num_replicas=alexnet_reps,
                       cpus_per_replica=1,
-                      allocated_cpus=get_cpus(4),
-                      allocated_gpus=get_gpus(1)),
-        setup_res18(batch_size=1,
-                    num_replicas=1,
+                      allocated_cpus=get_cpus(6),
+                      allocated_gpus=get_gpus(alexnet_reps)),
+        setup_res50(batch_size=1,
+                    num_replicas=res50_reps,
                     cpus_per_replica=1,
-                    allocated_cpus=get_cpus(4),
-                    allocated_gpus=get_gpus(1)),
+                    allocated_cpus=get_cpus(6),
+                    allocated_gpus=get_gpus(res50_reps)),
         setup_res152(batch_size=1,
-                     num_replicas=1,
+                     num_replicas=res152_reps,
                      cpus_per_replica=1,
-                     allocated_cpus=get_cpus(4),
-                     allocated_gpus=get_gpus(1))
+                     allocated_cpus=get_cpus(6),
+                     allocated_gpus=get_gpus(res152_reps))
     ]
 
     setup_clipper(configs)
-    benchmarker = ModelBenchmarker(queue)
+    benchmarker = ModelBenchmarker(queue, args.delay)
 
     all_stats = []
     p = Process(target=benchmarker.run)
