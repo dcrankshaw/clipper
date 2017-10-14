@@ -179,24 +179,22 @@ if __name__ == "__main__":
 
     # for cpus in [1, 2]:
     cpus = 1
-    for gpus in [1, 0]:
-        for m in models:
-            if gpus == 0 and m is not "alexnet":
-                continue
-            for batch_size in [10, 12, 16, 20, 24, 30, 48, 64, 128]:
-                if gpus == 1 and batch_size < 30:
-                    continue
-                model_config = get_heavy_node_config(
-                    model_name=m,
-                    batch_size=batch_size,
-                    num_replicas=1,
-                    cpus_per_replica=cpus,
-                    allocated_cpus=range(8, 20),
-                    allocated_gpus=range(gpus)
-                )
-                setup_clipper(model_config)
-                benchmarker = ModelBenchmarker(model_config)
+    gpus = 0
+    m = "alexnet"
+    # for gpus in [0,]:
+        # for m in models:
+    for batch_size in [10, 12, 16, 20, 24, 30, 48, 64, 128]:
+        model_config = get_heavy_node_config(
+            model_name=m,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=cpus,
+            allocated_cpus=range(8, 20),
+            allocated_gpus=range(gpus)
+        )
+        setup_clipper(model_config)
+        benchmarker = ModelBenchmarker(model_config)
 
-                p = Process(target=benchmarker.run, args=())
-                p.start()
-                p.join()
+        p = Process(target=benchmarker.run, args=())
+        p.start()
+        p.join()
