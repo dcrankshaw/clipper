@@ -225,7 +225,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            if self.batch_num_complete % 50 == 0:
+            if self.batch_num_complete % 700 == 0:
                 self.print_stats()
                 self.init_stats()
 
