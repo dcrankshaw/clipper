@@ -145,7 +145,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            if self.batch_num_complete % 200 == 0:
+            if self.batch_num_complete % 900 == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -196,7 +196,7 @@ class ModelBenchmarker(object):
             predictor.predict(input_item=input_item)
             # if i % 2 == 0:
             time.sleep(self.delay)
-            if len(predictor.stats["thrus"]) > 50:
+            if len(predictor.stats["thrus"]) > 30:
                 break
             i += 1
         self.queue.put(predictor.stats)
@@ -223,22 +223,26 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
-    alexnet_reps = 1
+    alexnet_reps = 2
     res50_reps = 2
     res152_reps = 2
 
+    alex_batch = 128
+    res50_batch = 30
+    res152_batch = 30
+
     configs = [
-        setup_alexnet(batch_size=1,
+        setup_alexnet(batch_size=alex_batch,
                       num_replicas=alexnet_reps,
                       cpus_per_replica=1,
                       allocated_cpus=get_cpus(4),
                       allocated_gpus=get_gpus(alexnet_reps)),
-        setup_res50(batch_size=1,
+        setup_res50(batch_size=res50_batch,
                     num_replicas=res50_reps,
                     cpus_per_replica=1,
                     allocated_cpus=get_cpus(4),
                     allocated_gpus=get_gpus(res50_reps)),
-        setup_res152(batch_size=1,
+        setup_res152(batch_size=res152_batch,
                      num_replicas=res152_reps,
                      cpus_per_replica=1,
                      allocated_cpus=get_cpus(4),
@@ -257,6 +261,6 @@ if __name__ == "__main__":
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
-    driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
+    driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
     sys.exit(0)
     # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade_DEBUG")
