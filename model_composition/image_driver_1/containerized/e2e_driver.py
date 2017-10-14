@@ -289,7 +289,7 @@ class DriverBenchmarker(object):
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
-        driver_utils.save_results(self.configs, cl, predictor.stats, "gpu_and_batch_size_experiments")
+        driver_utils.save_results(self.configs, cl, [predictor.stats], "gpu_and_batch_size_experiments")
 
     def _get_vgg_feats_input(self):
         input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
