@@ -192,6 +192,7 @@ class Predictor(object):
         self.stats = {
             "thrus": [],
             "p99_lats": [],
+            "all_lats": [],
             "mean_lats": []}
         self.total_num_complete = 0
 
@@ -209,6 +210,7 @@ class Predictor(object):
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
+        self.stats["all_lats"] = self.stats["all_lats"] + self.latencies
         self.stats["mean_lats"].append(mean)
         logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
                                                                        mean=mean,
