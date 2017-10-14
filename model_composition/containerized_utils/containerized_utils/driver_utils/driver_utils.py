@@ -63,7 +63,7 @@ def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
     clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
 
 
-def save_results(configs, clipper_conn, client_metrics, results_dir):
+def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="results"):
     """
     Parameters
     ----------
@@ -88,8 +88,8 @@ def save_results(configs, clipper_conn, client_metrics, results_dir):
         "clipper_metrics": clipper_conn.inspect_instance(),
         "client_metrics": client_metrics,
     }
-    results_file = os.path.join(results_dir,
-                                "results-{:%y%m%d_%H%M%S}.json".format(datetime.datetime.now()))
+    results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
+        prefix=prefix, ts=datetime.datetime.now()))
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))

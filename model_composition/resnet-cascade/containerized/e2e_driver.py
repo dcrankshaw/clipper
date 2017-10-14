@@ -1,4 +1,4 @@
-# import sys
+import sys
 # import os
 # import argparse
 import numpy as np
@@ -188,7 +188,7 @@ class ModelBenchmarker(object):
     def run(self):
         logger.info("Generating random inputs")
         base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
-        inputs = [i for _ in range(40) for i in base_inputs]
+        inputs = [i for _ in range(50) for i in base_inputs]
         logger.info("Starting predictions")
         predictor = Predictor()
         i = 0
@@ -196,10 +196,12 @@ class ModelBenchmarker(object):
             predictor.predict(input_item=input_item)
             # if i % 2 == 0:
             time.sleep(self.delay)
-            if len(predictor.stats["thrus"]) > 60:
+            if len(predictor.stats["thrus"]) > 50:
                 break
             i += 1
         self.queue.put(predictor.stats)
+        print("DONE")
+        return
 
 
 if __name__ == "__main__":
@@ -211,7 +213,7 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    total_cpus = range(8, 32)
+    total_cpus = range(9, 32)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -222,24 +224,24 @@ if __name__ == "__main__":
         return [total_gpus.pop() for _ in range(num_gpus)]
 
     alexnet_reps = 1
-    res50_reps = 1
-    res152_reps = 1
+    res50_reps = 2
+    res152_reps = 2
 
     configs = [
         setup_alexnet(batch_size=1,
                       num_replicas=alexnet_reps,
                       cpus_per_replica=1,
-                      allocated_cpus=get_cpus(6),
+                      allocated_cpus=get_cpus(4),
                       allocated_gpus=get_gpus(alexnet_reps)),
         setup_res50(batch_size=1,
                     num_replicas=res50_reps,
                     cpus_per_replica=1,
-                    allocated_cpus=get_cpus(6),
+                    allocated_cpus=get_cpus(4),
                     allocated_gpus=get_gpus(res50_reps)),
         setup_res152(batch_size=1,
                      num_replicas=res152_reps,
                      cpus_per_replica=1,
-                     allocated_cpus=get_cpus(6),
+                     allocated_cpus=get_cpus(4),
                      allocated_gpus=get_gpus(res152_reps))
     ]
 
@@ -249,10 +251,12 @@ if __name__ == "__main__":
     all_stats = []
     p = Process(target=benchmarker.run)
     p.start()
-    p.join()
     all_stats.append(queue.get())
+    # p.join()
 
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade_DEBUG")
-    # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade")
+    fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
+    driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
+    sys.exit(0)
+    # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade_DEBUG")
