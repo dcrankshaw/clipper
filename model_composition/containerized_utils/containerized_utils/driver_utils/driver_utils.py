@@ -82,10 +82,14 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
         raise Exception("No latencies list found under key \"all_lats\"."
                         " Please update your driver to include all latencies so we can"
                         " plot the latency CDF")
+    else:
+        for c in client_metrics:
+            all_lats_strs = [json.dumps(l) for l in c["all_lats"]]
+            c["all_lats"] = all_lats_strs
 
     results_obj = {
         "node_configs": [c.__dict__ for c in configs],
-        "clipper_metrics": clipper_conn.inspect_instance(),
+        # "clipper_metrics": clipper_conn.inspect_instance(),
         "client_metrics": client_metrics,
     }
     results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(

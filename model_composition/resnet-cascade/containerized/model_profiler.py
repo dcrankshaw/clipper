@@ -13,7 +13,7 @@ from datetime import datetime
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
-import json
+# import json
 import argparse
 
 logging.basicConfig(
@@ -39,14 +39,13 @@ DEFAULT_OUTPUT = "TIMEOUT"
 
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-    # cl.connect()
-    # print(get_batch_sizes(cl.inspect_instance()))
     cl.stop_all()
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-6")
+        query_cpu_str="4")
+        # query_cpu_str="1-4")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -104,21 +103,9 @@ def setup_res152(batch_size,
                                             use_nvidia_docker=True)
 
 
-def get_batch_sizes(metrics_json):
-    hists = metrics_json["histograms"]
-    mean_batch_sizes = {}
-    for h in hists:
-        if "batch_size" in h.keys()[0]:
-            name = h.keys()[0]
-            model = name.split(":")[1]
-            mean = h[name]["mean"]
-            mean_batch_sizes[model] = round(float(mean), 2)
-    return mean_batch_sizes
-
-
 class Predictor(object):
 
-    def __init__(self, clipper_metrics):
+    def __init__(self, config):
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -127,15 +114,10 @@ class Predictor(object):
             "thrus": [],
             "all_lats": [],
             "p99_lats": [],
-            "mean_lats": [],
-        }
+            "p95_lats": [],
+            "mean_lats": []}
         self.total_num_complete = 0
-        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-        self.cl.connect()
-        self.get_clipper_metrics = clipper_metrics
-        if self.get_clipper_metrics:
-            self.stats["all_metrics"] = []
-            self.stats["mean_batch_sizes"] = []
+        self.config = config
 
     def init_stats(self):
         self.latencies = []
@@ -146,96 +128,60 @@ class Predictor(object):
     def print_stats(self):
         lats = np.array(self.latencies)
         p99 = np.percentile(lats, 99)
+        p95 = np.percentile(lats, 95)
         mean = np.mean(lats)
         end_time = datetime.now()
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["all_lats"].append(lats.tolist())
         self.stats["p99_lats"].append(p99)
+        self.stats["p95_lats"].append(p95)
         self.stats["mean_lats"].append(mean)
-        if self.get_clipper_metrics:
-            metrics = self.cl.inspect_instance()
-            batch_sizes = get_batch_sizes(metrics)
-            self.stats["mean_batch_sizes"].append(batch_sizes)
-            self.stats["all_metrics"].append(metrics)
-            logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
-                                                          batches=json.dumps(
-                                                              batch_sizes, sort_keys=True)))
-        else:
-            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
-                                                                           mean=mean,
-                                                                           thru=thru))
+        logger.info("p99: {p99}, p95: {p95}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                                   p95=p95,
+                                                                                   mean=mean,
+                                                                                   thru=thru))
 
-    def predict(self, input_item):
+    def predict(self, input_item, model_name):
         begin_time = datetime.now()
 
-        def complete():
-            end_time = datetime.now()
-            latency = (end_time - begin_time).total_seconds()
-            self.latencies.append(latency)
-            self.total_num_complete += 1
-            self.batch_num_complete += 1
-            if self.batch_num_complete % 500 == 0:
-                self.print_stats()
-                self.init_stats()
-
-        def res152_cont(output):
+        def complete(output):
             if output == DEFAULT_OUTPUT:
                 return
             else:
-                complete()
+                end_time = datetime.now()
+                latency = (end_time - begin_time).total_seconds()
+                self.latencies.append(latency)
+                self.total_num_complete += 1
+                self.batch_num_complete += 1
+                if self.batch_num_complete % (self.config.batch_size * 7) == 0:
+                    self.print_stats()
+                    self.init_stats()
 
-        def res50_cont(output):
-            if output == DEFAULT_OUTPUT:
-                return
-            else:
-                idk = np.random.random() > 0.4633
-                # idk = True
-                if idk:
-                    self.client.send_request("res152", input_item).then(res152_cont)
-                else:
-                    complete()
-
-        def alex_cont(output):
-            if output == DEFAULT_OUTPUT:
-                return
-            else:
-                idk = np.random.random() > 0.192
-                # idk = False
-                if idk:
-                    self.client.send_request("res50", input_item).then(res50_cont)
-                else:
-                    complete()
-
-        return self.client.send_request("alexnet", input_item).then(alex_cont)
+        return self.client.send_request(model_name, input_item).then(complete)
 
 
 class ModelBenchmarker(object):
-    def __init__(self, queue, delay, client_num):
+    def __init__(self, queue, delay, config):
         self.queue = queue
         self.delay = delay
-        self.client_num = client_num
+        self.config = config
 
     def run(self):
         logger.info("Generating random inputs")
         base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
         inputs = [i for _ in range(50) for i in base_inputs]
         logger.info("Starting predictions")
-        if self.client_num == 0:
-            predictor = Predictor(clipper_metrics=True)
-        else:
-            predictor = Predictor(clipper_metrics=False)
+        predictor = Predictor(self.config)
         i = 0
         for input_item in inputs:
-            predictor.predict(input_item=input_item)
+            predictor.predict(input_item, self.config.name)
             # if i % 2 == 0:
             time.sleep(self.delay)
-            if len(predictor.stats["thrus"]) > 20:
+            if len(predictor.stats["thrus"]) > 30:
                 break
             i += 1
         self.queue.put(predictor.stats)
-        print("DONE")
         return
 
 
@@ -243,14 +189,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--delay', type=float, help='inter-request delay')
-    parser.add_argument('-c', '--num_clients', type=int, help='number of clients')
+    # parser.add_argument('-m', '--model', type=str, help='Model name. alexnet, res50, or res152')
 
     args = parser.parse_args()
 
     queue = Queue()
 
-    # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(11, 32)
+    total_cpus = range(9, 16)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -260,48 +205,46 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
-    alexnet_reps = 2
-    res50_reps = 3
-    res152_reps = 3
+    alexnet_reps = 3
+    res50_reps = 1
+    res152_reps = 1
 
-    alex_batch = 30
+    alex_batch = 128
     res50_batch = 30
     res152_batch = 30
 
-    configs = [
-        setup_alexnet(batch_size=alex_batch,
-                      num_replicas=alexnet_reps,
-                      cpus_per_replica=1,
-                      allocated_cpus=get_cpus(4),
-                      allocated_gpus=get_gpus(alexnet_reps)),
-        setup_res50(batch_size=res50_batch,
-                    num_replicas=res50_reps,
-                    cpus_per_replica=1,
-                    allocated_cpus=get_cpus(4),
-                    allocated_gpus=get_gpus(res50_reps)),
-        setup_res152(batch_size=res152_batch,
-                     num_replicas=res152_reps,
-                     cpus_per_replica=1,
-                     allocated_cpus=get_cpus(4),
-                     allocated_gpus=get_gpus(res152_reps))
-    ]
+    config = setup_alexnet(batch_size=alex_batch,
+                           num_replicas=alexnet_reps,
+                           cpus_per_replica=1,
+                           allocated_cpus=get_cpus(alexnet_reps),
+                           allocated_gpus=get_gpus(alexnet_reps))
+    # setup_res50(batch_size=res50_batch,
+    #             num_replicas=res50_reps,
+    #             cpus_per_replica=1,
+    #             allocated_cpus=get_cpus(6),
+    #             allocated_gpus=get_gpus(res50_reps)),
+    # setup_res152(batch_size=res152_batch,
+    #              num_replicas=res152_reps,
+    #              cpus_per_replica=1,
+    #              allocated_cpus=get_cpus(4),
+    #              allocated_gpus=get_gpus(res152_reps))
 
-    setup_clipper(configs)
-    procs = []
-    for i in range(args.num_clients):
-        benchmarker = ModelBenchmarker(queue, args.delay, i)
-        p = Process(target=benchmarker.run)
-        p.start()
-        procs.append(p)
+    setup_clipper([config, ])
+    benchmarker = ModelBenchmarker(queue, args.delay, config)
 
     all_stats = []
-    for i in range(args.num_clients):
-        all_stats.append(queue.get())
+    p = Process(target=benchmarker.run)
+    p.start()
+    all_stats.append(queue.get())
     # p.join()
 
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
-    driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
+    fname = "batch_{}".format(config.batch_size)
+    driver_utils.save_results([config],
+                              cl,
+                              all_stats,
+                              "single-model-prof-{}".format(config.name),
+                              prefix=fname)
     sys.exit(0)
     # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade_DEBUG")
