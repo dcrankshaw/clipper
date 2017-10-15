@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
                          clipper::metrics::MetricsRegistry& registry =
                              clipper::metrics::MetricsRegistry::get_metrics();
                          std::string metrics_report =
-                             registry.report_metrics();
+                             registry.report_metrics(true);
                         std::cout << metrics_report << std::endl;
                          respond_http(metrics_report, "200 OK", response);
                        });
