@@ -175,12 +175,13 @@ class ModelBenchmarker(object):
         while num_gen_inputs < num_inputs:
             idx = np.random.randint(len(self.doc_text))
             text = self.doc_text[idx]
-            if len(text) < input_length:
+            words = text.split()
+            if len(words) < input_length:
                 expansion_factor = int(math.ceil(float(input_length)/len(text)))
                 for i in range(expansion_factor):
-                    text = text + " " + text
-            text = text[:input_length]
-            inputs.append(text)
+                    words = words + words
+            words = words[:input_length]
+            inputs.append(" ".join(words))
             num_gen_inputs += 1
 
         return inputs
@@ -197,7 +198,7 @@ class ModelBenchmarker(object):
 
 class InputLengthConfig:
     def __init__(self, input_length):
-        self.input_length = input_length
+        self.input_length_words = input_length
 
     def to_json(self):
         return json.dumps(self.__dict__)
