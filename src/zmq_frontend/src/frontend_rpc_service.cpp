@@ -75,7 +75,7 @@ void FrontendRPCService::manage_send_service(const std::string ip, int port) {
 
 void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
   std::string recv_address = "tcp://" + ip + ":" + std::to_string(port);
-  zmq::context_t context(1);
+  zmq::context_t context(2);
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(recv_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
@@ -207,6 +207,8 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
 }
 
 void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
+  return;
+
   while (!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse *response = response_queue_->frontPtr();
     Output &output = std::get<0>(*response);

@@ -45,8 +45,8 @@ class TorchContainer(rpc.ModelContainerBase):
     def predict_floats(self, inputs):
         batch_size = 30
         num_batches = (len(inputs) // batch_size) + ((len(inputs) % batch_size) > 0)
-        for _ in range(num_batches):
-            time.sleep(0.178)
+        # for _ in range(num_batches):
+        #     time.sleep(0.178)
         return np.random.random(len(inputs)).astype(str).tolist()
 
 
