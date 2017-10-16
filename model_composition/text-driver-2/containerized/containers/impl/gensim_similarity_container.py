@@ -2,7 +2,7 @@ from __future__ import print_function
 import sys
 import os
 import rpc
-
+import numpy
 import gensim
 
 class SimilarityModelContainer(rpc.ModelContainerBase):
