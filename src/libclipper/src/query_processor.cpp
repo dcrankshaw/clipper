@@ -33,7 +33,10 @@ using std::tuple;
 namespace clipper {
 
 QueryProcessor::QueryProcessor() : state_db_(std::make_shared<StateDB>()),
-                                   futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)) {
+                                   futures_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)),
+                                   request_rate_(metrics::MetricsRegistry::get_metrics().create_meter(
+                                        "query_processor:request_rate"))
+  {
   // Create selection policy instances
   selection_policies_.emplace(DefaultOutputSelectionPolicy::get_name(),
                               std::make_shared<DefaultOutputSelectionPolicy>());
@@ -45,6 +48,7 @@ std::shared_ptr<StateDB> QueryProcessor::get_state_table() const {
 }
 
 folly::Future<Response> QueryProcessor::predict(Query query) {
+  request_rate_->mark(1);
   long query_id = query_counter_.fetch_add(1);
   auto current_policy_iter = selection_policies_.find(query.selection_policy_);
   if (current_policy_iter == selection_policies_.end()) {

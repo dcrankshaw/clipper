@@ -56,6 +56,7 @@ class QueryProcessor {
   std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
       selection_policies_;
   std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
+  std::shared_ptr<metrics::Meter> request_rate_;
 };
 
 }  // namespace clipper
