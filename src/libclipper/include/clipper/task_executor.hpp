@@ -139,7 +139,10 @@ struct DeadlineCompare {
 // thread safe model queue
 class ModelQueue {
  public:
-  ModelQueue() : queue_(ModelPQueue{}) {}
+  ModelQueue(std::string name) : queue_(ModelPQueue{}),
+        lock_latency_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
+            name + ":lock_latency",
+            "microseconds", 4096)) {}
 
   // Disallow copy and assign
   ModelQueue(const ModelQueue &) = delete;
@@ -151,8 +154,20 @@ class ModelQueue {
   ~ModelQueue() = default;
 
   void add_task(PredictTask task) {
+    std::chrono::time_point<std::chrono::system_clock> start_time =
+        std::chrono::system_clock::now();
     std::lock_guard<std::mutex> lock(queue_mutex_);
-    Deadline deadline = std::chrono::system_clock::now() +
+
+    std::chrono::time_point<std::chrono::system_clock> current_time =
+        std::chrono::system_clock::now();
+
+    auto lock_latency = current_time - start_time;
+    long lock_latency_micros =
+        std::chrono::duration_cast<std::chrono::microseconds>(lock_latency)
+            .count();
+    lock_latency_hist_->insert(static_cast<int64_t>(lock_latency_micros));
+
+    Deadline deadline = current_time +
                         std::chrono::microseconds(task.latency_slo_micros_);
     queue_.emplace(deadline, std::move(task));
     queue_not_empty_condition_.notify_one();
@@ -187,6 +202,7 @@ class ModelQueue {
   ModelPQueue queue_;
   std::mutex queue_mutex_;
   std::condition_variable queue_not_empty_condition_;
+  std::shared_ptr<metrics::Histogram> lock_latency_hist_;
 
   // Deletes tasks with deadlines prior or equivalent to the
   // current system time. This method should only be called
@@ -425,7 +441,7 @@ class TaskExecutor {
     // does not already exist
     boost::unique_lock<boost::shared_mutex> l(model_queues_mutex_);
     auto queue_added = model_queues_.emplace(
-        std::make_pair(model_id, std::make_shared<ModelQueue>()));
+        std::make_pair(model_id, std::make_shared<ModelQueue>(model_id.serialize())));
     bool queue_created = queue_added.second;
     if (queue_created) {
       boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
