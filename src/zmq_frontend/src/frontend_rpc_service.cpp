@@ -207,8 +207,6 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
 }
 
 void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
-  return;
-
   while (!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse *response = response_queue_->frontPtr();
     Output &output = std::get<0>(*response);

@@ -151,12 +151,32 @@ class Predictor(object):
         self.start_time = datetime.now()
 
     def print_stats(self):
+        lats = np.array(self.latencies)
+        p99 = np.percentile(lats, 99)
+        mean = np.mean(lats)
+        end_time = datetime.now()
+        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
+        self.stats["thrus"].append(thru)
+        self.stats["all_lats"].append(lats.tolist())
+        self.stats["p99_lats"].append(p99)
+        self.stats["mean_lats"].append(mean)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             request_rate = get_request_rate(metrics)
-            lock_latencies = get_lock_latencies(metrics)
+            batch_sizes = get_batch_sizes(metrics)
+            self.stats["mean_batch_sizes"].append(batch_sizes)
+            self.stats["all_metrics"].append(metrics)
 
-            logger.info("request_rate: {rr}, lock_latency: {ll}".format(rr=request_rate, ll=json.dumps(lock_latencies)))
+            logger.info(("request_rate: {rr}, p99: {p99}, mean: {mean}, thruput: {thru}, "
+                         "batch_sizes: {batches}").format(rr=request_rate, p99=p99, mean=mean,
+                                                          thru=thru,
+                                                          batches=json.dumps(
+                                                              batch_sizes, sort_keys=True)))
+
+        else:
+            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                           mean=mean,
+                                                                           thru=thru))
 
     def predict(self, input_item):
         begin_time = datetime.now()
@@ -167,9 +187,9 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            # if self.batch_num_complete % 500 == 0:
-            #     self.print_stats()
-            #     self.init_stats()
+            if self.batch_num_complete % 500 == 0:
+                self.print_stats()
+                self.init_stats()
 
 
         def alex_cont(output):
@@ -201,8 +221,8 @@ class ModelBenchmarker(object):
         while len(predictor.stats["thrus"]) < 30:
             input_item = inputs[i % len(inputs)]
             predictor.predict(input_item=input_item)
-            if i % 10000 == 0:
-                predictor.print_stats()
+            # if i % 10000 == 0:
+            #     predictor.print_stats()
 
             # if i % 2 == 0:
             time.sleep(self.delay)
