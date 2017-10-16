@@ -13,7 +13,7 @@ from datetime import datetime
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
-# import json
+import json
 import argparse
 
 logging.basicConfig(
@@ -101,6 +101,18 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_lock_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_lock_latencies = {}
+    for h in hists:
+        if "lock_latency" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            mean = h[name]["mean"]
+            # mean_lock_latencies[model] = round(float(mean), 2)
+            mean_lock_latencies[model] = mean
+    return mean_lock_latencies
+
 
 def get_request_rate(metrics_json):
     meters = metrics_json["meters"]
@@ -142,7 +154,9 @@ class Predictor(object):
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             request_rate = get_request_rate(metrics)
-            logger.info("request_rate: {rr}".format(rr=request_rate))
+            lock_latencies = get_lock_latencies(metrics)
+
+            logger.info("request_rate: {rr}, lock_latency: {ll}".format(rr=request_rate, ll=json.dumps(lock_latencies)))
 
     def predict(self, input_item):
         begin_time = datetime.now()
