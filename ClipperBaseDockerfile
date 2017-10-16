@@ -3,9 +3,10 @@ FROM frolvlad/alpine-gxx
 
 RUN echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
 
-RUN apk add --update --no-cache curl git bash make boost-dev cmake libev-dev hiredis-dev zeromq-dev \
+RUN apk add --update --no-cache curl git bash make boost-dev cmake hiredis-dev zeromq-dev \
     libtool automake autoconf-archive@testing lz4-dev xz-dev snappy-dev zlib-dev \
     glog-dev@testing scons openssl-dev libevent-dev ca-certificates perl
+# libev-dev
 
 
 # Set up Folly
@@ -45,6 +46,7 @@ RUN git clone https://github.com/facebook/wangle.git \
     && make -j8 \
     && make install
 
+RUN apk add --update --no-cache libev-dev
 
 # Prep Clipper
 
