@@ -7,26 +7,26 @@ import gensim
 
 class LDAContainer(rpc.ModelContainerBase):
 
-	def __init__(self, model_path, dictionary_path):
-		self.word_ids_dict = gensim.corpora.Dictionary.load_from_text(dictionary_path)
-		self.model = gensim.models.ldamulticore.LdaMulticore.load(model_path, mmap='r')
+    def __init__(self, model_path, dictionary_path):
+        self.word_ids_dict = gensim.corpora.Dictionary.load_from_text(dictionary_path)
+        self.model = gensim.models.ldamulticore.LdaMulticore.load(model_path, mmap='r')
 
-	def predict_strings(self, inputs):
-		outputs = []
-		for input_doc in inputs:
-			doc_bow = self.word_ids_dict.doc2bow(input_doc.split())
-			topic_dist = self.model[doc_bow]
+    def predict_strings(self, inputs):
+        outputs = []
+        for input_doc in inputs:
+            doc_bow = self.word_ids_dict.doc2bow(input_doc.split())
+            topic_dist = self.model[doc_bow]
 
-			max_prob = 0
-			best_topic = -1
-			for topic_probability in topic_dist:
-				if topic_probability[1] > max_prob:
-					best_topic = topic_probability[0]
-					max_prob = topic_probability[1]
+            max_prob = 0
+            best_topic = -1
+            for topic_probability in topic_dist:
+                if topic_probability[1] > max_prob:
+                    best_topic = topic_probability[0]
+                    max_prob = topic_probability[1]
 
-			outputs.append(str(best_topic))
+            outputs.append(str(best_topic))
 
-		return outputs
+        return outputs
 
 if __name__ == "__main__":
     print("Starting Gensim LDA Container")
