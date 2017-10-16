@@ -9,7 +9,8 @@
 #include <folly/futures/Future.h>
 
 #include <folly/futures/Future.h>
-#include <wangle/concurrent/CPUThreadPoolExecutor.h>
+// #include <wangle/concurrent/CPUThreadPoolExecutor.h>
+#include <wangle/concurrent/IOThreadPoolExecutor.h>
 
 #include "datatypes.hpp"
 #include "metrics.hpp"
@@ -55,7 +56,7 @@ class QueryProcessor {
   // same instance for different applications or users.
   std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
       selection_policies_;
-  std::shared_ptr<wangle::CPUThreadPoolExecutor> futures_executor_;
+  std::shared_ptr<wangle::IOThreadPoolExecutor> futures_executor_;
   std::shared_ptr<metrics::Meter> request_rate_;
 };
 

@@ -1,4 +1,5 @@
-#include "zmq_frontend.hpp"
+// #include "zmq_frontend.hpp"
+#include "zmq_frontend_no_queries.hpp"
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
@@ -41,7 +42,13 @@ int main(int argc, char* argv[]) {
   // conf.set_task_execution_threadpool_size(options["threadpool_size"].as<int>());
   conf.ready();
 
-  zmq_frontend::ServerImpl zmq_server("0.0.0.0", 4455, 4456);
+  zmq_frontend::ServerImplNoQueries zmq_server("0.0.0.0", 4455, 4456);
+  std::vector<std::thread> bench_threads;
+  for (int i = 0; i < 2; ++i) {
+    bench_threads.push_back(std::thread([&zmq_server]() mutable {
+        zmq_server.run_benchmark();
+    }));
+  }
 
   HttpServer metrics_server("0.0.0.0", clipper::QUERY_FRONTEND_PORT, 1);
 
