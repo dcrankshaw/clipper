@@ -148,7 +148,7 @@ class ModelBenchmarker(object):
     def __init__(self, config, queue, input_length=20):
         self.config = config
         self.queue = queue
-        self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
+        self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name, input_length=input_length)
         self.loaded_docs = False
 
     def run(self, num_trials):
