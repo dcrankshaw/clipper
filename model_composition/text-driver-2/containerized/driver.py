@@ -5,6 +5,7 @@ import numpy as np
 import time
 import base64
 import logging
+import json
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
@@ -193,6 +194,13 @@ class ModelBenchmarker(object):
     def _get_input_generator_fn(self, model_app_name, input_length=20):
         return lambda num_inputs : self._gen_docs_inputs(num_inputs=num_inputs, input_length=input_length)
 
+class InputLengthConfig:
+    def __init__(self, input_length):
+        self.input_length = input_length
+
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-t', '--num_trials', type=int, default=15)
@@ -224,6 +232,8 @@ if __name__ == "__main__":
         for num_replicas in replica_num_confs:
             for cpus_per_replica in cpus_per_replica_confs:
                 for batch_size in batch_size_confs:
+                    input_length_config = InputLengthConfig(input_length)
+
                     model_config = get_heavy_node_config(model_name=args.model_name, 
                                                          batch_size=batch_size, 
                                                          num_replicas=num_replicas,
@@ -246,6 +256,6 @@ if __name__ == "__main__":
 
                     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
                     cl.connect()
-                    driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
+                    driver_utils.save_results([input_length_config, model_config], cl, all_stats, "gpu_and_batch_size_experiments")
 
 

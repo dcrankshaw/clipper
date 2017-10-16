@@ -8,6 +8,6 @@ COPY impl/gensim_lda_container.py /container/
 COPY gensim_lda_model_data/ /model
 
 ENV CLIPPER_MODEL_PATH=/model/gensim_lda_trained.sav
-ENV CLIPPER_DICT_PATH=/model/gensim_dict.pkl
+ENV CLIPPER_DICT_PATH=/model/out_wordids.txt
 
 CMD ["python", "/container/gensim_lda_container.py"]
