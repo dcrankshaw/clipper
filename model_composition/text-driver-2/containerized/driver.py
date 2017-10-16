@@ -8,7 +8,6 @@ import logging
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
-from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
@@ -222,7 +221,7 @@ if __name__ == "__main__":
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
     cpus_per_replica_confs = args.cpus_per_replica_nums if args.cpus_per_replica_nums else default_cpus_per_replica_confs
-    input_length_confs = arg.input_lengths if args.input_lengths else default_input_length_confs
+    input_length_confs = args.input_lengths if args.input_lengths else default_input_length_confs
 
     for input_length in input_length_confs:
         for num_replicas in replica_num_confs:
