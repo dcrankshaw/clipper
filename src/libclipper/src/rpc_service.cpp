@@ -109,7 +109,7 @@ void RPCService::manage_service(const string address) {
   std::unordered_map<std::vector<uint8_t>, std::pair<VersionedModelId, int>,
                      std::function<size_t(const std::vector<uint8_t> &vec)>>
       connections_containers_map(INITIAL_REPLICA_ID_SIZE, hash_vector<uint8_t>);
-  context_t context = context_t(2);
+  context_t context = context_t(1);
   socket_t socket = socket_t(context, ZMQ_ROUTER);
   socket.bind(address);
   // Indicate that we will poll our zmq service socket for new inbound messages

@@ -13,7 +13,7 @@ from datetime import datetime
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
-import json
+# import json
 import argparse
 
 logging.basicConfig(
@@ -55,22 +55,39 @@ def setup_clipper(configs):
     return config
 
 
-def setup_alexnet(batch_size,
-                  num_replicas,
-                  cpus_per_replica,
-                  allocated_cpus,
-                  allocated_gpus):
+def setup_noop(batch_size,
+               num_replicas,
+               cpus_per_replica,
+               allocated_cpus):
 
-    return driver_utils.HeavyNodeConfig(name="alexnet",
+    return driver_utils.HeavyNodeConfig(name="noop",
                                         input_type="floats",
                                         # model_image="model-comp/pytorch-alexnet",
-                                        model_image="model-comp/pytorch-alex-sleep",
+                                        model_image="clipper/noop-container:develop",
                                         allocated_cpus=allocated_cpus,
                                         cpus_per_replica=cpus_per_replica,
-                                        gpus=allocated_gpus,
+                                        gpus=[],
                                         batch_size=batch_size,
                                         num_replicas=num_replicas,
-                                        use_nvidia_docker=True)
+                                        use_nvidia_docker=False)
+
+
+# def setup_alexnet(batch_size,
+#                   num_replicas,
+#                   cpus_per_replica,
+#                   allocated_cpus,
+#                   allocated_gpus):
+#
+#     return driver_utils.HeavyNodeConfig(name="alexnet",
+#                                         input_type="floats",
+#                                         # model_image="model-comp/pytorch-alexnet",
+#                                         model_image="model-comp/pytorch-alex-sleep",
+#                                         allocated_cpus=allocated_cpus,
+#                                         cpus_per_replica=cpus_per_replica,
+#                                         gpus=allocated_gpus,
+#                                         batch_size=batch_size,
+#                                         num_replicas=num_replicas,
+#                                         use_nvidia_docker=True)
 
 
 def get_batch_sizes(metrics_json):
@@ -140,35 +157,15 @@ class Predictor(object):
             #     self.print_stats()
             #     self.init_stats()
 
-        def res152_cont(output):
-            if output == DEFAULT_OUTPUT:
-                return
-            else:
-                complete()
-
-        def res50_cont(output):
-            if output == DEFAULT_OUTPUT:
-                return
-            else:
-                idk = np.random.random() > 0.4633
-                # idk = True
-                if idk:
-                    self.client.send_request("res152", input_item).then(res152_cont)
-                else:
-                    complete()
 
         def alex_cont(output):
             if output == DEFAULT_OUTPUT:
                 return
             else:
                 # idk = np.random.random() > 0.192
-                idk = False
-                if idk:
-                    self.client.send_request("res50", input_item).then(res50_cont)
-                else:
-                    complete()
+                complete()
 
-        return self.client.send_request("alexnet", input_item).then(alex_cont)
+        return self.client.send_request("noop", input_item).then(alex_cont)
 
 
 class ModelBenchmarker(object):
@@ -190,7 +187,7 @@ class ModelBenchmarker(object):
         while len(predictor.stats["thrus"]) < 30:
             input_item = inputs[i % len(inputs)]
             predictor.predict(input_item=input_item)
-            if i % 2000 == 0:
+            if i % 10000 == 0:
                 predictor.print_stats()
 
             # if i % 2 == 0:
@@ -208,6 +205,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--delay', type=float, help='inter-request delay')
     parser.add_argument('-c', '--num_clients', type=int, help='number of clients')
+    parser.add_argument('-n', '--num_replicas', type=int, help='number of container replicas')
 
     args = parser.parse_args()
 
@@ -224,20 +222,27 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
-    alexnet_reps = 4
-    res50_reps = 1
-    res152_reps = 1
+    noop_reps = args.num_replicas
+    noop_batch = 30
 
-    alex_batch = 30
-    res50_batch = 30
-    res152_batch = 30
+    # alexnet_reps = 4
+    # res50_reps = 1
+    # res152_reps = 1
+    #
+    # alex_batch = 30
+    # res50_batch = 30
+    # res152_batch = 30
 
     configs = [
-        setup_alexnet(batch_size=alex_batch,
-                      num_replicas=alexnet_reps,
-                      cpus_per_replica=1,
-                      allocated_cpus=get_cpus(8),
-                      allocated_gpus=get_gpus(alexnet_reps)),
+        setup_noop(batch_size=noop_batch,
+                   num_replicas=noop_reps,
+                   cpus_per_replica=1,
+                   allocated_cpus=get_cpus(8))
+        # setup_alexnet(batch_size=alex_batch,
+        #               num_replicas=alexnet_reps,
+        #               cpus_per_replica=1,
+        #               allocated_cpus=get_cpus(8),
+        #               allocated_gpus=get_gpus(res50_reps)),
         # setup_res50(batch_size=res50_batch,
         #             num_replicas=res50_reps,
         #             cpus_per_replica=1,
@@ -267,7 +272,7 @@ if __name__ == "__main__":
     cl.connect()
     # fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
     # driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
-    fname = "{clients}_clients-{alex_reps}_reps".format(clients=args.num_clients,
-                                                        alex_reps=alexnet_reps)
-    driver_utils.save_results(configs, cl, all_stats, "alexnet-thruput-replicas", prefix=fname)
+    fname = "{clients}_clients-{noop_reps}_reps".format(clients=args.num_clients,
+                                                        noop_reps=noop_reps)
+    driver_utils.save_results(configs, cl, all_stats, "noop-thruput-replicas", prefix=fname)
     sys.exit(0)
