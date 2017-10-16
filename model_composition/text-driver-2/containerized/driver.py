@@ -181,6 +181,7 @@ class ModelBenchmarker(object):
                     text = text + " " + text
             text = text[:input_length]
             inputs.append(text)
+            num_gen_inputs += 1
 
         return inputs
 
