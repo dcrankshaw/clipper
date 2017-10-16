@@ -148,7 +148,7 @@ class ModelBenchmarker(object):
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
         self.loaded_docs = False
 
-    def run(self, duration_seconds=120):
+    def run(self, num_trials):
         logger.info("Generating random inputs")
         base_inputs = self.input_generator_fn(1000)
         inputs = [i for _ in range(40) for i in base_inputs]
@@ -157,12 +157,9 @@ class ModelBenchmarker(object):
         predictor = Predictor()
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            # time.sleep(0.005)
-            time.sleep(0)
-        while True:
-            curr_time = datetime.now()
-            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
-                break
+            time.sleep(.001)
+
+        while len(predictor.stats["thrus"]) < num_trials:
             time.sleep(1)
 
         self.queue.put(predictor.stats)
@@ -198,7 +195,7 @@ class ModelBenchmarker(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-t', '--trials', type=int, default=15)
+    parser.add_argument('-t', '--num_trials', type=int, default=15)
     parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'gensim-lda', 'gensim-docsim'")
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
@@ -240,7 +237,7 @@ if __name__ == "__main__":
                     processes = []
                     all_stats = []
                     for _ in range(args.num_clients):
-                        p = Process(target=benchmarker.run, args=(args.duration,))
+                        p = Process(target=benchmarker.run, args=(args.num_trials,))
                         p.start()
                         processes.append(p)
                     for p in processes:
