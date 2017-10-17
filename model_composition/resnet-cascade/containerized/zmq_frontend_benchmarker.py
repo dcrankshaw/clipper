@@ -128,6 +128,17 @@ def get_queue_submit_latencies(metrics_json):
     return mean_lock_latencies
 
 
+def get_frontend_rpc_meters(metrics_json):
+    meters = metrics_json["meters"]
+    frontend_rpc_meters = {}
+    for m in meters:
+        if "frontend_rpc" in m.keys()[0]:
+            name = m.keys()[0]
+            meter_name = name.split(":")[1]
+            frontend_rpc_meters[meter_name] = round(float(m[name]["rate"]), 2)
+    return frontend_rpc_meters
+
+
 def get_request_rate(metrics_json):
     meters = metrics_json["meters"]
     for m in meters:
@@ -179,26 +190,27 @@ class Predictor(object):
             request_rate = get_request_rate(metrics)
             batch_sizes = get_batch_sizes(metrics)
             queue_submit_lats = get_queue_submit_latencies(metrics)
+            frontend_rpc_meters = get_frontend_rpc_meters(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
-
             logger.info((
-                "thruput: {thru}, p99: {p99} "
                 "\n\nrequest_rate: {rr}"
-                "\nbatch_sizes: {batches}"
-                "\nsubmit_lats: {submit_lats}\n\n").format(
+                "\nfrontend_rpc:  {frontend_rpc}"
+                "\nbatch_sizes:   {batches}"
+                "\nsubmit_lats:   {submit_lats}\n\n").format(
                     rr=request_rate,
-                    p99=p99, mean=mean, thru=thru,
+                    frontend_rpc=json.dumps(
+                        frontend_rpc_meters, sort_keys=True),
                     batches=json.dumps(
                         batch_sizes, sort_keys=True),
                     submit_lats=json.dumps(
                         queue_submit_lats, sort_keys=True)
                 ))
 
-        else:
-            logger.info("thruput: {thru}, p99: {p99}".format(p99=p99,
-                                                             mean=mean,
-                                                             thru=thru))
+        # else:
+        logger.info("thruput: {thru}, p99: {p99}".format(p99=p99,
+                                                         mean=mean,
+                                                         thru=thru))
 
     def predict(self, input_item):
         begin_time = datetime.now()
