@@ -70,6 +70,8 @@ class FrontendRPCService {
 
   std::shared_ptr<metrics::Meter> response_enqueue_meter_;
   std::shared_ptr<metrics::Meter> response_dequeue_meter_;
+  std::shared_ptr<metrics::Histogram> malloc_latency_;
+  std::shared_ptr<metrics::Histogram> recv_latency_;
 };
 
 }  // namespace zmq_frontend
