@@ -115,6 +115,18 @@ def get_lock_latencies(metrics_json):
     return mean_lock_latencies
 
 
+def get_frontend_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    frontend_latencies = {}
+    for h in hists:
+        if "frontend_rpc" in h.keys()[0]:
+            name = h.keys()[0]
+            shortname = name.split(":")[1]
+            mean = h[name]["mean"]
+            frontend_latencies[shortname] = mean
+    return frontend_latencies
+
+
 def get_queue_submit_latencies(metrics_json):
     hists = metrics_json["histograms"]
     mean_lock_latencies = {}
@@ -189,6 +201,7 @@ class Predictor(object):
             metrics = self.cl.inspect_instance()
             request_rate = get_request_rate(metrics)
             batch_sizes = get_batch_sizes(metrics)
+            frontend_lats = get_frontend_latencies(metrics)
             queue_submit_lats = get_queue_submit_latencies(metrics)
             frontend_rpc_meters = get_frontend_rpc_meters(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
@@ -197,14 +210,18 @@ class Predictor(object):
                 "\n\nrequest_rate: {rr}"
                 "\nfrontend_rpc:  {frontend_rpc}"
                 "\nbatch_sizes:   {batches}"
-                "\nsubmit_lats:   {submit_lats}\n\n").format(
+                "\nsubmit_lats:   {submit_lats}"
+                "\nfrontend_lats:   {frontend_lats}"
+                "\n\n").format(
                     rr=request_rate,
                     frontend_rpc=json.dumps(
                         frontend_rpc_meters, sort_keys=True),
                     batches=json.dumps(
                         batch_sizes, sort_keys=True),
                     submit_lats=json.dumps(
-                        queue_submit_lats, sort_keys=True)
+                        queue_submit_lats, sort_keys=True),
+                    frontend_lats=json.dumps(
+                        frontend_lats, sort_keys=True)
                 ))
 
         # else:
@@ -279,7 +296,7 @@ if __name__ == "__main__":
     queue = Queue()
 
     # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(35,40)
+    total_cpus = range(35, 40)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]

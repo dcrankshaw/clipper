@@ -25,14 +25,20 @@ FrontendRPCService::FrontendRPCService()
               RESPONSE_QUEUE_SIZE)),
           // std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
           //     RESPONSE_QUEUE_SIZE)),
-      prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend_rpc", 15)),
+      prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend", 15)),
       active_(false),
       request_enqueue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
           "frontend_rpc:request_enqueue")),
       response_enqueue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
           "frontend_rpc:response_enqueue")),
       response_dequeue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
-          "frontend_rpc:response_dequeue")) {}
+          "frontend_rpc:response_dequeue")),
+      malloc_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
+          "frontend_rpc:malloc_latency",
+          "microseconds", 4096)),
+      recv_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
+          "frontend_rpc:recv_latency",
+          "microseconds", 4096)) {}
 
 FrontendRPCService::~FrontendRPCService() { stop(); }
 
@@ -169,10 +175,29 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
       input = std::make_shared<IntVector>(data, input_size_typed);
     } break;
     case DataType::Floats: {
+      std::chrono::time_point<std::chrono::system_clock> start_time =
+        std::chrono::system_clock::now();
       std::shared_ptr<float> data(
           static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
+      std::chrono::time_point<std::chrono::system_clock> malloc_end_time =
+        std::chrono::system_clock::now();
       socket.recv(data.get(), input_size_typed * sizeof(float), 0);
+      std::chrono::time_point<std::chrono::system_clock> recv_end_time =
+        std::chrono::system_clock::now();
       input = std::make_shared<FloatVector>(data, input_size_typed);
+
+      // Update latency metrics
+      auto malloc_latency = malloc_end_time - start_time;
+      long malloc_latency_micros =
+          std::chrono::duration_cast<std::chrono::microseconds>(malloc_latency)
+              .count();
+      malloc_latency_->insert(malloc_latency_micros);
+
+      auto recv_latency = recv_end_time - malloc_end_time;
+      long recv_latency_micros =
+          std::chrono::duration_cast<std::chrono::microseconds>(recv_latency)
+              .count();
+      recv_latency_->insert(recv_latency_micros);
     } break;
     case DataType::Doubles: {
       std::shared_ptr<double> data(
