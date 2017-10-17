@@ -11,7 +11,6 @@
 
 #include <redox.hpp>
 
-#include <folly/futures/Future.h>
 
 #include <clipper/config.hpp>
 #include <clipper/containers.hpp>
@@ -21,6 +20,7 @@
 #include <clipper/redis.hpp>
 #include <clipper/rpc_service.hpp>
 #include <clipper/threadpool.hpp>
+#include <clipper/callback_threadpool.hpp>
 #include <clipper/util.hpp>
 
 namespace clipper {
@@ -72,52 +72,29 @@ class CacheEntry {
   bool completed_ = false;
   bool used_ = true;
   Output value_;
-  std::vector<folly::Promise<Output>> value_promises_;
+  std::vector<std::function<void(Output)>> value_callbacks_;
 };
 
 // A cache page is a pair of <hash, entry_size>
 using CachePage = std::pair<long, long>;
 
-class PredictionCache {
- public:
-  PredictionCache(size_t size_bytes);
-  folly::Future<Output> fetch(const VersionedModelId &model,
-                              const std::shared_ptr<Input> &input);
-
-  void put(const VersionedModelId &model, const std::shared_ptr<Input> &input,
-           const Output &output);
-
- private:
-  size_t hash(const VersionedModelId &model, size_t input_hash) const;
-  void insert_entry(const long key, CacheEntry &value);
-  void evict_entries(long space_needed_bytes);
-
-  std::mutex m_;
-  const size_t max_size_bytes_;
-  size_t size_bytes_ = 0;
-  // TODO cache needs a promise as well?
-  std::unordered_map<long, CacheEntry> entries_;
-  std::vector<long> page_buffer_;
-  size_t page_buffer_index_ = 0;
-  std::shared_ptr<metrics::Counter> lookups_counter_;
-  std::shared_ptr<metrics::RatioCounter> hit_ratio_;
-};
-
 // NOTE: Prediction cache is now a query cache
 class QueryCache {
  public:
   QueryCache(size_t size_bytes);
-  folly::Future<Output> fetch(const VersionedModelId &model,
-                              const QueryId query_id);
+  bool fetch(const VersionedModelId &model,
+      const QueryId query_id, std::function<void(Output)> callback);
 
   void put(const VersionedModelId &model, const QueryId query_id,
-              Output output);
+      Output output);
 
  private:
   size_t hash(const VersionedModelId &model, const QueryId query_id) const;
   void insert_entry(const long key, CacheEntry &value);
   void evict_entries(long space_needed_bytes);
 
+
+
   std::mutex m_;
   const size_t max_size_bytes_;
   size_t size_bytes_ = 0;
@@ -127,6 +104,7 @@ class QueryCache {
   size_t page_buffer_index_ = 0;
   std::shared_ptr<metrics::Counter> lookups_counter_;
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
+  CallbackThreadPool callback_threadpool_;
 };
 
 struct DeadlineCompare {
@@ -365,53 +343,27 @@ class TaskExecutor {
   TaskExecutor(TaskExecutor &&other) = default;
   TaskExecutor &operator=(TaskExecutor &&other) = default;
 
-  std::vector<folly::Future<Output>> schedule_predictions(
-      std::vector<PredictTask> tasks) {
-    predictions_counter_->increment(tasks.size());
-    std::vector<folly::Future<Output>> output_futures;
-    for (auto &t : tasks) {
-      // add each task to the queue corresponding to its associated model
-      boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
-      auto model_queue_entry = model_queues_.find(t.model_);
-      if (model_queue_entry != model_queues_.end()) {
-        output_futures.push_back(cache_->fetch(t.model_, t.query_id_));
-        // output_futures.push_back(cache_->fetch(t.model_, t.input_));
-        if (!output_futures.back().isReady()) {
-          t.recv_time_ = std::chrono::system_clock::now();
-          model_queue_entry->second->add_task(t);
-          log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
-                             "Adding task to queue. QueryID: {}, model: {}",
-                             t.query_id_, t.model_.serialize());
-          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
-              model_metrics_mutex_);
-          auto cur_model_metric_entry = model_metrics_.find(t.model_);
-          if (cur_model_metric_entry != model_metrics_.end()) {
-            auto cur_model_metric = cur_model_metric_entry->second;
-            cur_model_metric.cache_hit_ratio_->increment(0, 1);
-          }
-        } else {
-          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
-              model_metrics_mutex_);
-          auto cur_model_metric_entry = model_metrics_.find(t.model_);
-          if (cur_model_metric_entry != model_metrics_.end()) {
-            auto cur_model_metric = cur_model_metric_entry->second;
-            cur_model_metric.cache_hit_ratio_->increment(1, 1);
-          }
-        }
-      } else {
-        log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
-                            "Received task for unknown model: {} : {}",
-                            t.model_.get_name(), t.model_.get_id());
-      }
-    }
-    return output_futures;
-  }
+  void schedule_prediction(PredictTask task,
+      std::function<void(Output)>&& task_completion_callback) {
+    predictions_counter_->increment(1);
+    // add each task to the queue corresponding to its associated model
+    boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
+    auto model_queue_entry = model_queues_.find(task.model_);
+    if (model_queue_entry != model_queues_.end()) {
+      bool cached = cache_->fetch(task.model_, task.query_id_, std::move(task_completion_callback));
+      if (!cached) {
+        task.recv_time_ = std::chrono::system_clock::now();
+        model_queue_entry->second->add_task(task);
+        log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
+                           "Adding task to queue. QueryID: {}, model: {}",
+                           task.query_id_, task.model_.serialize());
 
-  std::vector<folly::Future<FeedbackAck>> schedule_feedback(
-      const std::vector<FeedbackTask> tasks) {
-    UNUSED(tasks);
-    // TODO Implement
-    return {};
+      }
+    } else {
+      log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
+                          "Received task for unknown model: {} : {}",
+                          task.model_.get_name(), task.model_.get_id());
+    }
   }
 
  private:
@@ -421,8 +373,6 @@ class TaskExecutor {
   std::shared_ptr<ActiveContainers> active_containers_;
   std::unique_ptr<rpc::RPCService> rpc_;
   std::unique_ptr<QueryCache> cache_;
-  //QueryCache cache_;
-  //std::unique_ptr<PredictionCache> cache_;
   redox::Redox redis_connection_;
   redox::Subscriber redis_subscriber_;
   std::mutex inflight_messages_mutex_;
