@@ -7,10 +7,12 @@
 #include <unordered_map>
 
 #include <boost/thread.hpp>
+#include <blockingconcurrentqueue.h>
 
 #include "datatypes.hpp"
 #include "logging.hpp"
 #include "threadpool.hpp"
+#include "metrics.hpp"
 
 namespace clipper {
 
@@ -18,109 +20,6 @@ namespace clipper {
 
 /// Implementation adapted from
 /// https://goo.gl/Iav87R
-
-// template <typename T>
-// class ThreadSafeQueue {
-//  public:
-//   #<{(|*
-//    * Destructor.
-//    |)}>#
-//   ~ThreadSafeQueue(void) { invalidate(); }
-//
-//   #<{(|*
-//    * Attempt to get the first value in the queue.
-//    * Returns true if a value was successfully written to the out parameter,
-//    * false otherwise.
-//    |)}>#
-//   bool try_pop(T& out) {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     if (queue_.empty() || !valid_) {
-//       return false;
-//     }
-//     out = std::move(queue_.front());
-//     queue_.pop();
-//     return true;
-//   }
-//
-//   #<{(|*
-//    * Get the first value in the queue.
-//    * Will block until a value is available unless clear is called or the
-//    * instance is destructed.
-//    * Returns true if a value was successfully written to the out parameter,
-//    * false otherwise.
-//    |)}>#
-//   bool wait_pop(T& out) {
-//     std::unique_lock<std::mutex> lock{mutex_};
-//     condition_.wait(lock, [this]() { return !queue_.empty() || !valid_; });
-//     #<{(|
-//      * Using the condition in the predicate ensures that spurious wakeups with a
-//      * valid
-//      * but empty queue will not proceed, so only need to check for validity
-//      * before proceeding.
-//      |)}>#
-//     if (!valid_) {
-//       return false;
-//     }
-//     out = std::move(queue_.front());
-//     queue_.pop();
-//     return true;
-//   }
-//
-//   #<{(|*
-//    * Push a new value onto the queue.
-//    |)}>#
-//   void push(T value) {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     queue_.push(std::move(value));
-//     condition_.notify_one();
-//   }
-//
-//   #<{(|*
-//    * Check whether or not the queue is empty.
-//    |)}>#
-//   bool empty(void) const {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     return queue_.empty();
-//   }
-//
-//   #<{(|*
-//    * Clear all items from the queue.
-//    |)}>#
-//   void clear(void) {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     while (!queue_.empty()) {
-//       queue_.pop();
-//     }
-//     condition_.notify_all();
-//   }
-//
-//   #<{(|*
-//    * Invalidate the queue.
-//    * Used to ensure no conditions are being waited on in wait_pop when
-//    * a thread or the application is trying to exit.
-//    * The queue is invalid after calling this method and it is an error
-//    * to continue using a queue after this method has been called.
-//    |)}>#
-//   void invalidate(void) {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     valid_ = false;
-//     condition_.notify_all();
-//   }
-//
-//   #<{(|*
-//    * Returns whether or not this queue is valid.
-//    |)}>#
-//   bool is_valid(void) const {
-//     std::lock_guard<std::mutex> lock{mutex_};
-//     return valid_;
-//   }
-//
-//  private:
-//   std::atomic_bool valid_{true};
-//   mutable std::mutex mutex_;
-//   std::queue<T> queue_;
-//   std::condition_variable condition_;
-// };
 
 class CallbackThreadPool {
  private:
@@ -160,7 +59,11 @@ class CallbackThreadPool {
   };
 
  public:
-  explicit CallbackThreadPool(const std::uint32_t numThreads) : done_{false}, queue_{}, threads_{} {
+  CallbackThreadPool(const std::string name,
+      const std::uint32_t numThreads) : done_{false}, queue_{100000}, threads_{},
+    queue_submit_latency_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
+        name + ":queue_submit_latency",
+        "microseconds", 4096)) {
     try {
       for(std::uint32_t i = 0u; i < numThreads; ++i) {
         threads_.emplace_back(&CallbackThreadPool::worker, this);
@@ -199,7 +102,17 @@ class CallbackThreadPool {
     using TaskType = ThreadTask<PackagedTask>;
     PackagedTask task{std::move(boundTask)};
     auto result_future = task.get_future();
-    queue_.push(std::make_unique<TaskType>(std::move(task)));
+    std::chrono::time_point<std::chrono::system_clock> start_time =
+        std::chrono::system_clock::now();
+    queue_.enqueue(std::make_unique<TaskType>(std::move(task)));
+    std::chrono::time_point<std::chrono::system_clock> current_time =
+        std::chrono::system_clock::now();
+
+    auto submit_latency = current_time - start_time;
+    long submit_latency_micros =
+        std::chrono::duration_cast<std::chrono::microseconds>(submit_latency)
+            .count();
+    queue_submit_latency_hist_->insert(static_cast<int64_t>(submit_latency_micros));
     return result_future;
   }
 
@@ -211,12 +124,10 @@ class CallbackThreadPool {
   void worker() {
     while (!done_) {
       std::unique_ptr<IThreadTask> pTask{nullptr};
-      // NOTE: The use of try_pop here means the worker will spin instead of
-      // block while waiting for work. This is intentional. We defer to the
-      // submitted tasks to block when no work is available.
-      if (queue_.try_pop(pTask)) {
-        pTask->execute();
-      }
+      // NOTE: This is a blocking call. In this threadpool, we want the workers to block
+      // instead of spin if there is no work.
+      queue_.wait_dequeue(pTask);
+      pTask->execute();
     }
   }
 
@@ -226,7 +137,7 @@ class CallbackThreadPool {
   void destroy(void) {
     log_info(LOGGING_TAG_THREADPOOL, "Destroying threadpool");
     done_ = true;
-    queue_.invalidate();
+    // queue_.invalidate();
     for (auto& thread : threads_) {
       if (thread.joinable()) {
         thread.join();
@@ -236,37 +147,13 @@ class CallbackThreadPool {
 
  private:
   std::atomic_bool done_;
-  ThreadSafeQueue<std::unique_ptr<IThreadTask>> queue_;
+  // ThreadSafeQueue<std::unique_ptr<IThreadTask>> queue_;
+  moodycamel::BlockingConcurrentQueue<std::unique_ptr<IThreadTask>> queue_;
   std::vector<std::thread> threads_;
+  std::shared_ptr<metrics::Histogram> queue_submit_latency_hist_;
 };
 
 }
 
-// namespace TaskExecutionThreadPool {
-//
-// #<{(|*
-//  * Convenience method to get the task execution thread pool for the application.
-//  |)}>#
-// inline ThreadPool& get_thread_pool(void) {
-//   static ThreadPool taskExecutionPool;
-//   return taskExecutionPool;
-// }
-//
-// #<{(|*
-//  * Submit a job to the task execution thread pool.
-//  |)}>#
-// template <typename Func, typename... Args>
-// inline auto submit_job(VersionedModelId vm, int replica_id, Func&& func,
-//                        Args&&... args) {
-//   return get_thread_pool().submit(vm, replica_id, std::forward<Func>(func),
-//                                   std::forward<Args>(args)...);
-// }
-//
-// inline void create_queue(VersionedModelId vm, int replica_id) {
-//   get_thread_pool().create_queue(vm, replica_id);
-// }
-//
-// }  // namespace DefaultThreadPool
-// }  // namespace clipper
 
 #endif  // CLIPPER_LIB_CALLBACK_THREADPOOL_HPP

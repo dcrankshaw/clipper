@@ -23,7 +23,7 @@ FrontendRPCService::FrontendRPCService()
     : response_queue_(
           std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
               RESPONSE_QUEUE_SIZE)),
-      prediction_executor_(std::make_shared<clipper::CallbackThreadPool>(6)),
+      prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend_rpc", 15)),
       active_(false) {}
 
 FrontendRPCService::~FrontendRPCService() { stop(); }

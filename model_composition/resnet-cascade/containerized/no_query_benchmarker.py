@@ -94,6 +94,19 @@ def get_lock_latencies(metrics_json):
     return mean_lock_latencies
 
 
+def get_queue_submit_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_lock_latencies = {}
+    for h in hists:
+        if "queue_submit_latency" in h.keys()[0]:
+            name = h.keys()[0]
+            queue_name = name.split(":")[0]
+            mean = h[name]["mean"]
+            # mean_lock_latencies[model] = round(float(mean), 2)
+            mean_lock_latencies[queue_name] = mean
+    return mean_lock_latencies
+
+
 def get_request_rate(metrics_json):
     meters = metrics_json["meters"]
     for m in meters:
@@ -173,5 +186,15 @@ if __name__ == "__main__":
         request_rate = get_request_rate(metrics)
         throughput = get_throughput(metrics)
         batch_sizes = get_batch_sizes(metrics)
-        logger.info("request_rate: {rr}, throughput: {thru}, batch_sizes: {batches}".format(
-            rr=request_rate, thru=throughput, batches=json.dumps(batch_sizes, sort_keys=True)))
+        queue_submit_lats = get_queue_submit_latencies(metrics)
+        logger.info(("\n\nrequest_rate: {rr}"
+                     "\nthroughput: {thru}"
+                     "\nbatch_sizes: {batches}"
+                     "\nsubmit_lats: {submit_lats}\n\n").format(
+                         rr=request_rate,
+                         thru=throughput,
+                         batches=json.dumps(
+                             batch_sizes, sort_keys=True),
+                         submit_lats=json.dumps(
+                             queue_submit_lats, sort_keys=True)
+                     ))

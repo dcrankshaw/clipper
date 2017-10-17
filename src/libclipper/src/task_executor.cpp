@@ -18,7 +18,7 @@ CacheEntry::CacheEntry() {}
 
 QueryCache::QueryCache(size_t size_bytes)
     : max_size_bytes_(size_bytes),
-    callback_threadpool_(6) {}
+    callback_threadpool_("query_cache", 6) {}
 
 bool QueryCache::fetch(const VersionedModelId &model,
     const QueryId query_id, std::function<void(Output)> callback) {
