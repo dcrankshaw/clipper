@@ -46,7 +46,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-15")
+        query_cpu_str="11-20,30-34")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     queue = Queue()
 
     # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(16, 24)
+    total_cpus = range(35,40)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -304,7 +304,7 @@ if __name__ == "__main__":
         setup_noop(batch_size=noop_batch,
                    num_replicas=noop_reps,
                    cpus_per_replica=1,
-                   allocated_cpus=get_cpus(8))
+                   allocated_cpus=get_cpus(noop_reps))
         # setup_alexnet(batch_size=alex_batch,
         #               num_replicas=alexnet_reps,
         #               cpus_per_replica=1,
