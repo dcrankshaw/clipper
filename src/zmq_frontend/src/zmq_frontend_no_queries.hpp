@@ -434,7 +434,7 @@ class ServerImplNoQueries {
     }
     while (true) {
       for (int i = 0; i < inputs.size(); ++i) {
-        if (i % 10 == 0) {
+        if (i % 100 == 0) {
           predict_func_(inputs[i]);
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

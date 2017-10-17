@@ -14,6 +14,7 @@
 #include <clipper/rpc_service.hpp>
 #include <clipper/task_executor.hpp>
 #include <clipper/threadpool.hpp>
+#include <clipper/callback_threadpool.hpp>
 #include <clipper/util.hpp>
 
 namespace zmq_frontend {
@@ -22,7 +23,7 @@ FrontendRPCService::FrontendRPCService()
     : response_queue_(
           std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
               RESPONSE_QUEUE_SIZE)),
-      prediction_executor_(std::make_shared<wangle::CPUThreadPoolExecutor>(6)),
+      prediction_executor_(std::make_shared<clipper::CallbackThreadPool>(6)),
       active_(false) {}
 
 FrontendRPCService::~FrontendRPCService() { stop(); }
@@ -200,7 +201,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
     int client_id = static_cast<int *>(msg_client_id.data())[0];
 
     // Submit the function call with the request to a threadpool!!!
-    prediction_executor_->add([app_function, input, request_id, client_id]() {
+    prediction_executor_->submit([app_function, input, request_id, client_id]() {
       app_function(std::make_tuple(input, request_id, client_id));
     });
   }

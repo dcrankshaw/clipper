@@ -178,10 +178,10 @@ void RPCService::send_messages(socket_t &socket,
 
   for(size_t i = 0; i < num_requests; i++) {
     RPCRequest& request = requests[i];
-    long current_time_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count();
+    // long current_time_micros =
+    //     std::chrono::duration_cast<std::chrono::microseconds>(
+    //         std::chrono::system_clock::now().time_since_epoch())
+    //         .count();
     boost::bimap<int, vector<uint8_t>>::left_const_iterator connection =
         connections.left.find(std::get<0>(request));
     if (connection == connections.left.end()) {
