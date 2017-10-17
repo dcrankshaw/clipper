@@ -6,12 +6,6 @@
 #include <tuple>
 #include <utility>
 
-#include <folly/futures/Future.h>
-
-#include <folly/futures/Future.h>
-// #include <wangle/concurrent/CPUThreadPoolExecutor.h>
-#include <wangle/concurrent/IOThreadPoolExecutor.h>
-
 #include "datatypes.hpp"
 #include "metrics.hpp"
 #include "persistent_state.hpp"
@@ -38,8 +32,7 @@ class QueryProcessor {
   QueryProcessor(QueryProcessor&& other) = default;
   QueryProcessor& operator=(QueryProcessor&& other) = default;
 
-  folly::Future<Response> predict(Query query);
-  folly::Future<FeedbackAck> update(FeedbackQuery feedback);
+  void predict(Query query, std::function<void(Response)>&& on_response_callback);
 
   std::shared_ptr<StateDB> get_state_table() const;
 
@@ -56,7 +49,6 @@ class QueryProcessor {
   // same instance for different applications or users.
   std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
       selection_policies_;
-  std::shared_ptr<wangle::IOThreadPoolExecutor> futures_executor_;
   std::shared_ptr<metrics::Meter> request_rate_;
 };
 

@@ -13,9 +13,6 @@
 #include <unordered_map>
 #include <algorithm>
 
-#include <folly/futures/Future.h>
-#include <wangle/concurrent/IOThreadPoolExecutor.h>
-
 #include "frontend_rpc_service.hpp"
 
 #include <clipper/config.hpp>
@@ -145,8 +142,7 @@ class ServerImplNoQueries {
  public:
   ServerImplNoQueries(const std::string ip, int send_port, int recv_port)
       : rpc_service_(std::make_shared<FrontendRPCService>()),
-        futures_executor_(std::make_shared<wangle::IOThreadPoolExecutor>(6)),
-        query_processor_(futures_executor_) {
+        query_processor_() {
     // Init Clipper stuff
 
     // Start the frontend rpc service
@@ -361,12 +357,11 @@ class ServerImplNoQueries {
         long uid = 0;
         // int request_id = std::get<1>(request);
         // int client_id = std::get<2>(request);
-        auto prediction = query_processor_.predict(
+        // auto prediction = query_processor_.predict(
+        query_processor_.predict(
             Query{name, uid, input, latency_slo_micros, policy,
-                  versioned_models});
-
-        prediction.via(futures_executor_.get())
-            .then([this, app_metrics](Response r) {
+                  versioned_models},
+                  [this, app_metrics](Response r) {
               // Update metrics
               if (r.output_is_default_) {
                 app_metrics.default_pred_ratio_->increment(1, 1);
@@ -385,13 +380,35 @@ class ServerImplNoQueries {
 
               // rpc_service_->send_response(
               //     std::make_tuple(std::move(r.output_), request_id, client_id));
-            })
-            .onError([](const std::exception& e) {
-              clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
-                                           "Unexpected error: {}", e.what());
-              // TODO(czumar): Do something here!
-              return;
             });
+
+        // prediction.via(futures_executor_.get())
+        //     .then([this, app_metrics](Response r) {
+        //       // Update metrics
+        //       if (r.output_is_default_) {
+        //         app_metrics.default_pred_ratio_->increment(1, 1);
+        //       } else {
+        //         app_metrics.default_pred_ratio_->increment(0, 1);
+        //         if (r.output_.y_hat_->type() == clipper::DataType::Strings) {
+        //           std::string debugstr = std::string(
+        //               static_cast<const char *>(r.output_.y_hat_->get_data()),
+        //               r.output_.y_hat_->byte_size());
+        //           clipper::log_info_formatted(clipper::LOGGING_TAG_CLIPPER,
+        //               "Responding with: {}", debugstr);
+        //         }
+        //       }
+        //       app_metrics.latency_->insert(r.duration_micros_);
+        //       app_metrics.num_predictions_->increment(1);
+        //
+        //       // rpc_service_->send_response(
+        //       //     std::make_tuple(std::move(r.output_), request_id, client_id));
+        //     })
+        //     .onError([](const std::exception& e) {
+        //       clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
+        //                                    "Unexpected error: {}", e.what());
+        //       // TODO(czumar): Do something here!
+        //       return;
+        //     });
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
@@ -464,7 +481,6 @@ class ServerImplNoQueries {
   std::unordered_map<std::string, std::vector<std::string>>
       linked_models_for_apps_;
 
-  std::shared_ptr<wangle::IOThreadPoolExecutor> futures_executor_;
   clipper::QueryProcessor query_processor_;
   std::atomic<bool> predict_func_ready_{false};
   
