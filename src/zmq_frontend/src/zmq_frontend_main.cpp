@@ -1,5 +1,5 @@
-#include "zmq_frontend.hpp"
-// #include "zmq_frontend_no_queries.hpp"
+// #include "zmq_frontend.hpp"
+#include "zmq_frontend_no_queries.hpp"
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
@@ -42,15 +42,15 @@ int main(int argc, char* argv[]) {
   // conf.set_task_execution_threadpool_size(options["threadpool_size"].as<int>());
   conf.ready();
 
-  zmq_frontend::ServerImpl zmq_server("0.0.0.0", 4455, 4456);
+  // zmq_frontend::ServerImpl zmq_server("0.0.0.0", 4455, 4456);
 
-  // zmq_frontend::ServerImplNoQueries zmq_server("0.0.0.0", 4455, 4456);
-  // std::vector<std::thread> bench_threads;
-  // for (int i = 0; i < 4; ++i) {
-  //   bench_threads.push_back(std::thread([&zmq_server]() mutable {
-  //       zmq_server.run_benchmark();
-  //   }));
-  // }
+  zmq_frontend::ServerImplNoQueries zmq_server("0.0.0.0", 4455, 4456);
+  std::vector<std::thread> bench_threads;
+  for (int i = 0; i < 4; ++i) {
+    bench_threads.push_back(std::thread([&zmq_server]() mutable {
+        zmq_server.run_benchmark();
+    }));
+  }
 
 
   HttpServer metrics_server("0.0.0.0", clipper::QUERY_FRONTEND_PORT, 1);
@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
                          clipper::metrics::MetricsRegistry& registry =
                              clipper::metrics::MetricsRegistry::get_metrics();
                          std::string metrics_report =
+                             // registry.report_metrics(false);
                              registry.report_metrics(true);
                         std::cout << metrics_report << std::endl;
                          respond_http(metrics_report, "200 OK", response);

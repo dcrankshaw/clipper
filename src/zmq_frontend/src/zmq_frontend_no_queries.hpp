@@ -382,33 +382,6 @@ class ServerImplNoQueries {
               //     std::make_tuple(std::move(r.output_), request_id, client_id));
             });
 
-        // prediction.via(futures_executor_.get())
-        //     .then([this, app_metrics](Response r) {
-        //       // Update metrics
-        //       if (r.output_is_default_) {
-        //         app_metrics.default_pred_ratio_->increment(1, 1);
-        //       } else {
-        //         app_metrics.default_pred_ratio_->increment(0, 1);
-        //         if (r.output_.y_hat_->type() == clipper::DataType::Strings) {
-        //           std::string debugstr = std::string(
-        //               static_cast<const char *>(r.output_.y_hat_->get_data()),
-        //               r.output_.y_hat_->byte_size());
-        //           clipper::log_info_formatted(clipper::LOGGING_TAG_CLIPPER,
-        //               "Responding with: {}", debugstr);
-        //         }
-        //       }
-        //       app_metrics.latency_->insert(r.duration_micros_);
-        //       app_metrics.num_predictions_->increment(1);
-        //
-        //       // rpc_service_->send_response(
-        //       //     std::make_tuple(std::move(r.output_), request_id, client_id));
-        //     })
-        //     .onError([](const std::exception& e) {
-        //       clipper::log_error_formatted(clipper::LOGGING_TAG_CLIPPER,
-        //                                    "Unexpected error: {}", e.what());
-        //       // TODO(czumar): Do something here!
-        //       return;
-        //     });
       } catch (const std::invalid_argument& e) {
         // This invalid argument exception is most likely the propagation of an
         // exception thrown
@@ -434,7 +407,7 @@ class ServerImplNoQueries {
     }
     while (true) {
       for (int i = 0; i < inputs.size(); ++i) {
-        if (i % 100 == 0) {
+        if (i % 25 == 0) {
           predict_func_(inputs[i]);
           std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }

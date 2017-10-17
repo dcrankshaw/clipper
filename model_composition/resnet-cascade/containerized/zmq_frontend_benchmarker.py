@@ -44,9 +44,9 @@ def setup_clipper(configs):
     cl.stop_all()
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
-        redis_cpu_str="4",
-        mgmt_cpu_str="4",
-        query_cpu_str="5,6,7,21,22,23")
+        redis_cpu_str="0",
+        mgmt_cpu_str="0",
+        query_cpu_str="1-15")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -101,6 +101,7 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+
 def get_lock_latencies(metrics_json):
     hists = metrics_json["histograms"]
     mean_lock_latencies = {}
@@ -111,6 +112,19 @@ def get_lock_latencies(metrics_json):
             mean = h[name]["mean"]
             # mean_lock_latencies[model] = round(float(mean), 2)
             mean_lock_latencies[model] = mean
+    return mean_lock_latencies
+
+
+def get_queue_submit_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_lock_latencies = {}
+    for h in hists:
+        if "queue_submit_latency" in h.keys()[0]:
+            name = h.keys()[0]
+            queue_name = name.split(":")[0]
+            mean = h[name]["mean"]
+            # mean_lock_latencies[model] = round(float(mean), 2)
+            mean_lock_latencies[queue_name] = mean
     return mean_lock_latencies
 
 
@@ -164,19 +178,27 @@ class Predictor(object):
             metrics = self.cl.inspect_instance()
             request_rate = get_request_rate(metrics)
             batch_sizes = get_batch_sizes(metrics)
+            queue_submit_lats = get_queue_submit_latencies(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
 
-            logger.info(("request_rate: {rr}, p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}").format(rr=request_rate, p99=p99, mean=mean,
-                                                          thru=thru,
-                                                          batches=json.dumps(
-                                                              batch_sizes, sort_keys=True)))
+            logger.info((
+                "thruput: {thru}, p99: {p99} "
+                "\n\nrequest_rate: {rr}"
+                "\nbatch_sizes: {batches}"
+                "\nsubmit_lats: {submit_lats}\n\n").format(
+                    rr=request_rate,
+                    p99=p99, mean=mean, thru=thru,
+                    batches=json.dumps(
+                        batch_sizes, sort_keys=True),
+                    submit_lats=json.dumps(
+                        queue_submit_lats, sort_keys=True)
+                ))
 
         else:
-            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
-                                                                           mean=mean,
-                                                                           thru=thru))
+            logger.info("thruput: {thru}, p99: {p99}".format(p99=p99,
+                                                             mean=mean,
+                                                             thru=thru))
 
     def predict(self, input_item):
         begin_time = datetime.now()
@@ -190,7 +212,6 @@ class Predictor(object):
             if self.batch_num_complete % 500 == 0:
                 self.print_stats()
                 self.init_stats()
-
 
         def alex_cont(output):
             if output == DEFAULT_OUTPUT:
@@ -246,7 +267,7 @@ if __name__ == "__main__":
     queue = Queue()
 
     # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(8, 16) + range(24, 32)
+    total_cpus = range(16, 24)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -257,7 +278,7 @@ if __name__ == "__main__":
         return [total_gpus.pop() for _ in range(num_gpus)]
 
     noop_reps = args.num_replicas
-    noop_batch = 30
+    noop_batch = 100
 
     # alexnet_reps = 4
     # res50_reps = 1
