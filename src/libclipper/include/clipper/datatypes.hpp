@@ -80,7 +80,7 @@ class Input {
    *
    * The serialization methods are used for RPC.
    */
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const;
+  virtual void serialize(std::vector<std::shared_ptr<void>>& buf) const;
 
   virtual size_t hash() const = 0;
 
