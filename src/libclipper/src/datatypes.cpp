@@ -116,8 +116,8 @@ void ByteVector::set_data(const void *buf, size_t size) {
   memcpy(data_.get(), buf, size);
 }
 
-size_t ByteVector::serialize(uint8_t *buf) const {
-  return serialize_to_buffer(data_, size_, buf);
+void ByteVector::serialize(std::vector<std::shared_ptr<void>> &buf) const {
+  buf.push_back(data_);
 }
 
 size_t ByteVector::hash() const { return hash_shared_ptr(data_, size_); }
@@ -146,8 +146,8 @@ void IntVector::set_data(const void *buf, size_t size) {
 
 DataType IntVector::type() const { return DataType::Ints; }
 
-size_t IntVector::serialize(uint8_t *buf) const {
-  return serialize_to_buffer(data_, size_, buf);
+void IntVector::serialize(std::vector<std::shared_ptr<void>> &buf) const {
+  buf.push_back(data_);
 }
 
 size_t IntVector::hash() const { return hash_shared_ptr(data_, size_); }
@@ -174,8 +174,8 @@ void FloatVector::set_data(const void *buf, size_t size) {
   memcpy(data_.get(), buf, size * sizeof(float));
 }
 
-size_t FloatVector::serialize(uint8_t *buf) const {
-  return serialize_to_buffer(data_, size_, buf);
+void FloatVector::serialize(std::vector<std::shared_ptr<void>> &buf) const {
+  buf.push_back(data_);
 }
 
 DataType FloatVector::type() const { return DataType::Floats; }
@@ -211,8 +211,8 @@ void DoubleVector::set_data(const void *buf, size_t size) {
   memcpy(data_.get(), buf, size * sizeof(double));
 }
 
-size_t DoubleVector::serialize(uint8_t *buf) const {
-  return serialize_to_buffer(data_, size_, buf);
+void DoubleVector::serialize(std::vector<std::shared_ptr<void>> &buf) const {
+  buf.push_back(data_);
 }
 
 size_t DoubleVector::hash() const {
@@ -246,10 +246,8 @@ void SerializableString::set_data(const void *buf, size_t size) {
   memcpy(data_.get(), buf, size * sizeof(char));
 }
 
-size_t SerializableString::serialize(uint8_t *buf) const {
-  size_t amt_written = serialize_to_buffer(data_, size_, buf);
-  buf[amt_written] = '\0';
-  return amt_written + 1;
+void SerializableString::serialize(std::vector<std::shared_ptr<void>> &buf) const {
+  buf.push_back(data_);
 }
 
 size_t SerializableString::hash() const {
@@ -444,21 +442,11 @@ std::vector<ByteBuffer> rpc::PredictionRequest::serialize() {
   input_metadata_raw[0] = static_cast<uint32_t>(input_type_);
   input_metadata_raw[1] = static_cast<uint32_t>(inputs_.size());
 
-  std::shared_ptr<uint8_t> input_buf(
-      static_cast<uint8_t *>(malloc(input_data_size_)), free);
-  uint8_t *input_buf_raw = input_buf.get();
-  uint32_t index = 0;
+  std::vector<std::shared_ptr<void>> input_bufs;
   for (size_t i = 0; i < inputs_.size() - 1; i++) {
-    size_t amt_written = inputs_[i]->serialize(input_buf_raw);
-    input_buf_raw += amt_written;
-    index += inputs_[i]->size();
-    input_metadata_raw[i + 2] = index;
+    inputs_[i]->serialize(input_bufs);
+    input_metadata_raw[i + 2] = static_cast<uint32_t>(inputs_[i]->byte_size());
   }
-  // Don't include the final separation index because it results in the
-  // creation of an empty data array when deserializing
-  size_t tail_index = inputs_.size() - 1;
-  size_t amt_written = inputs_[tail_index]->serialize(input_buf_raw);
-  input_buf_raw += amt_written;
 
   size_t input_metadata_size_buf_size = 1 * sizeof(long);
   std::shared_ptr<uint8_t> input_metadata_size_buf(
@@ -470,15 +458,6 @@ std::vector<ByteBuffer> rpc::PredictionRequest::serialize() {
   // buffer allocation in the receiving container
   input_metadata_size_buf_raw[0] = input_metadata_size;
 
-  size_t inputs_size_buf_size = 1 * sizeof(long);
-  std::shared_ptr<uint8_t> inputs_size_buf(
-      static_cast<uint8_t *>(malloc(inputs_size_buf_size)), free);
-  long *inputs_size_buf_raw = reinterpret_cast<long *>(inputs_size_buf.get());
-  // Add the size of the serialized inputs in bytes. This will be
-  // sent prior to the input data to allow for proactive
-  // buffer allocation in the receiving container
-  inputs_size_buf_raw[0] = input_data_size_;
-
   std::vector<ByteBuffer> serialized_request;
   serialized_request.push_back(
       std::make_pair(request_metadata, request_metadata_size));
@@ -486,10 +465,9 @@ std::vector<ByteBuffer> rpc::PredictionRequest::serialize() {
       std::make_pair(input_metadata_size_buf, input_metadata_size_buf_size));
   serialized_request.push_back(
       std::make_pair(input_metadata, input_metadata_size));
-  serialized_request.push_back(
-      std::make_pair(inputs_size_buf, inputs_size_buf_size));
-  serialized_request.push_back(std::make_pair(input_buf, input_data_size_));
-
+  for (size_t i = 0; i < input_bufs.size(); i++) {
+    serialized_request.push_back(std::make_pair(input_bufs[i], input_metadata_raw[i + 2]));
+  }
   return serialized_request;
 }
 

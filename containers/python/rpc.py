@@ -212,6 +212,7 @@ class Server(threading.Thread):
         poller = zmq.Poller()
         sys.stdout.flush()
         sys.stderr.flush()
+
         while True:
             socket = self.context.socket(zmq.DEALER)
             poller.register(socket, zmq.POLLIN)
@@ -280,15 +281,17 @@ class Server(threading.Thread):
                     if request_type == REQUEST_TYPE_PREDICT:
                         input_header_size = socket.recv()
                         input_header = socket.recv()
-                        raw_content_size = socket.recv()
-                        raw_content = socket.recv()
-
-                        t2 = datetime.now()
-
-                        parsed_input_header = np.frombuffer(
-                            input_header, dtype=np.int32)
-                        input_type, input_size, splits = parsed_input_header[
-                            0], parsed_input_header[1], parsed_input_header[2:]
+                        parsed_input_header = np.frombuffer(input_header, dtype=np.uint32)
+                        [
+                            input_type, 
+                            num_inputs, 
+                            input_sizes
+                        ] = 
+                        [
+                            parsed_input_header[0], 
+                            parsed_input_header[1], 
+                            parsed_input_header[2:]
+                        ]
 
                         if int(input_type) != int(self.model_input_type):
                             print((
@@ -298,38 +301,28 @@ class Server(threading.Thread):
                                         int(self.model_input_type)),
                                     received=input_type_to_string(
                                         int(input_type))))
-                            raise
+                            raise                           
 
-                        if input_type == DATA_TYPE_STRINGS:
-                            # If we're processing string inputs, we delimit them using
-                            # the null terminator included in their serialized representation,
-                            # ignoring the extraneous final null terminator by
-                            # using a -1 slice
-                            inputs = np.array(
-                                raw_content.split('\0')[:-1],
-                                dtype=input_type_to_dtype(input_type))
-                        else:
-                            inputs = np.array(
-                                np.split(
-                                    np.frombuffer(
-                                        raw_content,
-                                        dtype=input_type_to_dtype(input_type)),
-                                    splits))
+                        inputs = []
+                        for _ in range(num_inputs):
+                            input_item_buf = socket.recv(copy=False)
+                            input_item = np.frombuffer(input_item_buf, dtype=input_type_to_dtype(input_type))
+                            # TODO: FIX THIS!
+                            inputs.append()
 
-                        t3 = datetime.now()
+                        t2 = datetime.now()
 
                         prediction_request = PredictionRequest(
                             msg_id_bytes, inputs)
                         response = self.handle_prediction_request(
                             prediction_request)
 
-                        t4 = datetime.now()
+                        t3 = datetime.now()
 
                         response.send(socket, self.event_history)
 
-                        print("recv: %f us, parse: %f us, handle: %f us" %
-                              ((t2 - t1).microseconds, (t3 - t2).microseconds,
-                               (t4 - t3).microseconds))
+                        print("recv and parse: %f us, handle: %f us" %
+                              ((t2 - t1).microseconds, (t3 - t2).microseconds))
                         sys.stdout.flush()
                         sys.stderr.flush()
 
