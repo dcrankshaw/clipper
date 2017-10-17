@@ -23,8 +23,16 @@ FrontendRPCService::FrontendRPCService()
     : response_queue_(
           std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
               RESPONSE_QUEUE_SIZE)),
+          // std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
+          //     RESPONSE_QUEUE_SIZE)),
       prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend_rpc", 15)),
-      active_(false) {}
+      active_(false),
+      request_enqueue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
+          "frontend_rpc:request_enqueue")),
+      response_enqueue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
+          "frontend_rpc:response_enqueue")),
+      response_dequeue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
+          "frontend_rpc:response_dequeue")) {}
 
 FrontendRPCService::~FrontendRPCService() { stop(); }
 
@@ -53,6 +61,7 @@ void FrontendRPCService::add_application(
 }
 
 void FrontendRPCService::send_response(FrontendRPCResponse response) {
+  response_enqueue_meter_->mark(1);
   std::lock_guard<std::mutex> lock(response_queue_insertion_mutex_);
   response_queue_->write(response);
 }
@@ -201,6 +210,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
     int client_id = static_cast<int *>(msg_client_id.data())[0];
 
     // Submit the function call with the request to a threadpool!!!
+    request_enqueue_meter_->mark(1);
     prediction_executor_->submit([app_function, input, request_id, client_id]() {
       app_function(std::make_tuple(input, request_id, client_id));
     });
@@ -210,6 +220,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
 void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
   while (!response_queue_->isEmpty() && num_responses > 0) {
     FrontendRPCResponse *response = response_queue_->frontPtr();
+    response_dequeue_meter_->mark(1);
     Output &output = std::get<0>(*response);
     int request_id = std::get<1>(*response);
     int client_id = std::get<2>(*response);
