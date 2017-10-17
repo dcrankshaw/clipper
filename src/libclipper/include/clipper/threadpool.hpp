@@ -5,6 +5,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <condition_variable>
 
 #include <boost/thread.hpp>
 

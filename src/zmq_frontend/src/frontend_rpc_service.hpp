@@ -4,8 +4,8 @@
 #include <mutex>
 
 #include <folly/ProducerConsumerQueue.h>
-#include <wangle/concurrent/CPUThreadPoolExecutor.h>
 #include <clipper/datatypes.hpp>
+#include <clipper/callback_threadpool.hpp>
 #include <zmq.hpp>
 
 namespace zmq_frontend {
@@ -50,7 +50,7 @@ class FrontendRPCService {
   std::mutex response_queue_insertion_mutex_;
   std::shared_ptr<folly::ProducerConsumerQueue<FrontendRPCResponse>>
       response_queue_;
-  std::shared_ptr<wangle::CPUThreadPoolExecutor> prediction_executor_;
+  std::shared_ptr<clipper::CallbackThreadPool> prediction_executor_;
   std::atomic_bool active_;
   std::mutex app_functions_mutex_;
   std::mutex client_routing_mutex_;
