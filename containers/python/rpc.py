@@ -304,9 +304,8 @@ class Server(threading.Thread):
 
                         inputs = []
                         for _ in range(num_inputs):
-                            input_item_frame = socket.recv(copy=False)
-                            input_item = np.asarray(input_item_frame.buffer, dtype=input_type_to_dtype(input_type))
-                            # TODO: FIX THIS!
+                            input_item = socket.recv()
+                            input_item = np.frombuffer(input_item, dtype=input_type_to_dtype(input_type))
                             inputs.append(input_item)
 
                         t2 = datetime.now()
