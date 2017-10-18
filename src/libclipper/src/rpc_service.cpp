@@ -166,6 +166,8 @@ void RPCService::shutdown_service(socket_t &socket) {
   socket.close();
 }
 
+void noop_free (void *data, void *hint) { }
+
 void RPCService::send_messages(socket_t &socket,
                                boost::bimap<int, vector<uint8_t>> &connections,
                                int max_num_messages) {
@@ -207,16 +209,34 @@ void RPCService::send_messages(socket_t &socket,
     // subtract 1 because we start counting at 0
     int last_msg_num = std::get<2>(request).size() - 1;
     for (const ByteBuffer &m : std::get<2>(request)) {
+      if (last_msg_num < 3) {
+        throw std::runtime_error("Trying to send message to container without enough parts");
+      }
+
       // send the sndmore flag unless we are on the last message part
       if (cur_msg_num < last_msg_num) {
         socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
       } else {
-        socket.send(m.first.get(), m.second, 0);
+        socket.send(m.first.get(), m.second);
       }
+
+
+      // if (cur_msg_num < 3) {
+      //   socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
+      // } else {
+      //   message_t cur_buffer(m.first.get(), m.second, noop_free);
+      //   // send the sndmore flag unless we are on the last message part
+      //   if (cur_msg_num < last_msg_num) {
+      //     socket.send(cur_buffer, ZMQ_SNDMORE);
+      //   } else {
+      //     socket.send(cur_buffer);
+      //   }
+      // }
       cur_msg_num++;
     }
   }
 }
+
 
 void RPCService::receive_message(
     socket_t &socket, boost::bimap<int, vector<uint8_t>> &connections,

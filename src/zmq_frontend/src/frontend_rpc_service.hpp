@@ -21,7 +21,7 @@ constexpr size_t RESPONSE_QUEUE_SIZE = 50000;
 constexpr size_t NUM_REQUESTS_RECV = 100;
 constexpr size_t NUM_RESPONSES_SEND = 100;
 
-constexpr size_t TOTAL_DATA_BYTES = 299*299*3*sizeof(float)*20000;
+constexpr size_t TOTAL_DATA_BYTES = 299*299*3*sizeof(float)*50000;
 
 // Tuple of input, request id, client id
 typedef std::tuple<std::shared_ptr<Input>, int, int> FrontendRPCRequest;
