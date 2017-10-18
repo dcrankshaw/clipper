@@ -212,7 +212,6 @@ class Server(threading.Thread):
         poller = zmq.Poller()
         sys.stdout.flush()
         sys.stderr.flush()
-
         while True:
             socket = self.context.socket(zmq.DEALER)
             poller.register(socket, zmq.POLLIN)
