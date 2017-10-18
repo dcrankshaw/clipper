@@ -11,16 +11,17 @@ from single_proc_utils import DriverBase, driver_utils
 from models import lgbm_model, vgg_feats_model, kpca_svm_model, inception_feats_model, kernel_svm_model
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+MODELS_DIR = os.path.join(CURR_DIR, "models")
 
 VGG_FEATS_MODEL_NAME = "vgg_feats"
 INCEPTION_FEATS_MODEL_NAME = "inception_feats"
 KERNEL_SVM_MODEL_NAME = "kernel_svm"
 LGBM_MODEL_NAME = "lgbm"
 
-VGG_MODEL_PATH = os.path.join(CURR_DIR, "vgg_model_data", "vgg_feats_graph_def.pb")
-KERNEL_SVM_MODEL_PATH = os.path.join(CURR_DIR, "kernel_svm_model_data", "kernel_svm_trained.sav")
-INCEPTION_MODEL_PATH = os.path.join(CURR_DIR, "inception_model_data", "inception_feats_graph_def.pb")
-LGBM_MODEL_PATH = os.path.join(CURR_DIR, "lgbm_model_data", "gbm_trained.sav")
+VGG_MODEL_PATH = os.path.join(MODELS_DIR, "vgg_model_data", "vgg_feats_graph_def.pb")
+KERNEL_SVM_MODEL_PATH = os.path.join(MODELS_DIR, "kernel_svm_model_data", "kernel_svm_trained.sav")
+INCEPTION_MODEL_PATH = os.path.join(MODELS_DIR, "inception_model_data", "inception_feats_graph_def.pb")
+LGBM_MODEL_PATH = os.path.join(MODELS_DIR, "lgbm_model_data", "gbm_trained.sav")
 
 TRIAL_LENGTH = 200
 

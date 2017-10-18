@@ -11,13 +11,14 @@ from single_proc_utils import DriverBase, driver_utils
 from models import inception_model, opencv_svm_model, opencv_sift_feats_model
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+MODELS_DIR = os.path.join(CURR_DIR, "models")
 
 INCEPTION_MODEL_NAME = "inception"
 OPENCV_SVM_MODEL_NAME = "opencv_svm"
 OPENCV_SIFT_FEATS_MODEL_NAME = "opencv_sift_feats"
 
-INCEPTION_MODEL_PATH = os.path.join(CURR_DIR, "inception_model_data", "inception_v3.ckpt")
-OPENCV_SVM_MODEL_PATH = os.path.join(CURR_DIR, "opencv_svm_model_data", "opencv_svm_trained.sav")
+INCEPTION_MODEL_PATH = os.path.join(MODELS_DIR, "inception_model_data", "inception_v3.ckpt")
+OPENCV_SVM_MODEL_PATH = os.path.join(MODELS_DIR, "opencv_svm_model_data", "opencv_svm_trained.sav")
 
 TRIAL_LENGTH = 200
 

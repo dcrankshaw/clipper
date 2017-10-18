@@ -12,13 +12,14 @@ from models import theano_sentiment_model as lstm_model
 from models import nmt_model
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+MODELS_DIR = os.path.join(CURR_DIR, "models")
 
 LSTM_1_MODEL_NAME = "lstm_1"
 LSTM_2_MOEL_NAME = "lstm_2"
 NMT_MODEL_NAME = "nmt"
 
-LSTM_MODEL_PATH = os.path.join(CURR_DIR, "lstm_model_data")
-NMT_MODEL_PATH = os.path.join(CURR_DIR, "nmt_model_data")
+LSTM_MODEL_PATH = os.path.join(MODELS_DIR, "lstm_model_data")
+NMT_MODEL_PATH = os.path.join(MODELS_DIR, "nmt_model_data")
 
 TRIAL_LENGTH = 200
 
