@@ -12,8 +12,7 @@
 
 namespace clipper {
 
-// Tuple of data content and byte size
-typedef std::pair<std::shared_ptr<void>, size_t> ByteBuffer;
+typedef std::pair<std::shared_ptr<uint8_t>, size_t> ByteBuffer;
 
 using QueryId = long;
 using FeedbackAck = bool;
@@ -80,7 +79,7 @@ class Input {
    *
    * The serialization methods are used for RPC.
    */
-  virtual void serialize(std::vector<std::shared_ptr<void>>& buf) const = 0;
+  virtual size_t serialize(uint8_t *buf) const = 0;
 
   virtual size_t hash() const = 0;
 
@@ -110,7 +109,7 @@ class ByteVector : public Input {
 
   DataType type() const override;
   void set_data(const void* buf, size_t size) override;
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const override;
+  size_t serialize(uint8_t *buf) const override;
   size_t hash() const override;
   size_t size() const override;
   size_t byte_size() const override;
@@ -137,7 +136,7 @@ class IntVector : public Input {
 
   DataType type() const override;
   void set_data(const void* buf, size_t size) override;
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const override;
+  size_t serialize(uint8_t *buf) const override;
   size_t hash() const override;
   size_t size() const override;
   size_t byte_size() const override;
@@ -165,7 +164,7 @@ class FloatVector : public Input {
 
   DataType type() const override;
   void set_data(const void* buf, size_t size) override;
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const override;
+  size_t serialize(uint8_t *buf) const override;
   size_t hash() const override;
   size_t size() const override;
   size_t byte_size() const override;
@@ -193,7 +192,7 @@ class DoubleVector : public Input {
 
   DataType type() const override;
   void set_data(const void* buf, size_t size) override;
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const override;
+  size_t serialize(uint8_t *buf) const override;
   size_t hash() const override;
   size_t size() const override;
   size_t byte_size() const override;
@@ -221,7 +220,7 @@ class SerializableString : public Input {
 
   DataType type() const override;
   void set_data(const void* buf, size_t size) override;
-  void serialize(std::vector<std::shared_ptr<void>>& buf) const override;
+  size_t serialize(uint8_t *buf) const override;
   size_t hash() const override;
   size_t size() const override;
   size_t byte_size() const override;

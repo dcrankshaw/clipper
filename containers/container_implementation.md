@@ -176,10 +176,33 @@ RPC requests sent from Clipper to model containers are divided into two categori
  * The input header begins with a 32-bit integer specifying the type of inputs contained in the request. This integer can assume values 0-4, as defined in point 2 of **Initializing a Connection**.
  
  * The next 32-bit integer in the input header is the number of inputs included in the serialized content.
- 
- * The remaining values in the input header are the sizes, in bytes, of each serialized input. These sizes are ordered the same way as the serialized inputs (i.e. the `n + 2`th input header element is the size, in bytes, of the `n`th serialized input)
+
+ * The remaining values in the input header correspond to the offsets at which the deserialized output should be split.
+   * For example, if the request contains three double vectors of size 500, the offsets will be `[500, 1000]`, indicating that the deserialized vector of 1500 doubles should be split into three vectors containing doubles 0-499, 500-999, and 1000-1499 respectively.
    
-4. The remaining ZeroMQ messages contain serialized input content. There is one message per input.
+    * In the case of strings, the offset list is not relevant and should not be used.
+    
+4. The fourth ZeroMQ message contains the size of the input content, in bytes, as a 32-bit integer. This is the size of the content of the fifth ZeroMQ message.
+   
+5. The final ZeroMQ message contains the concatenation of all inputs, represented as a string of bytes. This string of bytes should be converted to an array of the type specified by the input header.
+ * In the case of primitive inputs (types 0-3), deserialized inputs can then be obtained by splitting the typed array at the offsets specified in the input header.
+   * Python example:
+   
+  ```py  
+     raw_concatenated_content = socket.recv()
+     typed_inputs = np.frombuffer(raw_concatenated_content, dtype=<PRIMITIVE_INPUT_TYPE>)
+     inputs = np.split(typed_inputs, <OFFSETS_LIST>)
+  ```
+ 
+ * In the case of string inputs (type 4), all strings are sent with trailing null terminators. Therefore, deserialized inputs can be obtaining by splitting the typed array along the null terminator character, `\0`.
+   * Python example:
+   
+  ```py
+     raw_concatenated_content = socket.recv()
+     # Split content based on trailing null terminators
+     # Ignore the extraneous final null terminator by using a -1 slice
+     inputs = np.array(raw_concatenated_content.split('\0')[:-1], dtype=np.string_)
+  ```
      
 ### Serializing Prediction Responses
 1. A response is a single ZeroMQ message that is parsed into subfields
