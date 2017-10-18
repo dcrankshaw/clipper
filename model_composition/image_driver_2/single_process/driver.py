@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import DriverBase, driver_utils
+from single_proc_utils import driver_utils
 from models import inception_model, opencv_svm_model, opencv_sift_feats_model
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))

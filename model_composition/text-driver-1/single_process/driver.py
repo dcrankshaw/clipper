@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import DriverBase, driver_utils
+from single_proc_utils import driver_utils
 from models import theano_sentiment_model as lstm_model
 from models import nmt_model
 
