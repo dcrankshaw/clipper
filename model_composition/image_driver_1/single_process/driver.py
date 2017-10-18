@@ -54,15 +54,6 @@ def get_heavy_node_configs(batch_size, allocated_cpus, vgg_gpus=[], inception_gp
 
     return [vgg_config, inception_config, kernel_svm_config, lgbm_config]
 
-def load_models(vgg_gpu, inception_gpu):
-    models_dict = {
-        VGG_FEATS_MODEL_NAME : create_vgg_model(VGG_MODEL_PATH, gpu_num=vgg_gpu),
-        KERNEL_SVM_MODEL_NAME : create_svm_model(KERNEL_SVM_MODEL_PATH),
-        INCEPTION_FEATS_MODEL_NAME : create_inception_model(INCEPTION_MODEL_PATH, gpu_num=inception_gpu),
-        LGBM_MODEL_NAME : create_lgbm_model(LGBM_MODEL_PATH)
-    }
-    return models_dict
-
 def create_vgg_model(model_path, gpu_num):
     return vgg_feats_model.VggFeaturizationModel(model_path, gpu_num=gpu_num)
 
@@ -74,6 +65,15 @@ def create_inception_model(model_path, gpu_num):
 
 def create_lgbm_model(model_path):
     return lgbm_model.ImagesGBM(model_path)
+
+def load_models(vgg_gpu, inception_gpu):
+    models_dict = {
+        VGG_FEATS_MODEL_NAME : create_vgg_model(VGG_MODEL_PATH, gpu_num=vgg_gpu),
+        KERNEL_SVM_MODEL_NAME : create_kernel_svm_model(KERNEL_SVM_MODEL_PATH),
+        INCEPTION_FEATS_MODEL_NAME : create_inception_model(INCEPTION_MODEL_PATH, gpu_num=inception_gpu),
+        LGBM_MODEL_NAME : create_lgbm_model(LGBM_MODEL_PATH)
+    }
+    return models_dict
 
 ########## Benchmarking ##########
 
