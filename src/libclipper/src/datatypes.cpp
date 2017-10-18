@@ -443,7 +443,7 @@ std::vector<ByteBuffer> rpc::PredictionRequest::serialize() {
   input_metadata_raw[1] = static_cast<uint32_t>(inputs_.size());
 
   std::vector<std::shared_ptr<void>> input_bufs;
-  for (size_t i = 0; i < inputs_.size() - 1; i++) {
+  for (size_t i = 0; i < inputs_.size(); i++) {
     inputs_[i]->serialize(input_bufs);
     input_metadata_raw[i + 2] = static_cast<uint32_t>(inputs_[i]->byte_size());
   }
