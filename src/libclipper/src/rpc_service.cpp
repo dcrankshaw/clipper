@@ -213,26 +213,26 @@ void RPCService::send_messages(socket_t &socket,
         throw std::runtime_error("Trying to send message to container without enough parts");
       }
 
-      // send the sndmore flag unless we are on the last message part
-      if (cur_msg_num < last_msg_num) {
-        socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
-      } else {
-        socket.send(m.first.get(), m.second);
-      }
-
-
-      // if (cur_msg_num < 3) {
+      // // send the sndmore flag unless we are on the last message part
+      // if (cur_msg_num < last_msg_num) {
       //   socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
       // } else {
-      //   message_t cur_buffer(m.first.get(), m.second, noop_free);
-      //   // send the sndmore flag unless we are on the last message part
-      //   if (cur_msg_num < last_msg_num) {
-      //     socket.send(cur_buffer, ZMQ_SNDMORE);
-      //   } else {
-      //     socket.send(cur_buffer);
-      //   }
+      //   socket.send(m.first.get(), m.second);
       // }
-      cur_msg_num++;
+
+
+      if (cur_msg_num < 3) {
+        socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
+      } else {
+        message_t cur_buffer(m.first.get(), m.second, noop_free);
+        // send the sndmore flag unless we are on the last message part
+        if (cur_msg_num < last_msg_num) {
+          socket.send(cur_buffer, ZMQ_SNDMORE);
+        } else {
+          socket.send(cur_buffer);
+        }
+      }
+      cur_msg_num += 1;
     }
   }
 }

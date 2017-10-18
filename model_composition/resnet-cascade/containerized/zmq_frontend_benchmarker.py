@@ -37,6 +37,24 @@ CLIPPER_RECV_PORT = 4455
 DEFAULT_OUTPUT = "TIMEOUT"
 
 
+def setup_clipper_no_docker(configs):
+    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+    cl.connect()
+    for config in configs:
+        cl.register_application(name=config.name,
+                                default_output=DEFAULT_OUTPUT,
+                                slo_micros=config.slo,
+                                input_type=config.input_type)
+
+        cl.register_model(name=config.name,
+                          version=1,
+                          input_type=config.input_type,
+                          batch_size=config.batch_size)
+
+        cl.link_model_to_app(app_name=config.name, model_name=config.name)
+    time.sleep(10)
+
+
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     # cl.connect()
@@ -52,7 +70,6 @@ def setup_clipper(configs):
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
-    return config
 
 
 def setup_noop(batch_size,
@@ -340,6 +357,7 @@ if __name__ == "__main__":
     ]
 
     setup_clipper(configs)
+    # setup_clipper_no_docker(configs)
     procs = []
     for i in range(args.num_clients):
         benchmarker = ModelBenchmarker(queue, args.delay, i)

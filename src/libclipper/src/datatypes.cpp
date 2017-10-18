@@ -161,14 +161,14 @@ const std::shared_ptr<int> &IntVector::get_data() const { return data_; }
 FloatVector::FloatVector(std::shared_ptr<float> data, size_t size)
     : data_(data), size_(size) {}
 
-FloatVector::FloatVector(const float *data, size_t size) : FloatVector(size) {
-  set_data(data, size);
-}
-
-FloatVector::FloatVector(size_t size)
-    : data_(std::shared_ptr<float>(static_cast<float*>(malloc(size * sizeof(float))), free)), size_(size) {
-
-}
+// FloatVector::FloatVector(const float *data, size_t size) : FloatVector(size) {
+//   set_data(data, size);
+// }
+//
+// FloatVector::FloatVector(size_t size)
+//     : data_(std::shared_ptr<float>(static_cast<float*>(malloc(size * sizeof(float))), free)), size_(size) {
+//
+// }
 
 void FloatVector::set_data(const void *buf, size_t size) {
   memcpy(data_.get(), buf, size * sizeof(float));

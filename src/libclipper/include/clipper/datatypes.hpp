@@ -151,9 +151,9 @@ class IntVector : public Input {
 
 class FloatVector : public Input {
  public:
-  explicit FloatVector(std::shared_ptr<float> data, size_t size);
-  explicit FloatVector(const float* data, size_t size);
-  explicit FloatVector(size_t size);
+  FloatVector(std::shared_ptr<float> data, size_t size);
+  // explicit FloatVector(const float* data, size_t size);
+  // explicit FloatVector(size_t size);
 
   // Disallow copy
   FloatVector(FloatVector &other) = delete;

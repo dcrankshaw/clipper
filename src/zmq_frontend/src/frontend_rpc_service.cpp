@@ -201,7 +201,9 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
       // std::shared_ptr<float> data(
       //     static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
       std::shared_ptr<float> data(
-          (float *)alloc_data(input_size_typed * sizeof(float)), [](float *ptr){});
+          reinterpret_cast<float *>(alloc_data(input_size_typed * sizeof(float))), [](float *ptr){});
+      // std::shared_ptr<float> data(
+      //     (float *)alloc_data(input_size_typed * sizeof(float)), [](float *ptr){});
       socket.recv(data.get(), input_size_typed * sizeof(float), 0);
       std::chrono::time_point<std::chrono::system_clock> recv_end_time =
         std::chrono::system_clock::now();
