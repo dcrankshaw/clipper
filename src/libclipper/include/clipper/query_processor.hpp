@@ -12,7 +12,7 @@
 #include "rpc_service.hpp"
 #include "selection_policies.hpp"
 #include "task_executor.hpp"
-#include "timers.hpp"
+// #include "timers.hpp"
 
 namespace clipper {
 
@@ -41,7 +41,7 @@ class QueryProcessor {
   std::shared_ptr<StateDB> state_db_;
   std::shared_ptr<SelectionState> selection_state_;
   TaskExecutor task_executor_;
-  TimerSystem<HighPrecisionClock> timer_system_{HighPrecisionClock()};
+  // TimerSystem<HighPrecisionClock> timer_system_{HighPrecisionClock()};
   // This is a heteregenous container of different instances of selection
   // policy. The key is the name of the specific selection policy, the value is
   // an instance of that policy. All SelectionPolicy implementations (derived

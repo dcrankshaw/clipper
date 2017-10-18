@@ -4,7 +4,7 @@
 #include <cstdlib>
 
 
-#include <folly/ProducerConsumerQueue.h>
+// #include <folly/ProducerConsumerQueue.h>
 #include <boost/functional/hash.hpp>
 #include <zmq.hpp>
 
@@ -23,10 +23,10 @@ namespace zmq_frontend {
 
 FrontendRPCService::FrontendRPCService()
     : response_queue_(
-          std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
-              RESPONSE_QUEUE_SIZE)),
-          // std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
+          // std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
           //     RESPONSE_QUEUE_SIZE)),
+          std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
+              RESPONSE_QUEUE_SIZE)),
       prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend", 15)),
       active_(false),
       request_enqueue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
@@ -89,8 +89,8 @@ void FrontendRPCService::add_application(
 
 void FrontendRPCService::send_response(FrontendRPCResponse response) {
   response_enqueue_meter_->mark(1);
-  std::lock_guard<std::mutex> lock(response_queue_insertion_mutex_);
-  response_queue_->write(response);
+  // std::lock_guard<std::mutex> lock(response_queue_insertion_mutex_);
+  response_queue_->enqueue(response);
 }
 
 void FrontendRPCService::manage_send_service(const std::string ip, int port) {
@@ -264,42 +264,77 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
 }
 
 void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_responses) {
-  while (!response_queue_->isEmpty() && num_responses > 0) {
-    FrontendRPCResponse *response = response_queue_->frontPtr();
-    response_dequeue_meter_->mark(1);
-    Output &output = std::get<0>(*response);
-    int request_id = std::get<1>(*response);
-    int client_id = std::get<2>(*response);
 
-    std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
-    auto routing_id_search = client_routing_map_.find(client_id);
-    if (routing_id_search == client_routing_map_.end()) {
-      std::stringstream ss;
-      ss << "Received a response associated with a client id " << client_id
-         << " that has no associated routing identity";
-      throw std::runtime_error(ss.str());
+    FrontendRPCResponse response;
+    size_t sent_responses = 0;
+    while (sent_responses < num_responses && response_queue_->try_dequeue(response)) {
+
+      response_dequeue_meter_->mark(1);
+      Output &output = std::get<0>(response);
+      int request_id = std::get<1>(response);
+      int client_id = std::get<2>(response);
+
+      std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
+      auto routing_id_search = client_routing_map_.find(client_id);
+      if (routing_id_search == client_routing_map_.end()) {
+        std::stringstream ss;
+        ss << "Received a response associated with a client id " << client_id
+           << " that has no associated routing identity";
+        throw std::runtime_error(ss.str());
+      }
+
+      const std::vector<uint8_t>& routing_id = routing_id_search->second;
+
+      int output_type = static_cast<int>(output.y_hat_->type());
+
+      // TODO(czumar): If this works, include other relevant output data (default
+      // bool, default expl, etc)
+      socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
+      socket.send("", 0, ZMQ_SNDMORE);
+      socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
+      socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
+      socket.send(output.y_hat_->get_data(),
+                  output.y_hat_->byte_size());
+
+      sent_responses += 1;
     }
 
-    const std::vector<uint8_t>& routing_id = routing_id_search->second;
-
-    int output_type = static_cast<int>(output.y_hat_->type());
-
-    // TODO(czumar): If this works, include other relevant output data (default
-    // bool, default expl, etc)
-    socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
-    socket.send("", 0, ZMQ_SNDMORE);
-    socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
-    socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
-    socket.send(output.y_hat_->get_data(),
-                output.y_hat_->byte_size());
-
-    // Remove the response from the outbound queue now that we're done
-    // processing it
-    response_queue_->popFront();
-    // Remove the oustanding request from the map
-
-    num_responses--;
-  }
+  // while (!response_queue_->isEmpty() && num_responses > 0) {
+  //   FrontendRPCResponse *response = response_queue_->frontPtr();
+  //   response_dequeue_meter_->mark(1);
+  //   Output &output = std::get<0>(*response);
+  //   int request_id = std::get<1>(*response);
+  //   int client_id = std::get<2>(*response);
+  //
+  //   std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
+  //   auto routing_id_search = client_routing_map_.find(client_id);
+  //   if (routing_id_search == client_routing_map_.end()) {
+  //     std::stringstream ss;
+  //     ss << "Received a response associated with a client id " << client_id
+  //        << " that has no associated routing identity";
+  //     throw std::runtime_error(ss.str());
+  //   }
+  //
+  //   const std::vector<uint8_t>& routing_id = routing_id_search->second;
+  //
+  //   int output_type = static_cast<int>(output.y_hat_->type());
+  //
+  //   // TODO(czumar): If this works, include other relevant output data (default
+  //   // bool, default expl, etc)
+  //   socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
+  //   socket.send("", 0, ZMQ_SNDMORE);
+  //   socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
+  //   socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
+  //   socket.send(output.y_hat_->get_data(),
+  //               output.y_hat_->byte_size());
+  //
+  //   // Remove the response from the outbound queue now that we're done
+  //   // processing it
+  //   response_queue_->popFront();
+  //   // Remove the oustanding request from the map
+  //
+  //   num_responses--;
+  // }
 
 }
 
@@ -311,6 +346,7 @@ uint8_t* FrontendRPCService::alloc_data(size_t size_bytes) {
   std::lock_guard<std::mutex> l(data_mutex_);
   // Check if we've reached end of buffer and need to wrap back
   if ((next_data_offset_ + size_bytes) > TOTAL_DATA_BYTES) {
+    std::cout << "Wrapping around to front of buffer" << std::endl;
     next_data_offset_ = 0;
   }
 
