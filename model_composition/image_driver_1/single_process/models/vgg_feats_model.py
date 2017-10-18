@@ -5,16 +5,14 @@ import numpy as np
 import tensorflow as tf
 
 from datetime import datetime
-
-from drivers_pkg.models import model
-from drivers_pkg import benchmarking
+from single_proc_utils import ModelBase
 
 GPU_MEM_FRAC = .95
 
-class VggFeaturizationModel(model.ModelBase):
+class VggFeaturizationModel(ModelBase):
 
 	def __init__(self, vgg_model_path, gpu_num):
-		model.ModelBase.__init__(self)
+		ModelBase.__init__(self)
 
 		self.gpu_num = gpu_num
 		self.imgs_tensor = self.load_vgg_model(vgg_model_path)

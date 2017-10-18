@@ -3,7 +3,7 @@ import os
 
 setup(
 	name='single_proc_utils',
-	version='1.03',
+	version='1',
 	description='utilities for benchmarking models used in Clipper model composition research',
 	maintainer='Corey Zumar',
 	maintainer_email='czumar@berkeley.edu',

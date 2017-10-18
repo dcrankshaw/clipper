@@ -1,13 +1,12 @@
 import lightgbm as lgb
 import numpy as np
 
-from drivers_pkg import benchmarking
-from drivers_pkg.models import model
+from single_proc_utils import ModelBase
 
-class ImagesGBM(model.ModelBase):
+class ImagesGBM(ModelBase):
 
 	def __init__(self, gbm_model_path):
-		model.ModelBase.__init__(self)
+		ModelBase.__init__(self)
 		self.gbm_model = lgb.Booster(model_file=gbm_model_path)
 
 	def predict(self, inputs):
