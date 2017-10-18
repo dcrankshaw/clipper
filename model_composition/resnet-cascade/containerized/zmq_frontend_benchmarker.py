@@ -340,6 +340,8 @@ if __name__ == "__main__":
     ]
 
     setup_clipper(configs)
+    logger.info("ATTACH GDB")
+    time.sleep(5)
     procs = []
     for i in range(args.num_clients):
         benchmarker = ModelBenchmarker(queue, args.delay, i)
