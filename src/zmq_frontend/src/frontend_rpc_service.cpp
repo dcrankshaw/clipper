@@ -1,6 +1,8 @@
 #include "frontend_rpc_service.hpp"
 
 #include <mutex>
+#include <cstdlib>
+
 
 #include <folly/ProducerConsumerQueue.h>
 #include <boost/functional/hash.hpp>
@@ -33,14 +35,33 @@ FrontendRPCService::FrontendRPCService()
           "frontend_rpc:response_enqueue")),
       response_dequeue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
           "frontend_rpc:response_dequeue")),
-      malloc_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
-          "frontend_rpc:malloc_latency",
-          "microseconds", 4096)),
+      // malloc_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
+      //     "frontend_rpc:malloc_latency",
+      //     "microseconds", 4096)),
       recv_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
           "frontend_rpc:recv_latency",
-          "microseconds", 4096)) {}
+          "microseconds", 4096)),
+      next_data_offset_(0) {
 
-FrontendRPCService::~FrontendRPCService() { stop(); }
+        std::chrono::time_point<std::chrono::system_clock> start_time =
+          std::chrono::system_clock::now();
+        recv_data_buffer_ = (uint8_t *)std::calloc(1, TOTAL_DATA_BYTES);
+        std::chrono::time_point<std::chrono::system_clock> end_time =
+          std::chrono::system_clock::now();
+        auto calloc_latency = end_time - start_time;
+        long calloc_latency_micros =
+          std::chrono::duration_cast<std::chrono::microseconds>(calloc_latency)
+          .count();
+
+        std::cout << "Memory allocation time (us): " << std::to_string(calloc_latency_micros) << std::endl;
+
+
+}
+
+FrontendRPCService::~FrontendRPCService() {
+  stop();
+  std::free(recv_data_buffer_);
+}
 
 void FrontendRPCService::start(const std::string address, int send_port, int recv_port) {
   active_ = true;
@@ -177,23 +198,23 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
     case DataType::Floats: {
       std::chrono::time_point<std::chrono::system_clock> start_time =
         std::chrono::system_clock::now();
+      // std::shared_ptr<float> data(
+      //     static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
       std::shared_ptr<float> data(
-          static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
-      std::chrono::time_point<std::chrono::system_clock> malloc_end_time =
-        std::chrono::system_clock::now();
+          (float *)alloc_data(input_size_typed * sizeof(float)), [](float *ptr){});
       socket.recv(data.get(), input_size_typed * sizeof(float), 0);
       std::chrono::time_point<std::chrono::system_clock> recv_end_time =
         std::chrono::system_clock::now();
       input = std::make_shared<FloatVector>(data, input_size_typed);
 
       // Update latency metrics
-      auto malloc_latency = malloc_end_time - start_time;
-      long malloc_latency_micros =
-          std::chrono::duration_cast<std::chrono::microseconds>(malloc_latency)
-              .count();
-      malloc_latency_->insert(malloc_latency_micros);
+      // auto malloc_latency = malloc_end_time - start_time;
+      // long malloc_latency_micros =
+      //     std::chrono::duration_cast<std::chrono::microseconds>(malloc_latency)
+      //         .count();
+      // malloc_latency_->insert(malloc_latency_micros);
 
-      auto recv_latency = recv_end_time - malloc_end_time;
+      auto recv_latency = recv_end_time - start_time;
       long recv_latency_micros =
           std::chrono::duration_cast<std::chrono::microseconds>(recv_latency)
               .count();
@@ -279,6 +300,23 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
 
     num_responses--;
   }
+
+}
+
+// WARNING: THIS IS A QUICK AND DIRTY HACK. IT'S TOTALLY NOT SAFE TO ACTUALLY USE.
+uint8_t* FrontendRPCService::alloc_data(size_t size_bytes) {
+  if (size_bytes > TOTAL_DATA_BYTES) {
+    throw std::runtime_error("Requested a memory allocation that was too big");
+  }
+  std::lock_guard<std::mutex> l(data_mutex_);
+  // Check if we've reached end of buffer and need to wrap back
+  if ((next_data_offset_ + size_bytes) > TOTAL_DATA_BYTES) {
+    next_data_offset_ = 0;
+  }
+
+  uint8_t *alloc_ptr = recv_data_buffer_ + next_data_offset_;
+  next_data_offset_ += size_bytes;
+  return alloc_ptr;
 }
 
 }  // namespace zmq_frontend

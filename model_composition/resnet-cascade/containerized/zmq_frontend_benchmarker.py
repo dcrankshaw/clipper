@@ -307,7 +307,7 @@ if __name__ == "__main__":
         return [total_gpus.pop() for _ in range(num_gpus)]
 
     noop_reps = args.num_replicas
-    noop_batch = 100
+    noop_batch = 30
 
     # alexnet_reps = 4
     # res50_reps = 1
