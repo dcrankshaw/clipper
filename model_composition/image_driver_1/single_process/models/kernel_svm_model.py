@@ -1,7 +1,7 @@
 import pickle
 
 from single_proc_utils import ModelBase
-from deps.kpca_svm_utils import KernelSvmModel
+from deps.kernel_svm_utils import KernelSvmModel
 
 class KernelSVM(ModelBase):
 
