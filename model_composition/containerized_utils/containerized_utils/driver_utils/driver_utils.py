@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import datetime
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +15,12 @@ class HeavyNodeConfig(object):
                  model_image,
                  allocated_cpus,
                  cpus_per_replica,
-                 slo=500000,
-                 num_replicas=1,
-                 gpus=[],
-                 batch_size=1,
-                 use_nvidia_docker=False):
+                 num_replicas,
+                 gpus,
+                 batch_size,
+                 use_nvidia_docker,
+                 slo=5000000,
+                 input_size=-1):
         self.name = name
         self.input_type = input_type
         self.model_image = model_image
@@ -29,6 +31,13 @@ class HeavyNodeConfig(object):
         self.gpus = gpus
         self.batch_size = batch_size
         self.use_nvidia_docker = use_nvidia_docker
+        self.input_size = input_size
+        self.instance_type = requests.get(
+            "http://169.254.169.254/latest/meta-data/instance-type").text
+        if len(gpus) == 0:
+            self.gpus_per_replica = 0
+        else:
+            self.gpus_per_replica = 1
 
     def to_json(self):
         return json.dumps(self.__dict__)
@@ -68,6 +77,11 @@ def save_results(configs, clipper_conn, client_metrics, results_dir):
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
         logger.info("Created experiments directory: %s" % results_dir)
+
+    if "all_lats" not in client_metrics[0]:
+        raise Exception("No latencies list found under key \"all_lats\"."
+                        " Please update your driver to include all latencies so we can"
+                        " plot the latency CDF")
 
     results_obj = {
         "node_configs": [c.__dict__ for c in configs],
