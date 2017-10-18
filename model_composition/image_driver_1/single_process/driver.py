@@ -1,22 +1,36 @@
+import sys
+import os
 import argparse
 import numpy as np
 import json
 
-from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from single_proc_utils import DriverBase, driver_utils
 from models import lgbm_model, vgg_feats_model, vgg_svm_model, inception_feats_model
 
+CURR_DIR = os.path.dirname(os.path.realpath(__file__))
+
 VGG_FEATS_MODEL_NAME = "vgg_feats"
 INCEPTION_FEATS_MODEL_NAME = "inception_feats"
 SVM_MODEL_NAME = "svm"
 LGBM_MODEL_NAME = "lgbm"
 
-
 GPU_CONFIG_KEY_VGG_FEATS = "vgg_feats"
 GPU_CONFIG_KEY_INCEPTION_FEATS = "inception_feats"
+
+KEY_VGG_MODEL = "vgg_model"
+KEY_SVM_MODEL = "svm_model"
+KEY_INCEPTION_MODEL = "inception_model"
+KEY_LGBM_MODEL = "lgbm_model"
+
+VGG_MODEL_PATH = os.path.join(CURR_DIR, "vgg_model_data")
+SVM_MODEL_PATH = os.path.join(CURR_DIR, "svm_model_data")
+INCEPTION_MODEL_PATH = os.path.join(CURR_DIR, "inception_model_data")
+LGBM_MODEL_PATH = os.path.join(CURR_DIR, "lgbm_model_data")
+
+TRIAL_LENGTH = 200
 
 ########## Setup ##########
 
@@ -45,92 +59,139 @@ def get_heavy_node_configs(batch_size, allocated_cpus, vgg_gpus=[], inception_gp
 											   gpus=[],
 											   batch_size=batch_size)
 
+def load_models(vgg_gpu, inception_gpu):
+	models_dict = {
+		KEY_VGG_MODEL : create_vgg_model(VGG_MODEL_PATH, gpu_num=vgg_gpu),
+		KEY_SVM_MODEL : create_svm_model(SVM_MODEL_PATH),
+		KEY_INCEPTION_MODEL : create_inception_model(INCEPTION_MODEL_PATH, gpu_num=inception_gpu),
+		KEY_LGBM_MODEL : create_lgbm_model(LGBM_MODEL_PATH)
+	}
+	return models_dict
+
+def create_vgg_model(model_path, gpu_num):
+	return vgg_feats_model.VggFeaturizationModel(model_path, gpu_num=gpu_num)
+
+def create_svm_model(model_path):
+	return svm_model.VggSVM(model_path)
+
+def create_inception_model(model_path, gpu_num):
+	return inception_feats_model.InceptionFeaturizationModel(model_path, gpu_num=gpu_num)
+
+def create_lgbm_model(model_path):
+	return lgbm_model.ImagesGBM(model_path)
+
 ########## Benchmarking ##########
 
-class DogCatBinaryDriver(DriverBase):
+class Predictor(object):
 
-	def __init__(self, vgg_feats_model_path, vgg_svm_model_path, inception_feats_model_path, gbm_model_path, vgg_gpu_num, inception_gpu_num):
-		DriverBase.__init__(self)
+    def __init__(self, models_dict):
+    	self.thread_pool = ThreadPoolExecutor(max_workers=2)
 
-		self.vgg_feats_model = vgg_feats_model.VggFeaturizationModel(vgg_feats_model_path, gpu_num=vgg_gpu_num)
-		self.vgg_svm_model = vgg_svm_model.VggSVM(vgg_svm_model_path)
-		self.inception_feats_model = inception_feats_model.InceptionFeaturizationModel(inception_feats_model_path, gpu_num=inception_gpu_num)
-		self.gbm_model = lgbm_model.ImagesGBM(gbm_model_path)
+    	# Stats
+        self.init_stats()
+        self.stats = {
+            "thrus": [],
+            "p99_lats": [],
+            "mean_lats": []
+        }
+        self.total_num_complete = 0
 
-		self.thread_pool = ThreadPoolExecutor(max_workers=2)
+        # Models
+        self.vgg_model = vgg_model[PREDICTOR_KEY_VGG_MODEL]
+        self.svm_model = svm_model[PREDICTOR_KEY_SVM_MODEL]
+        self.inception_model = inception_model[PREDICTOR_KEY_INCEPTION_MODEL]
+        self.lgbm_model = lgbm_model[PREDICTOR_KEY_LGBM_MODEL]
 
-	def _run(self, inputs, log=False):
-		"""
+
+    def init_stats(self):
+        self.latencies = []
+        self.trial_num_complete = 0
+        self.cur_req_id = 0
+        self.start_time = datetime.now()
+
+    def print_stats(self):
+        lats = np.array(self.latencies)
+        p99 = np.percentile(lats, 99)
+        mean = np.mean(lats)
+        end_time = datetime.now()
+        thru = float(self.trial_num_complete) / (end_time - self.start_time).total_seconds()
+        self.stats["thrus"].append(thru)
+        self.stats["p99_lats"].append(p99)
+        self.stats["mean_lats"].append(mean)
+        logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                       mean=mean,
+                                                                       thru=thru))
+
+    def predict(self, vgg_inputs, inception_inputs):
+    	"""
 		Parameters
-		----------
-		inputs : list
-		   	A list of numpy float32 arrays of dimension >= (299, 299, 3)
-		"""
-		t1 = datetime.now()
+		------------
+		vgg_inputs : [np.ndarray]
+			A list of image inputs, each represented as a numpy array
+			of shape 224 x 224 x 3
+		inception_inputs : [np.ndarray]
+			A list of image inputs, each represented as a numpy array
+			of shape 299 x 299 x 3
+    	"""
+    	assert len(vgg_inputs) == len(inception_inputs)
 
-		input_imgs = [Image.fromarray(raw_input_img.astype(np.uint8)) for raw_input_img in inputs]
-		vgg_inputs = self._get_vgg_inputs(input_imgs)
-		inception_inputs = input_imgs
+    	batch_size = len(vgg_inputs)
 
-		t2 = datetime.now()
+    	begin_time = datetime.now()
 
-		vgg_future = self.thread_pool.submit(lambda inputs : self._classify_vgg(self._featurize_vgg(inputs, log=log), log=log), vgg_inputs)
-		inception_gbm_future = self.thread_pool.submit(lambda inputs : self._classify_gbm(self._featurize_inception(inputs, log=log), log=log), inception_inputs)
+		vgg_svm_future = self.thread_pool.submit(lambda inputs : self.svm_model.predict(self.vgg_model.predict(inputs)), vgg_inputs)
+		inception_gbm_future = self.thread_pool.submit(lambda inputs : self.lgbm_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
 		vgg_classes = vgg_future.result()
 		inception_gbm_classes = inception_gbm_future.result()
 
-		for i in range(0, len(inception_gbm_classes)):
-			if inception_gbm_classes[i] <= .5:
-				inception_gbm_classes[i] = 0
-			else:
-				inception_gbm_classes[i] = 1
+        end_time = datetime.now()
 
-		t3 = datetime.now()
+        latency = (end_time - begin_time).total_seconds()
+        self.latencies.append(latency)
+        self.total_num_complete += batch_size
+        self.trial_num_complete += batch_size
+        if self.trial_num_complete % TRIAL_LENGTH == 0:
+            self.print_stats()
+            self.init_stats()
 
-		self._log("Input processing latency: {} ms, Prediction latency: {} ms".format((t2 - t1).total_seconds() * 1000, (t3 - t2).total_seconds() * 1000), allow=log)
+class DriverBenchmarker(object):
+    def __init__(self, models_dict):
+        self.predictor = Predictor(models_dict)
 
-		return [vgg_classes[i] if vgg_classes[i] == inception_gbm_classes[i] else -1 for i in range(0, len(vgg_classes))]
+    def set_configs(configs):
+    	self.configs = configs
 
-	def _get_vgg_inputs(self, input_imgs):
-		vgg_inputs = []
-		for input_img in input_imgs:
-			vgg_img = input_img.resize((224, 224)).convert('RGB')
-			vgg_input = np.array(vgg_img, dtype=np.float32)
-			vgg_inputs.append(vgg_input)
-		return vgg_inputs
+    def run(self, num_trials, batch_size):
+        logger.info("Generating random inputs")
+        vgg_inputs = [self._get_vgg_feats_input() for _ in range(1000)]
+        vgg_inputs = [i for _ in range(40) for i in vgg_inputs]
 
-	def _benchmark_model_step(self, fn, inputs):
-		begin = datetime.now()
-		outputs = fn(inputs)
-		end = datetime.now()
-		latency_seconds = (end - begin).total_seconds()
-		throughput = float(len(inputs)) / latency_seconds
-		return (latency_seconds, throughput, outputs)
+       	inception_inputs = [self._get_inception_input() for _ in range(1000)]
+       	inception_inputs = [i for _ in range(40) for i in inception_inputs]
 
-	def _featurize_vgg(self, inputs, log=False):
-		latency, throughput, outputs = self._benchmark_model_step(self.vgg_feats_model.predict, inputs)
-		return outputs
+       	assert len(inception_inputs) == len(vgg_inputs)
+		
+		logger.info("Starting predictions")
+		while True:
+			batch_idx = np.random.choice(len(vgg_inputs), batch_size)
+			vgg_batch = vgg_inputs[batch_idx]
+			inception_batch = vgg_inputs[batch_idx]
 
-	def _featurize_inception(self, inputs, log=False):
-		latency, throughput, outputs = self._benchmark_model_step(self.inception_feats_model.predict, inputs)
-		return outputs
+			self.predictor.predict(vgg_batch, inception_batch)
 
-	def _classify_vgg(self, inputs, log=False):
-		latency, throughput, outputs = self._benchmark_model_step(self.vgg_svm_model.predict, inputs)
-		return outputs		
+			if len(predictor.stats["thrus"]) > num_trials:
+				break
 
-	def _classify_gbm(self, inputs, log=False):
-		latency, throughput, outputs = self._benchmark_model_step(self.gbm_model.predict, inputs)
-		return outputs
+        driver_utils.save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
-class DriverBenchmarker:
-	def __init__(self, driver):
-		self.driver = driver
+    def _get_vgg_feats_input(self):
+        input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
+        return vgg_input.flatten()
 
-	def benchmark(self, batch_size=1, avg_after=5, log_intermediate=False, **kwargs):
-		inputs_gen_fn = lambda num_inputs : [np.random.rand(299, 299, 3) * 255 for i in range(0, num_inputs)]
-		benchmarking.benchmark_function(lambda inputs : self._run(inputs, log=log_intermediate), inputs_gen_fn, batch_size, avg_after)
+    def _get_inception_input(self):
+        inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+        return inception_input.flatten()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Single Process Image Driver 1')
@@ -139,6 +200,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--cpus', type=int, nargs='+', help="The set of cpu cores on which to run the single process driver")
     parser.add_argument('-v', '--vgg_gpu', type=int, default=0, help="The GPU on which to run the VGG featurization model")
     parser.add_argument('-i', '--inception_gpu', type=int, default=0, help="The GPU on which to run the inception featurization model")
+    parser.add_argument('-t', '--num_trials', type=int, default=15, help="The number of trials to run")
     
     args = parser.parse_args()
 
@@ -146,29 +208,15 @@ if __name__ == "__main__":
     	raise Exception("The set of allocated cpus must be specified via the '--cpus' flag!")
 
     default_batch_size_confs = [2]
-
-   	benchmarer = Driv
+    batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
+	
+    models_dict = load_models(args.vgg_gpu, args.inception_gpu)
+    benchmarker = DriverBenchmarker(models_dict)
 
     for batch_size in batch_size_confs:
     	configs = get_heavy_node_configs(batch_size=batch_size,
-    									 allocated_cpus=args.cpus
+    									 allocated_cpus=args.cpus,
     									 vgg_gpus=[args.vgg_gpu],
     									 inception_gpus=[args.inception_gpu])
-
-
-
-                benchmarker = ModelBenchmarker(model_config, queue)
-
-                processes = []
-                all_stats = []
-                for _ in range(args.num_clients):
-                    p = Process(target=benchmarker.run, args=(args.duration,))
-                    p.start()
-                    processes.append(p)
-                for p in processes:
-                    all_stats.append(queue.get())
-                    p.join()
-
-                cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-                cl.connect()
-                driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
+    	benchmarker.set_configs(configs)
+    	benchmarker.run(args.num_trials, batch_size)
