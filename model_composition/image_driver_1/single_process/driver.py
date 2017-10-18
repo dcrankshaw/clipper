@@ -58,7 +58,7 @@ def create_vgg_model(model_path, gpu_num):
     return vgg_feats_model.VggFeaturizationModel(model_path, gpu_num=gpu_num)
 
 def create_kernel_svm_model(model_path):
-    return svm_model.KernelSVM(model_path)
+    return kernel_svm_model.KernelSVM(model_path)
 
 def create_inception_model(model_path, gpu_num):
     return inception_feats_model.InceptionFeaturizationModel(model_path, gpu_num=gpu_num)
