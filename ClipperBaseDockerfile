@@ -1,12 +1,18 @@
-FROM frolvlad/alpine-gxx
+FROM ubuntu:16.04
+
+RUN apt-get update && apt-get install -y g++ automake autoconf autoconf-archive libtool libboost-all-dev \
+        libevent-dev libdouble-conversion-dev libgoogle-glog-dev libgflags-dev liblz4-dev \
+        liblzma-dev libsnappy-dev make zlib1g-dev binutils-dev libjemalloc-dev libssl-dev \
+        pkg-config libiberty-dev git cmake libev-dev libhiredis-dev libzmq5 libzmq5-dev
 
 
-RUN echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
-
-RUN apk add --update --no-cache curl git bash make boost-dev cmake hiredis-dev zeromq-dev \
-    libtool automake autoconf-archive@testing lz4-dev xz-dev snappy-dev zlib-dev \
-    glog-dev@testing scons openssl-dev libevent-dev ca-certificates perl \
-    libev-dev
+# FROM frolvlad/alpine-gxx
+# RUN echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+#
+# RUN apk add --update --no-cache curl git bash make boost-dev cmake hiredis-dev zeromq-dev \
+#     libtool automake autoconf-archive@testing lz4-dev xz-dev snappy-dev zlib-dev \
+#     glog-dev@testing scons openssl-dev libevent-dev ca-certificates perl \
+#     libev-dev
 
 
 # # Set up Folly
