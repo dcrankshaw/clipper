@@ -286,8 +286,7 @@ class Server(threading.Thread):
                             input_type, 
                             num_inputs, 
                             input_sizes
-                        ] = 
-                        [
+                        ] = [
                             parsed_input_header[0], 
                             parsed_input_header[1], 
                             parsed_input_header[2:]
