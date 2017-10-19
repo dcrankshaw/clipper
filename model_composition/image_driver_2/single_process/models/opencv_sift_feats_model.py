@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 
 from single_proc_utils import ModelBase
 
