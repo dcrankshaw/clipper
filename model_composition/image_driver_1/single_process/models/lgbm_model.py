@@ -17,5 +17,5 @@ class ImagesGBM(ModelBase):
 		   	A list of inception feature vectors encoded
 		   	as numpy arrays of type float32
 		"""
-		stacked_inputs = np.stack([input_item[0] for input_item in inputs])
+		stacked_inputs = np.stack([input_item[0][0] for input_item in inputs])
 		return self.gbm_model.predict(stacked_inputs)

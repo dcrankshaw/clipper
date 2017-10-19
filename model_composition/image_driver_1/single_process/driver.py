@@ -143,10 +143,10 @@ class Predictor(object):
         begin_time = datetime.now()
 
         vgg_svm_future = self.thread_pool.submit(
-            lambda inputs : self.kernel_svm_model.predict(self.vgg_model.predict(inputs).flatten()), vgg_inputs)
+            lambda inputs : self.kernel_svm_model.predict(self.vgg_model.predict(inputs)), vgg_inputs)
         
         inception_gbm_future = self.thread_pool.submit(
-            lambda inputs : self.lgbm_model.predict(self.inception_model.predict(inputs).flatten()), inception_inputs)
+            lambda inputs : self.lgbm_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
         vgg_classes = vgg_svm_future.result()
         inception_gbm_classes = inception_gbm_future.result()
