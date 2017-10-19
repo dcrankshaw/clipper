@@ -1,4 +1,13 @@
+import os
 import json
+import logging
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 class HeavyNodeConfig(object):
     def __init__(self,
