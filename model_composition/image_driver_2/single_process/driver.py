@@ -59,7 +59,7 @@ def get_heavy_node_configs(batch_size, allocated_cpus, inception_gpus=[]):
 
 def load_models(inception_gpu):
     models_dict = {
-        INCEPTION_MODEL_NAME : create_inception_model(INCEPTION_MODEL_PATH, gpu_num=inception_gpu)
+        INCEPTION_MODEL_NAME : create_inception_model(INCEPTION_MODEL_PATH, gpu_num=inception_gpu),
         OPENCV_SVM_MODEL_NAME : create_opencv_svm_model(OPENCV_SVM_MODEL_PATH),
         OPENCV_SIFT_FEATS_MODEL_NAME : create_opencv_sift_feats_model()
     }
