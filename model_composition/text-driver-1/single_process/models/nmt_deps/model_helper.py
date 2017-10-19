@@ -54,7 +54,7 @@ def get_initializer(init_op, seed=None, init_weight=None):
 
 def get_device_str(gpu_num):
   """Return a device string for GPU setup."""
-  if num_gpus == 0:
+  if gpu_num == -1:
     return "/cpu:0"
   device_str_output = "/gpu:%d" % gpu_num
   return device_str_output
