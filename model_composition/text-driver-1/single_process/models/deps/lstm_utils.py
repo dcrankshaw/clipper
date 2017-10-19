@@ -15,7 +15,7 @@ from theano import config
 import theano.tensor as tensor
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
-import imdb_utils as imdb
+from . import imdb_utils as imdb
 
 datasets = {'imdb': (imdb.load_data, imdb.prepare_data)}
 

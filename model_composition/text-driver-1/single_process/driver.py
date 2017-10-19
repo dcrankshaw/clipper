@@ -23,7 +23,7 @@ CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 MODELS_DIR = os.path.join(CURR_DIR, "models")
 
 LSTM_1_MODEL_NAME = "lstm_1"
-LSTM_2_MOEL_NAME = "lstm_2"
+LSTM_2_MODEL_NAME = "lstm_2"
 NMT_MODEL_NAME = "nmt"
 
 LSTM_MODEL_PATH = os.path.join(MODELS_DIR, "lstm_model_data")
@@ -251,7 +251,7 @@ if __name__ == "__main__":
 
     default_batch_size_confs = [2]
     default_input_length_confs = [100]
-    
+
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     input_length_confs = args.input_lengths if args.input_lengths else default_input_length_confs
     
