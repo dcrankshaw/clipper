@@ -260,6 +260,7 @@ class Predictor(object):
                 self.init_stats()
 
         expected_output = np.sum(input_item)
+
         def alex_cont(output):
             if expected_output != output:
                 logger.error("Got wrong output")

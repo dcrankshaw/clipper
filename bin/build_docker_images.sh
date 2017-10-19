@@ -21,13 +21,8 @@ time docker build -t clipper/clipper-base:$tag -f ClipperBaseDockerfile ./
 time docker build --build-arg CODE_VERSION=$tag -t clipper/zmq_frontend:$tag -f ZmqFrontendDockerfile ./
 # exit
 time docker build --build-arg CODE_VERSION=$tag -t clipper/management_frontend:$tag -f ManagementFrontendDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/query_frontend:$tag -f QueryFrontendDockerfile ./
 cd -
 
-# Build Spark JVM Container
-# cd $DIR/../containers/jvm
-# time docker build -t clipper/spark-scala-container:$tag -f SparkScalaContainerDockerfile ./
-# cd -
 
 # Build the Python model containers
 cd $DIR/..
