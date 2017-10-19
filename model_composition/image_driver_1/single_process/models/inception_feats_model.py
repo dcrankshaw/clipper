@@ -56,9 +56,7 @@ class InceptionFeaturizationModel(ModelBase):
             node.device = ""
 
         with tf.device("/gpu:{}".format(self.gpu_num)):
-            # Create placeholder for an arbitrary number
-            # of byte-encoded JPEG images
-            images_tensor = tf.placeholder("string")
+            images_tensor = tf.placeholder(tf.float32, shape=[None,299,299,3])
             tf.import_graph_def(graph_def, name='', input_map={ "ResizeBilinear:0" : images_tensor})
 
         return images_tensor
