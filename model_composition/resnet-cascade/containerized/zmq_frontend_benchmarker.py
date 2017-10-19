@@ -356,7 +356,7 @@ if __name__ == "__main__":
         #              allocated_gpus=get_gpus(res152_reps))
     ]
 
-    setup_clipper(configs)
+    # setup_clipper(configs)
     # setup_clipper_no_docker(configs)
     procs = []
     for i in range(args.num_clients):

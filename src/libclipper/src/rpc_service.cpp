@@ -168,6 +168,11 @@ void RPCService::shutdown_service(socket_t &socket) {
 
 void noop_free (void *data, void *hint) { }
 
+void real_free (void *data, void *hint) {
+  free(data);
+}
+
+
 void RPCService::send_messages(socket_t &socket,
                                boost::bimap<int, vector<uint8_t>> &connections,
                                int max_num_messages) {
@@ -222,9 +227,12 @@ void RPCService::send_messages(socket_t &socket,
 
 
       if (cur_msg_num < 3) {
-        socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
+        // First 3 parts of the message must be freed
+        message_t cur_buffer(m.first, m.second, real_free);
+        socket.send(cur_buffer, ZMQ_SNDMORE);
+        // socket.send(m.first.get(), m.second, ZMQ_SNDMORE);
       } else {
-        message_t cur_buffer(m.first.get(), m.second, noop_free);
+        message_t cur_buffer(m.first, m.second, noop_free);
         // send the sndmore flag unless we are on the last message part
         if (cur_msg_num < last_msg_num) {
           socket.send(cur_buffer, ZMQ_SNDMORE);

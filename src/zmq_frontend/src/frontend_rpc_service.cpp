@@ -4,7 +4,6 @@
 #include <cstdlib>
 
 
-// #include <folly/ProducerConsumerQueue.h>
 #include <boost/functional/hash.hpp>
 #include <zmq.hpp>
 
@@ -23,8 +22,6 @@ namespace zmq_frontend {
 
 FrontendRPCService::FrontendRPCService()
     : response_queue_(
-          // std::make_shared<folly::ProducerConsumerQueue<FrontendRPCResponse>>(
-          //     RESPONSE_QUEUE_SIZE)),
           std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
               RESPONSE_QUEUE_SIZE)),
       prediction_executor_(std::make_shared<clipper::CallbackThreadPool>("frontend", 15)),
@@ -35,9 +32,6 @@ FrontendRPCService::FrontendRPCService()
           "frontend_rpc:response_enqueue")),
       response_dequeue_meter_(metrics::MetricsRegistry::get_metrics().create_meter(
           "frontend_rpc:response_dequeue")),
-      // malloc_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
-      //     "frontend_rpc:malloc_latency",
-      //     "microseconds", 4096)),
       recv_latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
           "frontend_rpc:recv_latency",
           "microseconds", 4096)),
@@ -46,6 +40,7 @@ FrontendRPCService::FrontendRPCService()
         std::chrono::time_point<std::chrono::system_clock> start_time =
           std::chrono::system_clock::now();
         recv_data_buffer_ = (uint8_t *)std::calloc(1, TOTAL_DATA_BYTES);
+        // recv_data_buffer_ = (uint8_t *)std::calloc(1, 5);
         std::chrono::time_point<std::chrono::system_clock> end_time =
           std::chrono::system_clock::now();
         auto calloc_latency = end_time - start_time;
@@ -89,7 +84,6 @@ void FrontendRPCService::add_application(
 
 void FrontendRPCService::send_response(FrontendRPCResponse response) {
   response_enqueue_meter_->mark(1);
-  // std::lock_guard<std::mutex> lock(response_queue_insertion_mutex_);
   response_queue_->enqueue(response);
 }
 
@@ -183,31 +177,39 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
 
   std::shared_ptr<clipper::Input> input;
   switch (input_type) {
-    case DataType::Bytes: {
-      std::shared_ptr<uint8_t> data(
-          static_cast<uint8_t *>(malloc(input_size_typed)), free);
-      socket.recv(data.get(), input_size_typed, 0);
-      input = std::make_shared<ByteVector>(data, input_size_typed);
-    } break;
-    case DataType::Ints: {
-      std::shared_ptr<int> data(
-          static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(int), 0);
-      input = std::make_shared<IntVector>(data, input_size_typed);
-    } break;
+    // case DataType::Bytes: {
+    //   std::shared_ptr<uint8_t> data(
+    //       static_cast<uint8_t *>(malloc(input_size_typed)), free);
+    //   socket.recv(data.get(), input_size_typed, 0);
+    //   input = std::make_shared<ByteVector>(data, input_size_typed);
+    // } break;
+    // case DataType::Ints: {
+    //   std::shared_ptr<int> data(
+    //       static_cast<int *>(malloc(input_size_typed * sizeof(int))), free);
+    //   socket.recv(data.get(), input_size_typed * sizeof(int), 0);
+    //   input = std::make_shared<IntVector>(data, input_size_typed);
+    // } break;
     case DataType::Floats: {
       std::chrono::time_point<std::chrono::system_clock> start_time =
         std::chrono::system_clock::now();
       // std::shared_ptr<float> data(
       //     static_cast<float *>(malloc(input_size_typed * sizeof(float))), free);
-      std::shared_ptr<float> data(
-          reinterpret_cast<float *>(alloc_data(input_size_typed * sizeof(float))), [](float *ptr){});
+      // std::shared_ptr<float> data(
+      //     reinterpret_cast<float *>(alloc_data(input_size_typed * sizeof(float))), [](float *ptr){});
       // std::shared_ptr<float> data(
       //     (float *)alloc_data(input_size_typed * sizeof(float)), [](float *ptr){});
-      socket.recv(data.get(), input_size_typed * sizeof(float), 0);
+      
+
+      // float *input_buffer =
+      //   reinterpret_cast<float *>(malloc(input_size_typed * sizeof(float)));
+
+      float *input_buffer =
+        reinterpret_cast<float *>(alloc_data(input_size_typed * sizeof(float)));
+
+      socket.recv(input_buffer, input_size_typed * sizeof(float), 0);
       std::chrono::time_point<std::chrono::system_clock> recv_end_time =
         std::chrono::system_clock::now();
-      input = std::make_shared<FloatVector>(data, input_size_typed);
+      input = std::make_shared<FloatVector>(input_buffer, input_size_typed);
 
       // Update latency metrics
       // auto malloc_latency = malloc_end_time - start_time;
@@ -222,19 +224,19 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
               .count();
       recv_latency_->insert(recv_latency_micros);
     } break;
-    case DataType::Doubles: {
-      std::shared_ptr<double> data(
-          static_cast<double *>(malloc(input_size_typed * sizeof(double))),
-          free);
-      socket.recv(data.get(), input_size_typed * sizeof(double), 0);
-      input = std::make_shared<DoubleVector>(data, input_size_typed);
-    } break;
-    case DataType::Strings: {
-      std::shared_ptr<char> data(
-          static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
-      socket.recv(data.get(), input_size_typed * sizeof(char), 0);
-      input = std::make_shared<SerializableString>(data, input_size_typed);
-    } break;
+    // case DataType::Doubles: {
+    //   std::shared_ptr<double> data(
+    //       static_cast<double *>(malloc(input_size_typed * sizeof(double))),
+    //       free);
+    //   socket.recv(data.get(), input_size_typed * sizeof(double), 0);
+    //   input = std::make_shared<DoubleVector>(data, input_size_typed);
+    // } break;
+    // case DataType::Strings: {
+    //   std::shared_ptr<char> data(
+    //       static_cast<char *>(malloc(input_size_typed * sizeof(char))), free);
+    //   socket.recv(data.get(), input_size_typed * sizeof(char), 0);
+    //   input = std::make_shared<SerializableString>(data, input_size_typed);
+    // } break;
     case DataType::Invalid:
     default: {
       std::stringstream ss;
@@ -300,44 +302,6 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket, size_t num_respon
 
       sent_responses += 1;
     }
-
-  // while (!response_queue_->isEmpty() && num_responses > 0) {
-  //   FrontendRPCResponse *response = response_queue_->frontPtr();
-  //   response_dequeue_meter_->mark(1);
-  //   Output &output = std::get<0>(*response);
-  //   int request_id = std::get<1>(*response);
-  //   int client_id = std::get<2>(*response);
-  //
-  //   std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
-  //   auto routing_id_search = client_routing_map_.find(client_id);
-  //   if (routing_id_search == client_routing_map_.end()) {
-  //     std::stringstream ss;
-  //     ss << "Received a response associated with a client id " << client_id
-  //        << " that has no associated routing identity";
-  //     throw std::runtime_error(ss.str());
-  //   }
-  //
-  //   const std::vector<uint8_t>& routing_id = routing_id_search->second;
-  //
-  //   int output_type = static_cast<int>(output.y_hat_->type());
-  //
-  //   // TODO(czumar): If this works, include other relevant output data (default
-  //   // bool, default expl, etc)
-  //   socket.send(routing_id.data(), routing_id.size(), ZMQ_SNDMORE);
-  //   socket.send("", 0, ZMQ_SNDMORE);
-  //   socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
-  //   socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
-  //   socket.send(output.y_hat_->get_data(),
-  //               output.y_hat_->byte_size());
-  //
-  //   // Remove the response from the outbound queue now that we're done
-  //   // processing it
-  //   response_queue_->popFront();
-  //   // Remove the oustanding request from the map
-  //
-  //   num_responses--;
-  // }
-
 }
 
 // WARNING: THIS IS A QUICK AND DIRTY HACK. IT'S TOTALLY NOT SAFE TO ACTUALLY USE.
