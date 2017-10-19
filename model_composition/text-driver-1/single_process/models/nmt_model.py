@@ -11,7 +11,7 @@ from single_proc_utils import ModelBase
 
 GPU_MEM_FRAC = .95
 
-CHECKPOINT_RELATIVE_PATH = "translate.ckpt*"
+CHECKPOINT_RELATIVE_PATH = "translate.ckpt"
 DEFAULT_HPARAMS_RELATIVE_PATH = "default_hparams.json"
 MODEL_HPARAMS_RELATIVE_PATH = "model_hparams.json"
 SOURCE_VOCAB_RELATIVE_PATH = "source_vocab.de"
