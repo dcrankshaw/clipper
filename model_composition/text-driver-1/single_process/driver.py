@@ -169,10 +169,10 @@ class DriverBenchmarker(object):
 
             self.predictor.predict(lstm_batch, nmt_batch)
 
-            if len(predictor.stats["thrus"]) > num_trials:
+            if len(self.predictor.stats["thrus"]) > num_trials:
                 break
 
-        driver_utils.save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        driver_utils.save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _gen_reviews_inputs(self, num_inputs=5000, input_length=200):
         if not self.loaded_reviews:

@@ -167,10 +167,10 @@ class DriverBenchmarker(object):
 
             self.predictor.predict(inception_batch)
 
-            if len(predictor.stats["thrus"]) > num_trials:
+            if len(self.predictor.stats["thrus"]) > num_trials:
                 break
 
-        driver_utils.save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        driver_utils.save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _get_inception_input(self):
         # There's no need to flatten this input for a single-process model
