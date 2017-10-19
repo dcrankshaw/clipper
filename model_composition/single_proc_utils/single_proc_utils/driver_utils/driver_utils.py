@@ -5,8 +5,6 @@ class HeavyNodeConfig(object):
                  model_name,
                  input_type,
                  allocated_cpus,
-                 cpus_per_replica,
-                 num_replicas=1,
                  gpus=[],
                  batch_size=1):
         self.model_name = model_name

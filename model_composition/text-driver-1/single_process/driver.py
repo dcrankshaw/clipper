@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import driver_utils
+from single_proc_utils import HeavyNodeConfig
 from models import theano_sentiment_model as lstm_model
 from models import nmt_model
 
@@ -26,23 +26,23 @@ TRIAL_LENGTH = 200
 ########## Setup ##########
 
 def get_heavy_node_configs(batch_size, allocated_cpus, nmt_gpus=[]):
-    lstm_1_config = driver_utils.HeavyNodeConfig(model_name=LSTM_1_MODEL_NAME,
-                                                 input_type="strings",
-                                                 allocated_cpus=allocated_cpus,
-                                                 gpus=[],
-                                                 batch_size=batch_size)
+    lstm_1_config = HeavyNodeConfig(model_name=LSTM_1_MODEL_NAME,
+                                    input_type="strings",
+                                    allocated_cpus=allocated_cpus,
+                                    gpus=[],
+                                    batch_size=batch_size)
 
-    lstm_2_config = driver_utils.HeavyNodeConfig(model_name=LSTM_2_MODEL_NAME,
-                                                 input_type="strings",
-                                                 allocated_cpus=allocated_cpus,
-                                                 gpus=[],
-                                                 batch_size=batch_size)
+    lstm_2_config = HeavyNodeConfig(model_name=LSTM_2_MODEL_NAME,
+                                    input_type="strings",
+                                    allocated_cpus=allocated_cpus,
+                                    gpus=[],
+                                    batch_size=batch_size)
 
-    nmt_config = driver_utils.HeavyNodeConfig(model_name=NMT_MODEL_NAME,
-                                              input_type="strings",
-                                              allocated_cpus=allocated_cpus,
-                                              gpus=nmt_gpus,
-                                              batch_size=batch_size)
+    nmt_config = HeavyNodeConfig(model_name=NMT_MODEL_NAME,
+                                 input_type="strings",
+                                 allocated_cpus=allocated_cpus,
+                                 gpus=nmt_gpus,
+                                 batch_size=batch_size)
 
     return [lstm_1_config, lstm_2_config, nmt_config]
 
@@ -66,9 +66,9 @@ def create_lstm_model(model_data_path):
 class Predictor(object):
 
     def __init__(self, models_dict):
-    	self.thread_pool = ThreadPoolExecutor(max_workers=2)
+        self.thread_pool = ThreadPoolExecutor(max_workers=2)
 
-    	# Stats
+        # Stats
         self.init_stats()
         self.stats = {
             "thrus": [],
@@ -102,19 +102,19 @@ class Predictor(object):
                                                                        thru=thru))
 
     def predict(self, lstm_inputs, nmt_inputs):
-    	"""
-		Parameters
-		------------
-		lstm_inputs : [str]
+        """
+        Parameters
+        ------------
+        lstm_inputs : [str]
             A list of English movie reviews, each represented as a string
         nmt_inputs : [str]
             A list of German text items, each represented as a string
-    	"""
-    	assert len(lstm_inputs) == len(nmt_inputs)
+        """
+        assert len(lstm_inputs) == len(nmt_inputs)
 
-    	batch_size = len(lstm_inputs)
+        batch_size = len(lstm_inputs)
 
-    	begin_time = datetime.now()
+        begin_time = datetime.now()
 
         lstm_future = self.thread_pool.submit(self.lstm_model_1.predict, lstm_inputs)
 
@@ -141,7 +141,7 @@ class DriverBenchmarker(object):
         self.loaded_german = False
 
     def set_configs(configs):
-    	self.configs = configs
+        self.configs = configs
 
     def run(self, num_trials, batch_size):
         logger.info("Generating random inputs")
@@ -151,18 +151,18 @@ class DriverBenchmarker(object):
         nmt_inputs = self._gen_german_inputs(num_inputs=1000, input_length=20)
         nmt_inputs = [i for _ in range(40) for i in nmt_inputs]
 
-       	assert len(nmt_inputs) == len(lstm_inputs)
-		
-		logger.info("Starting predictions")
-		while True:
-			batch_idx = np.random.choice(len(lstm_model), batch_size)
+        assert len(nmt_inputs) == len(lstm_inputs)
+        
+        logger.info("Starting predictions")
+        while True:
+            batch_idx = np.random.choice(len(lstm_model), batch_size)
             lstm_batch = lstm_inputs[batch_idx]
             nmt_batch = nmt_inputs[batch_idx]
 
-			self.predictor.predict(lstm_batch, nmt_batch)
+            self.predictor.predict(lstm_batch, nmt_batch)
 
-			if len(predictor.stats["thrus"]) > num_trials:
-				break
+            if len(predictor.stats["thrus"]) > num_trials:
+                break
 
         driver_utils.save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
@@ -238,17 +238,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if not args.cpus:
-    	raise Exception("The set of allocated cpus must be specified via the '--cpus' flag!")
+        raise Exception("The set of allocated cpus must be specified via the '--cpus' flag!")
 
     default_batch_size_confs = [2]
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
-	
+    
     models_dict = load_models(args.nmt_gpu)
     benchmarker = DriverBenchmarker(models_dict)
 
     for batch_size in batch_size_confs:
-    	configs = get_heavy_node_configs(batch_size=batch_size,
-    									 allocated_cpus=args.cpus,
-    									 nmt_gpus=[args.nmt_gpu])
-    	benchmarker.set_configs(configs)
-    	benchmarker.run(args.num_trials, batch_size)
+        configs = get_heavy_node_configs(batch_size=batch_size,
+                                         allocated_cpus=args.cpus,
+                                         nmt_gpus=[args.nmt_gpu])
+        benchmarker.set_configs(configs)
+        benchmarker.run(args.num_trials, batch_size)

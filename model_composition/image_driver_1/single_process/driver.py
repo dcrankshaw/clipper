@@ -30,28 +30,28 @@ TRIAL_LENGTH = 200
 
 def get_heavy_node_configs(batch_size, allocated_cpus, vgg_gpus=[], inception_gpus=[]):
     vgg_config = HeavyNodeConfig(model_name=VGG_FEATS_MODEL_NAME,
-                                              input_type="floats",
-                                              allocated_cpus=allocated_cpus,
-                                              gpus=vgg_gpus,
-                                              batch_size=batch_size)    
+                                 input_type="floats",
+                                 allocated_cpus=allocated_cpus,
+                                 gpus=vgg_gpus,
+                                 batch_size=batch_size)    
 
     inception_config = HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
-                                                    input_type="floats",
-                                                    allocated_cpus=allocated_cpus,
-                                                    gpus=inception_gpus,
-                                                    batch_size=batch_size)
+                                       input_type="floats",
+                                       allocated_cpus=allocated_cpus,
+                                       gpus=inception_gpus,
+                                       batch_size=batch_size)
 
     kernel_svm_config = HeavyNodeConfig(model_name=KERNEL_SVM_MODEL_NAME,
-                                                     input_type="floats",
-                                                     allocated_cpus=allocated_cpus,
-                                                     gpus=[],
-                                                     batch_size=batch_size)
+                                        input_type="floats",
+                                        allocated_cpus=allocated_cpus,
+                                        gpus=[],
+                                        batch_size=batch_size)
 
     lgbm_config = HeavyNodeConfig(model_name=LGBM_MODEL_NAME,
-                                               input_type="floats",
-                                               allocated_cpus=allocated_cpus,
-                                               gpus=[],
-                                               batch_size=batch_size)
+                                  input_type="floats",
+                                  allocated_cpus=allocated_cpus,
+                                  gpus=[],
+                                  batch_size=batch_size)
 
     return [vgg_config, inception_config, kernel_svm_config, lgbm_config]
 

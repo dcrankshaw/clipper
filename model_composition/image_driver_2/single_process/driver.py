@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import driver_utils
+from single_proc_utils import HeavyNodeConfig
 from models import inception_model, opencv_svm_model, opencv_sift_feats_model
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -29,23 +29,23 @@ SPECIALIZATION_BRANCH_THRESHOLD = .3
 ########## Setup ##########
 
 def get_heavy_node_configs(batch_size, allocated_cpus, inception_gpus=[]):
-    inception_config = driver_utils.HeavyNodeConfig(model_name=INCEPTION_MODEL_NAME,
-                                                    input_type="floats",
-                                                    allocated_cpus=allocated_cpus,
-                                                    gpus=inception_gpus,
-                                                    batch_size=batch_size)
+    inception_config = HeavyNodeConfig(model_name=INCEPTION_MODEL_NAME,
+                                       input_type="floats",
+                                       allocated_cpus=allocated_cpus,
+                                       gpus=inception_gpus,
+                                       batch_size=batch_size)
 
-    opencv_svm_config = driver_utils.HeavyNodeConfig(model_name=OPENCV_SVM_MODEL_NAME,
-                                                     input_type="floats",
-                                                     allocated_cpus=allocated_cpus,
-                                                     gpus=[],
-                                                     batch_size=batch_size)
+    opencv_svm_config = HeavyNodeConfig(model_name=OPENCV_SVM_MODEL_NAME,
+                                        input_type="floats",
+                                        allocated_cpus=allocated_cpus,
+                                        gpus=[],
+                                        batch_size=batch_size)
 
-    opencv_sift_feats_config = driver_utils.HeavyNodeConfig(model_name=OPENCV_SIFT_FEATS_MODEL_NAME,
-                                                            input_type="floats",
-                                                            allocated_cpus=allocated_cpus,
-                                                            gpus=[],
-                                                            batch_size=batch_size)
+    opencv_sift_feats_config = HeavyNodeConfig(model_name=OPENCV_SIFT_FEATS_MODEL_NAME,
+                                               input_type="floats",
+                                               allocated_cpus=allocated_cpus,
+                                               gpus=[],
+                                               batch_size=batch_size)
 
     return [inception_config, opencv_svm_config, opencv_sift_feats_config]
 
