@@ -19,5 +19,5 @@ class OpenCVSVM(ModelBase):
 		   	A list of SIFT feature vectors, each
 		   	represented as numpy array of data type `np.int32`
 		"""
-
+		inputs = [input_item.flatten() for input_item in inputs]
 		return self.model.predict(inputs)
