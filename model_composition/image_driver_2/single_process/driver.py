@@ -8,7 +8,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import HeavyNodeConfig
+from single_proc_utils import HeavyNodeConfig, save_results
 from models import inception_model, opencv_svm_model, opencv_sift_feats_model
 
 logging.basicConfig(
@@ -171,7 +171,7 @@ class DriverBenchmarker(object):
             if len(self.predictor.stats["thrus"]) > num_trials:
                 break
 
-        driver_utils.save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _get_inception_input(self):
         # There's no need to flatten this input for a single-process model

@@ -8,7 +8,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import HeavyNodeConfig
+from single_proc_utils import HeavyNodeConfig, save_results
 from models import lgbm_model, vgg_feats_model, kpca_svm_model, inception_feats_model, kernel_svm_model
 from models.deps import kernel_svm_utils
 
@@ -188,7 +188,7 @@ class DriverBenchmarker(object):
             if len(self.predictor.stats["thrus"]) > num_trials:
                 break
 
-        driver_utils.save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _get_vgg_feats_input(self):
         vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
