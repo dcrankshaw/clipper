@@ -6,7 +6,7 @@ import tensorflow as tf
 from single_proc_utils import ModelBase
 
 # Change this to the relative path of your local copy of tf slim
-sys.path.insert(0, os.path.abspath('/Users/Corey/Documents/RISE/tf_models/slim'))
+sys.path.insert(0, os.path.abspath('/home/ubuntu/tf_models/research/slim'))
 
 from nets import inception_v3
 from preprocessing import inception_preprocessing
