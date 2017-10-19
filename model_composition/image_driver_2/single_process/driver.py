@@ -78,7 +78,7 @@ def create_opencv_sift_feats_model():
 
 class Predictor(object):
 
-    def __init__(self, models_dict):
+    def __init__(self, models_dict, trial_length):
         self.thread_pool = ThreadPoolExecutor(max_workers=2)
 
         # Stats
@@ -89,6 +89,7 @@ class Predictor(object):
             "mean_lats": []
         }
         self.total_num_complete = 0
+        self.trial_length = trial_length
 
         # Models
         self.inception_model = models_dict[INCEPTION_MODEL_NAME]
@@ -143,13 +144,13 @@ class Predictor(object):
         self.latencies.append(latency)
         self.total_num_complete += batch_size
         self.trial_num_complete += batch_size
-        if self.trial_num_complete % TRIAL_LENGTH == 0:
+        if self.trial_num_complete % self.trial_length == 0:
             self.print_stats()
             self.init_stats()
 
 class DriverBenchmarker(object):
-    def __init__(self, models_dict):
-        self.predictor = Predictor(models_dict)
+    def __init__(self, models_dict, trial_length):
+        self.predictor = Predictor(models_dict, trial_length)
 
     def set_configs(self, configs):
         self.configs = configs
@@ -184,6 +185,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--cpus', type=int, nargs='+', help="The set of cpu cores on which to run the single process driver")
     parser.add_argument('-i', '--inception_gpu', type=int, default=0, help="The GPU on which to run the inception featurization model")
     parser.add_argument('-t', '--num_trials', type=int, default=15, help="The number of trials to run")
+    parser.add_argument('-tl', '--trial_length', type=int, default=200, help="The length of each trial, in requests")
     
     args = parser.parse_args()
 
@@ -194,7 +196,7 @@ if __name__ == "__main__":
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     
     models_dict = load_models(args.inception_gpu)
-    benchmarker = DriverBenchmarker(models_dict)
+    benchmarker = DriverBenchmarker(models_dict, args.trial_length)
 
     for batch_size in batch_size_confs:
         configs = get_heavy_node_configs(batch_size=batch_size,

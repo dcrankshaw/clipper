@@ -29,8 +29,6 @@ NMT_MODEL_NAME = "nmt"
 LSTM_MODEL_PATH = os.path.join(MODELS_DIR, "lstm_model_data")
 NMT_MODEL_PATH = os.path.join(MODELS_DIR, "nmt_model_data")
 
-TRIAL_LENGTH = 200
-
 ########## Setup ##########
 
 def get_heavy_node_configs(batch_size, allocated_cpus, nmt_gpus=[]):
@@ -73,7 +71,7 @@ def create_lstm_model(model_data_path):
 
 class Predictor(object):
 
-    def __init__(self, models_dict):
+    def __init__(self, models_dict, trial_length):
         self.thread_pool = ThreadPoolExecutor(max_workers=2)
 
         # Stats
@@ -84,6 +82,7 @@ class Predictor(object):
             "mean_lats": []
         }
         self.total_num_complete = 0
+        self.trial_length = trial_length
 
         # Models
         self.lstm_model_1 = models_dict[LSTM_1_MODEL_NAME]
@@ -138,25 +137,25 @@ class Predictor(object):
         self.latencies.append(latency)
         self.total_num_complete += batch_size
         self.trial_num_complete += batch_size
-        if self.trial_num_complete % TRIAL_LENGTH == 0:
+        if self.trial_num_complete % self.trial_length == 0:
             self.print_stats()
             self.init_stats()
 
 class DriverBenchmarker(object):
-    def __init__(self, models_dict):
-        self.predictor = Predictor(models_dict)
+    def __init__(self, models_dict, trial_length):
+        self.predictor = Predictor(models_dict, trial_length)
         self.loaded_reviews = False
         self.loaded_german = False
 
     def set_configs(self, configs):
         self.configs = configs
 
-    def run(self, num_trials, batch_size):
+    def run(self, num_trials, batch_size, input_length):
         logger.info("Generating random inputs")
-        lstm_inputs = self._gen_reviews_inputs(num_inputs=1000, input_length=200)
+        lstm_inputs = self._gen_reviews_inputs(num_inputs=1000, input_length=input_length)
         lstm_inputs = [i for _ in range(40) for i in lstm_inputs]
 
-        nmt_inputs = self._gen_german_inputs(num_inputs=1000, input_length=20)
+        nmt_inputs = self._gen_german_inputs(num_inputs=1000, input_length=input_length)
         nmt_inputs = [i for _ in range(40) for i in nmt_inputs]
 
         assert len(nmt_inputs) == len(lstm_inputs)
@@ -174,7 +173,7 @@ class DriverBenchmarker(object):
 
         driver_utils.save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
-    def _gen_reviews_inputs(self, num_inputs=5000, input_length=200):
+    def _gen_reviews_inputs(self, num_inputs, input_length):
         if not self.loaded_reviews:
             self.reviews = self._load_reviews()
             self.loaded_reviews = True
@@ -194,7 +193,7 @@ class DriverBenchmarker(object):
             inputs.append(review)
         return inputs
 
-    def _gen_german_inputs(self, num_inputs=5000, input_length=10):
+    def _gen_german_inputs(self, num_inputs, input_length):
         if not self.loaded_german:
             self.german_text = self._load_german()
             self.loaded_german = True
@@ -240,8 +239,10 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the driver. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--cpus', type=int, nargs='+', help="The set of cpu cores on which to run the single process driver")
-    parser.add_argument('-ng', '--nmt_gpu', type=int, default=0, help="The GPU on which to run the NMT model")
+    parser.add_argument('-g', '--nmt_gpu', type=int, default=0, help="The GPU on which to run the NMT model")
     parser.add_argument('-t', '--num_trials', type=int, default=15, help="The number of trials to run")
+    parser.add_argument('-tl', '--trial_length', type=int, default=200, help="The length of each trial, in requests")
+    parser.add_argument('-l', '--input_lengths', type=int, nargs='+', help="Input length configurations to benchmark")
     
     args = parser.parse_args()
 
@@ -249,14 +250,18 @@ if __name__ == "__main__":
         raise Exception("The set of allocated cpus must be specified via the '--cpus' flag!")
 
     default_batch_size_confs = [2]
+    default_input_length_confs = [100]
+    
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
+    input_length_confs = args.input_lengths if args.input_lengths else default_input_length_confs
     
     models_dict = load_models(args.nmt_gpu)
-    benchmarker = DriverBenchmarker(models_dict)
+    benchmarker = DriverBenchmarker(models_dict, args.trial_length)
 
-    for batch_size in batch_size_confs:
-        configs = get_heavy_node_configs(batch_size=batch_size,
-                                         allocated_cpus=args.cpus,
-                                         nmt_gpus=[args.nmt_gpu])
-        benchmarker.set_configs(configs)
-        benchmarker.run(args.num_trials, batch_size)
+    for input_length in input_length_confs:
+        for batch_size in batch_size_confs:
+            configs = get_heavy_node_configs(batch_size=batch_size,
+                                             allocated_cpus=args.cpus,
+                                             nmt_gpus=[args.nmt_gpu])
+            benchmarker.set_configs(configs)
+            benchmarker.run(args.num_trials, batch_size, input_length)

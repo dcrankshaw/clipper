@@ -44,6 +44,8 @@ class NMTModel(ModelBase):
       The path of the vocabulary associated with the target text (English)
     """
 
+    ModelBase.__init__(self)
+
     checkpoint_path = os.path.join(model_data_path, CHECKPOINT_RELATIVE_PATH)
     default_hparams_path = os.path.join(model_data_path, DEFAULT_HPARAMS_RELATIVE_PATH)
     model_hparams_path = os.path.join(model_data_path, MODEL_HPARAMS_RELATIVE_PATH)
