@@ -182,7 +182,7 @@ class DriverBenchmarker(object):
         while True:
             batch_idx = np.random.randint(len(vgg_inputs) - batch_size)
             vgg_batch = vgg_inputs[batch_idx : batch_idx + batch_size]
-            inception_batch = vgg_inputs[batch_idx : batch_idx + batch_size]
+            inception_batch = inception_inputs[batch_idx : batch_idx + batch_size]
 
             self.predictor.predict(vgg_batch, inception_batch)
 
@@ -192,14 +192,12 @@ class DriverBenchmarker(object):
         driver_utils.save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _get_vgg_feats_input(self):
-        # There's no need to flatten this input for a single-process model
         vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
-        return vgg_input
+        return vgg_input.flatten()
 
     def _get_inception_input(self):
-        # There's no need to flatten this input for a single-process model
         inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        return inception_input
+        return inception_input.flatten()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Single Process Image Driver 1')

@@ -29,7 +29,8 @@ class VggFeaturizationModel(ModelBase):
 		np.float32, outputs a corresponding list of numpy arrays, each of 
 		which is a featurized image
 		"""
-		all_img_features = self.get_image_features(inputs)
+		reshaped_inputs = [input_item.reshape(224,224,3) for input_item in inputs]
+		all_img_features = self.get_image_features(reshaped_inputs)
 		return all_img_features
 
 	def load_vgg_model(self, vgg_model_path):
