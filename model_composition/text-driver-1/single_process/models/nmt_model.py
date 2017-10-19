@@ -11,11 +11,11 @@ from single_proc_utils import ModelBase
 
 GPU_MEM_FRAC = .95
 
-CHECKPOINT_RELATIVE_PATH = "#TODO: FILL IN"
-DEFAULT_HPARAMS_RELATIVE_PATH = "#TODO: FILL IN"
-MODEL_HPARAMS_RELATIVE_PATH = "#TODO: FILL IN"
-SOURCE_VOCAB_RELATIVE_PATH = "#TODO: FILL IN"
-TARGET_VOCAB_RELATIVE_PATH = "#TODO: FILL IN"
+CHECKPOINT_RELATIVE_PATH = "translate.ckpt*"
+DEFAULT_HPARAMS_RELATIVE_PATH = "default_hparams.json"
+MODEL_HPARAMS_RELATIVE_PATH = "model_hparams.json"
+SOURCE_VOCAB_RELATIVE_PATH = "source_vocab.de"
+TARGET_VOCAB_RELATIVE_PATH = "target_vocab.en"
 
 # These hyperparameters are required for inference and are not specified
 # by the provided set of JSON-formatted GNMT model hyperparameters

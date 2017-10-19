@@ -7,9 +7,9 @@ import numpy as np
 from deps import lstm_utils, imdb_utils
 from single_proc_utils import ModelBase 
 
-MODEL_RELATIVE_PATH = "model.npz"
-MODEL_OPTIONS_RELATIVE_PATH = "model_options.txt"
-MODEL_IMDB_DICT_RELATIVE_PATH = "imdb_dict.pkl"
+MODEL_RELATIVE_PATH = "theano_lstm_model.npz"
+MODEL_OPTIONS_RELATIVE_PATH = "theano_model_options.txt"
+MODEL_IMDB_DICT_RELATIVE_PATH = "theano_imdb.dict.pkl"
 
 class MovieSentimentLstm(ModelBase):
 
