@@ -64,7 +64,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="11-20,30-34")
+        query_cpu_str="0,1")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -313,7 +313,7 @@ if __name__ == "__main__":
     queue = Queue()
 
     # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(35, 40)
+    total_cpus = [2 for _ in range(16)]
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -356,7 +356,7 @@ if __name__ == "__main__":
         #              allocated_gpus=get_gpus(res152_reps))
     ]
 
-    # setup_clipper(configs)
+    setup_clipper(configs)
     # setup_clipper_no_docker(configs)
     procs = []
     for i in range(args.num_clients):
