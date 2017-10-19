@@ -140,7 +140,7 @@ class DriverBenchmarker(object):
         self.loaded_reviews = False
         self.loaded_german = False
 
-    def set_configs(configs):
+    def set_configs(self, configs):
         self.configs = configs
 
     def run(self, num_trials, batch_size):

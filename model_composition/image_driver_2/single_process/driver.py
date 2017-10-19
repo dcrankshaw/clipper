@@ -143,7 +143,7 @@ class DriverBenchmarker(object):
     def __init__(self, models_dict):
         self.predictor = Predictor(models_dict)
 
-    def set_configs(configs):
+    def set_configs(self, configs):
         self.configs = configs
 
     def run(self, num_trials, batch_size):
