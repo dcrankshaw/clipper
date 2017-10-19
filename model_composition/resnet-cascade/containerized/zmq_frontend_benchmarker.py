@@ -259,11 +259,12 @@ class Predictor(object):
                 self.print_stats()
                 self.init_stats()
 
+        expected_output = np.sum(input_item)
         def alex_cont(output):
-            if output == DEFAULT_OUTPUT:
+            if expected_output != output:
+                logger.error("Got wrong output")
                 return
             else:
-                # idk = np.random.random() > 0.192
                 complete()
 
         return self.client.send_request("noop", input_item).then(alex_cont)

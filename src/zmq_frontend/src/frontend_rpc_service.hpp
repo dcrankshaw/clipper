@@ -5,8 +5,8 @@
 
 // #include <folly/ProducerConsumerQueue.h>
 #include <concurrentqueue.h>
-#include <clipper/datatypes.hpp>
 #include <clipper/callback_threadpool.hpp>
+#include <clipper/datatypes.hpp>
 #include <zmq.hpp>
 
 namespace zmq_frontend {
@@ -20,7 +20,7 @@ constexpr size_t RESPONSE_QUEUE_SIZE = 50000;
 constexpr size_t NUM_REQUESTS_RECV = 100;
 constexpr size_t NUM_RESPONSES_SEND = 100;
 
-constexpr size_t TOTAL_DATA_BYTES = 299*299*3*sizeof(float)*50000;
+constexpr size_t TOTAL_DATA_BYTES = 299 * 299 * 3 * sizeof(float) * 50000;
 
 // Tuple of input, request id, client id
 typedef std::tuple<std::shared_ptr<Input>, int, int> FrontendRPCRequest;
@@ -50,12 +50,9 @@ class FrontendRPCService {
   void receive_request(zmq::socket_t &socket);
   void send_responses(zmq::socket_t &socket, size_t num_responses);
 
-  // std::mutex response_queue_insertion_mutex_;
-  // std::shared_ptr<folly::ProducerConsumerQueue<FrontendRPCResponse>>
-  //     response_queue_;
   std::shared_ptr<moodycamel::ConcurrentQueue<FrontendRPCResponse>>
       response_queue_;
-  std::shared_ptr<clipper::CallbackThreadPool> prediction_executor_;
+  // std::shared_ptr<clipper::CallbackThreadPool> prediction_executor_;
   std::atomic_bool active_;
   std::mutex app_functions_mutex_;
   std::mutex client_routing_mutex_;
@@ -74,7 +71,7 @@ class FrontendRPCService {
   // std::shared_ptr<metrics::Histogram> malloc_latency_;
   std::shared_ptr<metrics::Histogram> recv_latency_;
 
-  uint8_t* alloc_data(size_t size_bytes);
+  uint8_t *alloc_data(size_t size_bytes);
 
   std::mutex data_mutex_;
   size_t next_data_offset_;

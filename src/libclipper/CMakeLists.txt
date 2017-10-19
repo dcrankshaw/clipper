@@ -4,19 +4,20 @@ project(libclipper VERSION 0.1.0 LANGUAGES CXX)
 
 
 add_library(clipper
-    src/query_processor.cpp
     src/datatypes.cpp
     src/metrics.cpp
-    src/selection_policies.cpp
-    src/persistent_state.cpp
     src/task_executor.cpp
     src/rpc_service.cpp
-    # src/timers.cpp
     src/containers.cpp
     src/redis.cpp
     src/logging.cpp
     src/json_util.cpp
-    src/exceptions.cpp)
+    src/exceptions.cpp
+    # src/query_processor.cpp
+    # src/selection_policies.cpp
+    # src/persistent_state.cpp
+    # src/timers.cpp
+    )
 
 
 # Define headers for this library. PUBLIC headers are used for

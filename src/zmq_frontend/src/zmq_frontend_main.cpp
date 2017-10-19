@@ -3,7 +3,6 @@
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
-#include <clipper/query_processor.hpp>
 #include <cxxopts.hpp>
 #include <server_http.hpp>
 
@@ -19,8 +18,7 @@ void respond_http(std::string content, std::string message,
 }
 
 int main(int argc, char* argv[]) {
-  cxxopts::Options options("zmq_frontend",
-                           "Clipper query processing frontend");
+  cxxopts::Options options("zmq_frontend", "Clipper query processing frontend");
   // clang-format off
   options.add_options()
       ("redis_ip", "Redis address",
@@ -44,27 +42,18 @@ int main(int argc, char* argv[]) {
 
   zmq_frontend::ServerImpl zmq_server("0.0.0.0", 4455, 4456);
 
-  // zmq_frontend::ServerImplNoQueries zmq_server("0.0.0.0", 4455, 4456);
-  // std::vector<std::thread> bench_threads;
-  // for (int i = 0; i < 4; ++i) {
-  //   bench_threads.push_back(std::thread([&zmq_server]() mutable {
-  //       zmq_server.run_benchmark();
-  //   }));
-  // }
-
-
   HttpServer metrics_server("0.0.0.0", clipper::QUERY_FRONTEND_PORT, 1);
 
-  metrics_server.add_endpoint(GET_METRICS, "GET",
-                       [](std::shared_ptr<HttpServer::Response> response,
-                          std::shared_ptr<HttpServer::Request> /*request*/) {
-                         clipper::metrics::MetricsRegistry& registry =
-                             clipper::metrics::MetricsRegistry::get_metrics();
-                         std::string metrics_report =
-                             // registry.report_metrics(false);
-                             registry.report_metrics(true);
-                        std::cout << metrics_report << std::endl;
-                         respond_http(metrics_report, "200 OK", response);
-                       });
+  metrics_server.add_endpoint(
+      GET_METRICS, "GET", [](std::shared_ptr<HttpServer::Response> response,
+                             std::shared_ptr<HttpServer::Request> /*request*/) {
+        clipper::metrics::MetricsRegistry& registry =
+            clipper::metrics::MetricsRegistry::get_metrics();
+        std::string metrics_report =
+            // registry.report_metrics(false);
+            registry.report_metrics(true);
+        std::cout << metrics_report << std::endl;
+        respond_http(metrics_report, "200 OK", response);
+      });
   metrics_server.start();
 }
