@@ -229,58 +229,12 @@ class InflightMessage {
   QueryId query_id_;
 };
 
-void noop_free(void *data, void *hint) {}
+void noop_free(void *data, void *hint);
 
-void real_free(void *data, void *hint) { free(data); }
+void real_free(void *data, void *hint);
 
 std::vector<zmq::message_t> construct_batch_message(
-    std::vector<PredictTask> tasks) {
-  std::vector<zmq::message_t> messages;
-  size_t request_metadata_size = 1 * sizeof(uint32_t);
-  uint32_t *request_metadata =
-      static_cast<uint32_t *>(malloc(request_metadata_size));
-  request_metadata[0] = static_cast<uint32_t>(RequestType::PredictRequest);
-
-  size_t input_metadata_size = (2 + (tasks.size() - 1)) * sizeof(uint32_t);
-  uint32_t *input_metadata =
-      static_cast<uint32_t *>(malloc(input_metadata_size));
-  input_metadata[0] = static_cast<uint32_t>(tasks[0].input_.type_);
-  input_metadata[1] = static_cast<uint32_t>(tasks.size());
-
-  for (size_t i = 0; i < tasks.size(); ++i) {
-    input_metadata[i + 2] = static_cast<uint32_t>(tasks[i].input_.size_bytes_);
-  }
-
-  size_t input_metadata_size_buf_size = 1 * sizeof(long);
-  long *input_metadata_size_buf =
-      static_cast<long *>(malloc(input_metadata_size_buf_size));
-  // Add the size of the input metadata in bytes. This will be
-  // sent prior to the input metadata to allow for proactive
-  // buffer allocation in the receiving container
-  input_metadata_size_buf[0] = input_metadata_size;
-
-  // serialized_request.push_back(std::make_pair(
-  //     reinterpret_cast<void *>(request_metadata), request_metadata_size));
-  messages.emplace_back(reinterpret_cast<void *>(request_metadata),
-                        request_metadata_size, real_free);
-  // serialized_request.push_back(
-  //     std::make_pair(reinterpret_cast<void *>(input_metadata_size_buf),
-  //                    input_metadata_size_buf_size));
-  messages.emplace_back(reinterpret_cast<void *>(input_metadata_size_buf),
-                        input_metadata_size_buf_size, real_free);
-  // serialized_request.push_back(std::make_pair(
-  //     reinterpret_cast<void *>(input_metadata), input_metadata_size));
-  messages.emplace_back(reinterpret_cast<void *>(input_metadata),
-                        input_metadata_size, real_free);
-
-  for (size_t i = 0; i < tasks.size(); ++i) {
-    // serialized_request.push_back(
-    //     std::make_pair(inputs_[i]->get_data(), inputs_[i]->byte_size()));
-    messages.emplace_back(reinterpret_cast<void *>(tasks[i].input_.data_),
-                          tasks[i].input_.size_bytes_, noop_free);
-  }
-  return messages;
-}
+    std::vector<PredictTask> tasks);
 
 class TaskExecutor {
  public:

@@ -1,27 +1,26 @@
+#include <chrono>
 #include <memory>
 #include <random>
-#include <chrono>
 // uncomment to disable assert()
 // #define NDEBUG
 #include <cassert>
 #include <sstream>
 
+#include <clipper/callback_threadpool.hpp>
+#include <clipper/datatypes.hpp>
 #include <clipper/metrics.hpp>
 #include <clipper/task_executor.hpp>
 #include <clipper/util.hpp>
-#include <clipper/datatypes.hpp>
-#include <clipper/callback_threadpool.hpp>
 
 namespace clipper {
 
 CacheEntry::CacheEntry() {}
 
 QueryCache::QueryCache(size_t size_bytes)
-    : max_size_bytes_(size_bytes),
-    callback_threadpool_("query_cache", 6) {}
+    : max_size_bytes_(size_bytes), callback_threadpool_("query_cache", 6) {}
 
-bool QueryCache::fetch(const VersionedModelId &model,
-    const QueryId query_id, std::function<void(Output)> callback) {
+bool QueryCache::fetch(const VersionedModelId &model, const QueryId query_id,
+                       std::function<void(Output)> callback) {
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = entries_.find(key);
@@ -51,7 +50,8 @@ bool QueryCache::fetch(const VersionedModelId &model,
   }
 }
 
-void QueryCache::put(const VersionedModelId &model, const QueryId query_id, Output output) {
+void QueryCache::put(const VersionedModelId &model, const QueryId query_id,
+                     Output output) {
   std::unique_lock<std::mutex> l(m_);
   auto key = hash(model, query_id);
   auto search = entries_.find(key);
@@ -98,7 +98,7 @@ void QueryCache::insert_entry(const long key, CacheEntry &value) {
     // This entry is too large to cache
     log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
                         "Received an output of size: {} bytes that exceeds "
-                            "cache size of: {} bytes",
+                        "cache size of: {} bytes",
                         entry_size_bytes, max_size_bytes_);
   }
 }
@@ -121,13 +121,66 @@ void QueryCache::evict_entries(long space_needed_bytes) {
     } else {
       page_buffer_.erase(page_buffer_.begin() + page_buffer_index_);
       page_buffer_index_ = page_buffer_.size() > 0
-                           ? page_buffer_index_ % page_buffer_.size()
-                           : 0;
+                               ? page_buffer_index_ % page_buffer_.size()
+                               : 0;
       size_bytes_ -= page_entry.value_.y_hat_->size();
       space_needed_bytes -= page_entry.value_.y_hat_->size();
       entries_.erase(page_entry_search);
     }
   }
+}
+
+void noop_free(void *data, void *hint) {}
+
+void real_free(void *data, void *hint) { free(data); }
+
+std::vector<zmq::message_t> construct_batch_message(
+    std::vector<PredictTask> tasks) {
+  std::vector<zmq::message_t> messages;
+  size_t request_metadata_size = 1 * sizeof(uint32_t);
+  uint32_t *request_metadata =
+      static_cast<uint32_t *>(malloc(request_metadata_size));
+  request_metadata[0] = static_cast<uint32_t>(RequestType::PredictRequest);
+
+  size_t input_metadata_size = (2 + (tasks.size() - 1)) * sizeof(uint32_t);
+  uint32_t *input_metadata =
+      static_cast<uint32_t *>(malloc(input_metadata_size));
+  input_metadata[0] = static_cast<uint32_t>(tasks[0].input_.type_);
+  input_metadata[1] = static_cast<uint32_t>(tasks.size());
+
+  for (size_t i = 0; i < tasks.size(); ++i) {
+    input_metadata[i + 2] = static_cast<uint32_t>(tasks[i].input_.size_bytes_);
+  }
+
+  size_t input_metadata_size_buf_size = 1 * sizeof(long);
+  long *input_metadata_size_buf =
+      static_cast<long *>(malloc(input_metadata_size_buf_size));
+  // Add the size of the input metadata in bytes. This will be
+  // sent prior to the input metadata to allow for proactive
+  // buffer allocation in the receiving container
+  input_metadata_size_buf[0] = input_metadata_size;
+
+  // serialized_request.push_back(std::make_pair(
+  //     reinterpret_cast<void *>(request_metadata), request_metadata_size));
+  messages.emplace_back(reinterpret_cast<void *>(request_metadata),
+                        request_metadata_size, real_free);
+  // serialized_request.push_back(
+  //     std::make_pair(reinterpret_cast<void *>(input_metadata_size_buf),
+  //                    input_metadata_size_buf_size));
+  messages.emplace_back(reinterpret_cast<void *>(input_metadata_size_buf),
+                        input_metadata_size_buf_size, real_free);
+  // serialized_request.push_back(std::make_pair(
+  //     reinterpret_cast<void *>(input_metadata), input_metadata_size));
+  messages.emplace_back(reinterpret_cast<void *>(input_metadata),
+                        input_metadata_size, real_free);
+
+  for (size_t i = 0; i < tasks.size(); ++i) {
+    // serialized_request.push_back(
+    //     std::make_pair(inputs_[i]->get_data(), inputs_[i]->byte_size()));
+    messages.emplace_back(reinterpret_cast<void *>(tasks[i].input_.data_),
+                          tasks[i].input_.size_bytes_, noop_free);
+  }
+  return messages;
 }
 
 }  // namespace clipper

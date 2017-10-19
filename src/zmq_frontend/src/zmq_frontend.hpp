@@ -242,20 +242,19 @@ class ServerImpl {
         }
       }
 
-      long uid = 0;
       int request_id = std::get<1>(request);
       int client_id = std::get<2>(request);
       long query_id = query_counter_.fetch_add(1);
-      std::chrono::timepoint<std::chrono::system_clock> create_time =
-          std::chrono::high_resolution_clock::now();
+      std::chrono::time_point<std::chrono::system_clock> create_time =
+          std::chrono::system_clock::now();
 
       task_executor_.schedule_prediction(
           PredictTask{std::get<0>(request), versioned_models.front(), 1.0,
                       query_id, latency_slo_micros},
           [this, app_metrics, request_id, client_id,
            create_time](Output output) mutable {
-            std::chrono::time_point<std::chrono::high_resolution_clock> end =
-                std::chrono::high_resolution_clock::now();
+            std::chrono::time_point<std::chrono::system_clock> end =
+                std::chrono::system_clock::now();
             long duration_micros =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end - create_time)

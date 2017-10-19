@@ -23,7 +23,7 @@ constexpr size_t NUM_RESPONSES_SEND = 100;
 constexpr size_t TOTAL_DATA_BYTES = 299 * 299 * 3 * sizeof(float) * 50000;
 
 // Tuple of input, request id, client id
-typedef std::tuple<std::shared_ptr<Input>, int, int> FrontendRPCRequest;
+typedef std::tuple<InputVector, int, int> FrontendRPCRequest;
 // Tuple of output, request id, client id. Request id and client ids
 // should match corresponding ids of a FrontendRPCRequest object
 typedef std::tuple<Output, int, int> FrontendRPCResponse;
@@ -71,7 +71,7 @@ class FrontendRPCService {
   // std::shared_ptr<metrics::Histogram> malloc_latency_;
   std::shared_ptr<metrics::Histogram> recv_latency_;
 
-  uint8_t *alloc_data(size_t size_bytes);
+  void *alloc_data(size_t size_bytes);
 
   std::mutex data_mutex_;
   size_t next_data_offset_;

@@ -40,7 +40,7 @@ FrontendRPCService::FrontendRPCService()
       next_data_offset_(0) {
   std::chrono::time_point<std::chrono::system_clock> start_time =
       std::chrono::system_clock::now();
-  recv_data_buffer_ = std::calloc(1, TOTAL_DATA_BYTES);
+  recv_data_buffer_ = static_cast<uint8_t *>(std::calloc(1, TOTAL_DATA_BYTES));
   std::chrono::time_point<std::chrono::system_clock> end_time =
       std::chrono::system_clock::now();
   auto calloc_latency = end_time - start_time;
@@ -296,7 +296,7 @@ void *FrontendRPCService::alloc_data(size_t size_bytes) {
     next_data_offset_ = 0;
   }
 
-  void *alloc_ptr = recv_data_buffer_ + next_data_offset_;
+  void *alloc_ptr = static_cast<void *>(recv_data_buffer_ + next_data_offset_);
   next_data_offset_ += size_bytes;
   return alloc_ptr;
 }
