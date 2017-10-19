@@ -125,7 +125,7 @@ class AttentionModel(model.Model):
     # TODO(thangluong): do we need num_layers, num_gpus?
     cell = tf.contrib.rnn.DeviceWrapper(cell,
                                         model_helper.get_device_str(
-                                            num_layers - 1, num_gpus))
+                                            num_gpus))
 
     if hparams.pass_hidden_state:
       decoder_initial_state = cell.zero_state(batch_size, dtype).clone(

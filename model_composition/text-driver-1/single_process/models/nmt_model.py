@@ -63,7 +63,8 @@ class NMTModel(ModelBase):
                      default_hparams_path,
                      model_hparams_path,
                      source_vocab_path,
-                     target_vocab_path)
+                     target_vocab_path,
+                     gpu_num)
 
 
   def predict(self, inputs):
@@ -97,14 +98,14 @@ class NMTModel(ModelBase):
 
     return outputs
 
-  def _create_hparams(self, default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path):
+  def _create_hparams(self, default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path, gpu_num):
     partial_hparams = tf.contrib.training.HParams()
     default_hparams_file = open(default_hparams_path, "rb")
     default_hparams = json.load(default_hparams_file)
     default_hparams_file.close()
     for param in default_hparams:
       partial_hparams.add_hparam(param, default_hparams[param])
-    partial_hparams.set_hparam("num_gpus", 1)
+    partial_hparams.set_hparam("num_gpus", gpu_num)
 
     hparams = hparam_utils.load_hparams(model_hparams_path, partial_hparams)
     hparams = hparam_utils.extend_hparams(hparams, source_vocab_path, target_vocab_path)
@@ -115,8 +116,9 @@ class NMTModel(ModelBase):
                   default_hparams_path,
                   model_hparams_path,
                   source_vocab_path,
-                  target_vocab_path):
-    hparams = self._create_hparams(default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path)
+                  target_vocab_path,
+                  gpu_num):
+    hparams = self._create_hparams(default_hparams_path, model_hparams_path, source_vocab_path, target_vocab_path, gpu_num)
 
     model_creator = gnmt_model.GNMTModel
     infer_model = model_helper.create_infer_model(model_creator, hparams, scope=None)

@@ -52,11 +52,11 @@ def get_initializer(init_op, seed=None, init_weight=None):
     raise ValueError("Unknown init_op %s" % init_op)
 
 
-def get_device_str(device_id, num_gpus):
-  """Return a device string for multi-GPU setup."""
+def get_device_str(gpu_num):
+  """Return a device string for GPU setup."""
   if num_gpus == 0:
     return "/cpu:0"
-  device_str_output = "/gpu:%d" % (device_id % num_gpus)
+  device_str_output = "/gpu:%d" % gpu_num
   return device_str_output
 
 
