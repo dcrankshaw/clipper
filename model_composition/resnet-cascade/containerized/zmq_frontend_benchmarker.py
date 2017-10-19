@@ -64,7 +64,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="10-19")
+        query_cpu_str="1-11")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -89,22 +89,21 @@ def setup_noop(batch_size,
                                         use_nvidia_docker=False)
 
 
-# def setup_alexnet(batch_size,
-#                   num_replicas,
-#                   cpus_per_replica,
-#                   allocated_cpus,
-#                   allocated_gpus):
-#
-#     return driver_utils.HeavyNodeConfig(name="alexnet",
-#                                         input_type="floats",
-#                                         # model_image="model-comp/pytorch-alexnet",
-#                                         model_image="model-comp/pytorch-alex-sleep",
-#                                         allocated_cpus=allocated_cpus,
-#                                         cpus_per_replica=cpus_per_replica,
-#                                         gpus=allocated_gpus,
-#                                         batch_size=batch_size,
-#                                         num_replicas=num_replicas,
-#                                         use_nvidia_docker=True)
+def setup_alexnet(batch_size,
+                  num_replicas,
+                  cpus_per_replica,
+                  allocated_cpus,
+                  allocated_gpus):
+
+    return driver_utils.HeavyNodeConfig(name="alexnet",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-alexnet",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True)
 
 
 def get_batch_sizes(metrics_json):
@@ -224,11 +223,11 @@ class Predictor(object):
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info((
-                "\n\nrequest_rate: {rr}"
-                "\nfrontend_rpc:  {frontend_rpc}"
+                # "\n\nrequest_rate: {rr}"
+                "\n\nfrontend_rpc:  {frontend_rpc}"
                 "\nbatch_sizes:   {batches}"
-                "\nsubmit_lats:   {submit_lats}"
-                "\nfrontend_lats:   {frontend_lats}"
+                # "\nsubmit_lats:   {submit_lats}"
+                # "\nfrontend_lats:   {frontend_lats}"
                 "\n\n").format(
                     rr=request_rate,
                     frontend_rpc=json.dumps(
@@ -259,16 +258,14 @@ class Predictor(object):
                 self.print_stats()
                 self.init_stats()
 
-        expected_output = np.sum(input_item)
-
         def alex_cont(output):
-            if expected_output != output:
-                logger.error("Got wrong output")
-                return
-            else:
-                complete()
+            # if expected_output != output:
+            #     logger.error("Got wrong output")
+            #     return
+            # else:
+            complete()
 
-        return self.client.send_request("noop", input_item).then(alex_cont)
+        return self.client.send_request("alexnet", input_item).then(alex_cont)
 
 
 class ModelBenchmarker(object):
@@ -315,7 +312,7 @@ if __name__ == "__main__":
     queue = Queue()
 
     # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(32,40)
+    total_cpus = range(24, 32)
 
     def get_cpus(num_cpus):
         return [total_cpus.pop() for _ in range(num_cpus)]
@@ -325,27 +322,27 @@ if __name__ == "__main__":
     def get_gpus(num_gpus):
         return [total_gpus.pop() for _ in range(num_gpus)]
 
-    noop_reps = args.num_replicas
-    noop_batch = 30
+    # noop_reps = args.num_replicas
+    # noop_batch = 30
 
-    # alexnet_reps = 4
-    # res50_reps = 1
-    # res152_reps = 1
-    #
-    # alex_batch = 30
-    # res50_batch = 30
-    # res152_batch = 30
+    alexnet_reps = args.num_replicas
+    res50_reps = 1
+    res152_reps = 1
+
+    alex_batch = 30
+    res50_batch = 30
+    res152_batch = 30
 
     configs = [
-        setup_noop(batch_size=noop_batch,
-                   num_replicas=noop_reps,
-                   cpus_per_replica=1,
-                   allocated_cpus=get_cpus(noop_reps))
-        # setup_alexnet(batch_size=alex_batch,
-        #               num_replicas=alexnet_reps,
-        #               cpus_per_replica=1,
-        #               allocated_cpus=get_cpus(8),
-        #               allocated_gpus=get_gpus(res50_reps)),
+        # setup_noop(batch_size=noop_batch,
+        #            num_replicas=noop_reps,
+        #            cpus_per_replica=1,
+        #            allocated_cpus=get_cpus(noop_reps))
+        setup_alexnet(batch_size=alex_batch,
+                      num_replicas=alexnet_reps,
+                      cpus_per_replica=1,
+                      allocated_cpus=get_cpus(alexnet_reps),
+                      allocated_gpus=get_gpus(alexnet_reps)),
         # setup_res50(batch_size=res50_batch,
         #             num_replicas=res50_reps,
         #             cpus_per_replica=1,
@@ -376,7 +373,7 @@ if __name__ == "__main__":
     cl.connect()
     # fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
     # driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
-    fname = "{clients}_clients-{noop_reps}_reps".format(clients=args.num_clients,
-                                                        noop_reps=noop_reps)
-    driver_utils.save_results(configs, cl, all_stats, "noop-thruput-replicas", prefix=fname)
+    fname = "{clients}_clients-{alexnet_reps}_reps".format(clients=args.num_clients,
+                                                           alexnet_reps=alexnet_reps)
+    driver_utils.save_results(configs, cl, all_stats, "alexnet-thruput-replicas", prefix=fname)
     sys.exit(0)

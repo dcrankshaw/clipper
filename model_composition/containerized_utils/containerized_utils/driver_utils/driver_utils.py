@@ -32,8 +32,8 @@ class HeavyNodeConfig(object):
         self.batch_size = batch_size
         self.use_nvidia_docker = use_nvidia_docker
         self.input_size = input_size
-        # self.instance_type = requests.get(
-        #     "http://169.254.169.254/latest/meta-data/instance-type").text
+        self.instance_type = requests.get(
+            "http://169.254.169.254/latest/meta-data/instance-type").text
         if len(gpus) == 0:
             self.gpus_per_replica = 0
         else:
