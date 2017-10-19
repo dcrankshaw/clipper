@@ -193,7 +193,7 @@ class DriverBenchmarker(object):
 
     def _get_vgg_feats_input(self):
         # There's no need to flatten this input for a single-process model
-        input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
+        vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
         return vgg_input
 
     def _get_inception_input(self):
