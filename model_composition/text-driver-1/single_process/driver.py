@@ -163,9 +163,9 @@ class DriverBenchmarker(object):
         
         logger.info("Starting predictions")
         while True:
-            batch_idx = np.random.choice(len(lstm_model), batch_size)
-            lstm_batch = lstm_inputs[batch_idx]
-            nmt_batch = nmt_inputs[batch_idx]
+            batch_idx = np.random.randint(len(vgg_inputs) - batch_size)
+            lstm_batch = lstm_inputs[batch_idx : batch_idx + batch_size]
+            nmt_batch = nmt_inputs[batch_idx : batch_idx + batch_size]
 
             self.predictor.predict(lstm_batch, nmt_batch)
 

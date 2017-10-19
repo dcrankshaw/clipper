@@ -148,7 +148,7 @@ class Predictor(object):
         inception_gbm_future = self.thread_pool.submit(
             lambda inputs : self.lgbm_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
-        vgg_classes = vgg_future.result()
+        vgg_classes = vgg_svm_future.result()
         inception_gbm_classes = inception_gbm_future.result()
 
         end_time = datetime.now()
