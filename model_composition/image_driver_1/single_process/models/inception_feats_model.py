@@ -16,7 +16,7 @@ class InceptionFeaturizationModel(ModelBase):
 
         self.gpu_num = gpu_num
 
-        self.images_tensor = self.load_inception_model(inception_model_path)
+        self.images_tensor = self._load_inception_model(inception_model_path)
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEM_FRAC)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
@@ -42,7 +42,7 @@ class InceptionFeaturizationModel(ModelBase):
         all_img_features = self._get_image_features(reshaped_inputs)
         return [np.array(item, dtype=np.float32) for item in all_img_features]
 
-    def load_inception_model(self, inception_model_path):
+    def _load_inception_model(self, inception_model_path):
         inception_file = open(inception_model_path, mode='rb')
         inception_text = inception_file.read()
         inception_file.close()
@@ -61,10 +61,7 @@ class InceptionFeaturizationModel(ModelBase):
 
         return images_tensor
 
-    def get_image_features(self, image):
+    def _get_image_features(self, image):
         feed_dict = { self.images_tensor : image }
         features = self.sess.run(self.features_tensor, feed_dict=feed_dict)
         return features
-
-    def benchmark(self, batch_size=1, avg_after=5):
-        benchmarking.benchmark_function(self.predict, benchmarking.gen_inception_featurization_inputs, batch_size, avg_after)

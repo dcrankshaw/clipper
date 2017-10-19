@@ -19,6 +19,3 @@ class ImagesGBM(ModelBase):
 		"""
 		stacked_inputs = np.stack([input_item[0] for input_item in inputs])
 		return self.gbm_model.predict(stacked_inputs)
-
-	def benchmark(self, batch_size=1, avg_after=5):
-		benchmarking.benchmark_function(self.predict, benchmarking.gen_lgbm_classification_inputs, batch_size, avg_after)

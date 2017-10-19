@@ -15,7 +15,7 @@ class VggFeaturizationModel(ModelBase):
 		ModelBase.__init__(self)
 
 		self.gpu_num = gpu_num
-		self.imgs_tensor = self.load_vgg_model(vgg_model_path)
+		self.imgs_tensor = self._load_vgg_model(vgg_model_path)
 
 		gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEM_FRAC)
 		self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
@@ -30,10 +30,10 @@ class VggFeaturizationModel(ModelBase):
 		which is a featurized image
 		"""
 		reshaped_inputs = [input_item.reshape(224,224,3) for input_item in inputs]
-		all_img_features = self.get_image_features(reshaped_inputs)
+		all_img_features = self._get_image_features(reshaped_inputs)
 		return all_img_features
 
-	def load_vgg_model(self, vgg_model_path):
+	def _load_vgg_model(self, vgg_model_path):
 		vgg_file = open(vgg_model_path, mode='rb')
 		vgg_text = vgg_file.read()
 		vgg_file.close()
@@ -54,13 +54,10 @@ class VggFeaturizationModel(ModelBase):
 
 		return images_tensor
 
-	def get_image_features(self, images):
+	def _get_image_features(self, images):
 		feed_dict = { self.imgs_tensor : images }
 		fc7_features = self.sess.run(self.fc7_tensor, feed_dict=feed_dict)
 		return fc7_features
-
-	def benchmark(self, batch_size=1, avg_after=5):
-		benchmarking.benchmark_function(self.predict, benchmarking.gen_vgg_featurization_inputs, batch_size, avg_after)
 
 
 
