@@ -25,7 +25,7 @@ NUM_TRANSLATIONS_PER_INPUT = 1
 
 class NMTModel(ModelBase):
 
-  def __init__(self, model_data_path):
+  def __init__(self, model_data_path, gpu_num):
     """
     Initializes the container
 
