@@ -93,7 +93,7 @@ class Predictor(object):
 
         # Models
         self.inception_model = models_dict[INCEPTION_MODEL_NAME]
-        self.opencv_svm_model = moels_dict[OPENCV_SVM_MODEL_NAME]
+        self.opencv_svm_model = models_dict[OPENCV_SVM_MODEL_NAME]
         self.opencv_sift_feats_model = models_dict[OPENCV_SIFT_FEATS_MODEL_NAME]
 
     def init_stats(self):
