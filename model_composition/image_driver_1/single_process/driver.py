@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-from single_proc_utils import driver_utils
+from single_proc_utils import HeavyNodeConfig
 from models import lgbm_model, vgg_feats_model, kpca_svm_model, inception_feats_model, kernel_svm_model
 from models.deps import kernel_svm_utils
 
@@ -29,25 +29,25 @@ TRIAL_LENGTH = 200
 ########## Setup ##########
 
 def get_heavy_node_configs(batch_size, allocated_cpus, vgg_gpus=[], inception_gpus=[]):
-    vgg_config = driver_utils.HeavyNodeConfig(model_name=VGG_FEATS_MODEL_NAME,
+    vgg_config = HeavyNodeConfig(model_name=VGG_FEATS_MODEL_NAME,
                                               input_type="floats",
                                               allocated_cpus=allocated_cpus,
                                               gpus=vgg_gpus,
                                               batch_size=batch_size)    
 
-    inception_config = driver_utils.HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
+    inception_config = HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
                                                     input_type="floats",
                                                     allocated_cpus=allocated_cpus,
                                                     gpus=inception_gpus,
                                                     batch_size=batch_size)
 
-    kernel_svm_config = driver_utils.HeavyNodeConfig(model_name=KERNEL_SVM_MODEL_NAME,
+    kernel_svm_config = HeavyNodeConfig(model_name=KERNEL_SVM_MODEL_NAME,
                                                      input_type="floats",
                                                      allocated_cpus=allocated_cpus,
                                                      gpus=[],
                                                      batch_size=batch_size)
 
-    lgbm_config = driver_utils.HeavyNodeConfig(model_name=LGBM_MODEL_NAME,
+    lgbm_config = HeavyNodeConfig(model_name=LGBM_MODEL_NAME,
                                                input_type="floats",
                                                allocated_cpus=allocated_cpus,
                                                gpus=[],
