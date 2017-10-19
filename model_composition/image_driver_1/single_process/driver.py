@@ -3,6 +3,7 @@ import os
 import argparse
 import numpy as np
 import json
+import logging
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -10,6 +11,13 @@ from datetime import datetime
 from single_proc_utils import HeavyNodeConfig
 from models import lgbm_model, vgg_feats_model, kpca_svm_model, inception_feats_model, kernel_svm_model
 from models.deps import kernel_svm_utils
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 MODELS_DIR = os.path.join(CURR_DIR, "models")

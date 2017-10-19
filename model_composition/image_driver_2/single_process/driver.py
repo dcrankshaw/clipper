@@ -3,12 +3,20 @@ import os
 import argparse
 import numpy as np
 import json
+import logging
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from single_proc_utils import HeavyNodeConfig
 from models import inception_model, opencv_svm_model, opencv_sift_feats_model
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 MODELS_DIR = os.path.join(CURR_DIR, "models")
