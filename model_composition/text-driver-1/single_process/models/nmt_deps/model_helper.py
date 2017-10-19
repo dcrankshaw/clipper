@@ -23,9 +23,9 @@ import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
 
-import iterator_utils
-import misc_utils as utils
-import vocab_utils
+from . import iterator_utils
+from . import misc_utils as utils
+from . import vocab_utils
 
 
 __all__ = [

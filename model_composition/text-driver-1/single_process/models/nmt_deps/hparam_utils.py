@@ -1,8 +1,8 @@
 import sys
 import os
 import tensorflow as tf
-import misc_utils as utils
-import vocab_utils
+from . import misc_utils as utils
+from . import vocab_utils
 
 def extend_hparams(hparams, source_vocab_path, target_vocab_path):
   """

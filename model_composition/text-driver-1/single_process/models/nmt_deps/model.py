@@ -24,9 +24,9 @@ import tensorflow as tf
 
 from tensorflow.python.layers import core as layers_core
 
-import model_helper
-import iterator_utils
-import misc_utils as utils
+from . import model_helper
+from . import iterator_utils
+from . import misc_utils as utils
 
 utils.check_tensorflow_version()
 
