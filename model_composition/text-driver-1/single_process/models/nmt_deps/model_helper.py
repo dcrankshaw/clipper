@@ -355,7 +355,7 @@ def _cell_list(unit_type, num_units, num_layers, num_residual_layers,
         dropout=dropout,
         mode=mode,
         residual_connection=(i >= num_layers - num_residual_layers),
-        device_str=get_device_str(i + base_gpu, num_gpus),
+        device_str=get_device_str(num_gpus),
     )
     utils.print_out("")
     cell_list.append(single_cell)

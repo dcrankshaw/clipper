@@ -52,7 +52,6 @@ class NMTModel(ModelBase):
     source_vocab_path = os.path.join(model_data_path, SOURCE_VOCAB_RELATIVE_PATH)
     target_vocab_path = os.path.join(model_data_path, TARGET_VOCAB_RELATIVE_PATH)
 
-    assert os.path.exists(checkpoint_path)
     assert os.path.exists(default_hparams_path)
     assert os.path.exists(model_hparams_path)
     assert os.path.exists(source_vocab_path)
