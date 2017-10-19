@@ -130,7 +130,9 @@ void QueryCache::evict_entries(long space_needed_bytes) {
   }
 }
 
-void noop_free(void *data, void *hint) {}
+void noop_free(void *data, void *hint) {
+  // std::cout << "NOOP FREE CALLED" << std::endl;
+}
 
 void real_free(void *data, void *hint) { free(data); }
 
@@ -142,7 +144,7 @@ std::vector<zmq::message_t> construct_batch_message(
       static_cast<uint32_t *>(malloc(request_metadata_size));
   request_metadata[0] = static_cast<uint32_t>(RequestType::PredictRequest);
 
-  size_t input_metadata_size = (2 + (tasks.size() - 1)) * sizeof(uint32_t);
+  size_t input_metadata_size = (2 + tasks.size()) * sizeof(uint32_t);
   uint32_t *input_metadata =
       static_cast<uint32_t *>(malloc(input_metadata_size));
   input_metadata[0] = static_cast<uint32_t>(tasks[0].input_.type_);
