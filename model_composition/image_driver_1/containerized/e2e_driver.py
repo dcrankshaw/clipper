@@ -200,7 +200,7 @@ def get_queue_sizes(metrics_json):
         if "queue_size" in h.keys()[0]:
             name = h.keys()[0]
             model = name.split(":")[1]
-            mean = h[name][mean]
+            mean = h[name]["mean"]
             mean_queue_sizes[model] = round(float(mean), 2)
 
     return mean_queue_sizes
