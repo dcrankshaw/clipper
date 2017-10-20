@@ -182,6 +182,17 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 ########## Benchmarking ##########
 
+def get_batch_sizes(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_batch_sizes = {}
+    for h in hists:
+        if "batch_size" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            mean = h[name]["mean"]
+            mean_batch_sizes[model] = round(float(mean), 2)
+    return mean_batch_sizes
+
 class Predictor(object):
 
     def __init__(self, clipper_metrics):
@@ -340,22 +351,22 @@ if __name__ == "__main__":
                                              batch_size=64, 
                                              num_replicas=1, 
                                              cpus_per_replica=1, 
-                                             allocated_cpus=[14], 
-                                             allocated_gpus=[0])
+                                             allocated_cpus=[14,18,19,20], 
+                                             allocated_gpus=[0,2,3,4])
 
     vgg_svm_config = get_heavy_node_config(model_name=VGG_KERNEL_SVM_MODEL_APP_NAME, 
                                            batch_size=32, 
                                            num_replicas=1, 
                                            cpus_per_replica=1, 
-                                           allocated_cpus=[15], 
+                                           allocated_cpus=[15,21,22], 
                                            allocated_gpus=[])
 
     inception_feats_config = get_heavy_node_config(model_name=INCEPTION_FEATS_MODEL_APP_NAME, 
                                                    batch_size=20, 
                                                    num_replicas=1, 
                                                    cpus_per_replica=1, 
-                                                   allocated_cpus=[16], 
-                                                   allocated_gpus=[1])
+                                                   allocated_cpus=[16,23,24,25], 
+                                                   allocated_gpus=[1,5,6,7])
 
     lgbm_config = get_heavy_node_config(model_name=LGBM_MODEL_APP_NAME, 
                                         batch_size=1, 
@@ -368,7 +379,7 @@ if __name__ == "__main__":
 
 
     #for request_delay in range(.01, .1, .01):
-    request_delay = .015
+    request_delay = .03
     setup_clipper(model_configs)
     output_config = RequestDelayConfig(request_delay)
     benchmarker = DriverBenchmarker([output_config] + model_configs)
