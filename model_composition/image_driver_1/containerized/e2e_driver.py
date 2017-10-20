@@ -385,7 +385,7 @@ if __name__ == "__main__":
     setup_clipper(model_configs)
     output_config = RequestDelayConfig(args.request_delay)
     benchmarker = DriverBenchmarker([output_config] + model_configs, args.trial_length)
-    p = Process(target=benchmarker.run, args=(args.num_trials, request_delay))
+    p = Process(target=benchmarker.run, args=(args.num_trials, args.request_delay))
     p.start()
     p.join()
 
