@@ -162,12 +162,15 @@ class Predictor(object):
 
 class DriverBenchmarker(object):
     def __init__(self, models_dict, trial_length):
-        self.predictor = Predictor(models_dict, trial_length=trial_length)
+        self.models_dict = models_dict
+        self.trial_length = trial_length
 
     def set_configs(self, configs):
         self.configs = configs
 
     def run(self, num_trials, batch_size):
+        predictor = Predictor(self.models_dict, trial_length=self.trial_length)
+
         logger.info("Generating random inputs")
         vgg_inputs = [self._get_vgg_feats_input() for _ in range(1000)]
         vgg_inputs = [i for _ in range(40) for i in vgg_inputs]
@@ -183,12 +186,12 @@ class DriverBenchmarker(object):
             vgg_batch = vgg_inputs[batch_idx : batch_idx + batch_size]
             inception_batch = inception_inputs[batch_idx : batch_idx + batch_size]
 
-            self.predictor.predict(vgg_batch, inception_batch)
+            predictor.predict(vgg_batch, inception_batch)
 
-            if len(self.predictor.stats["thrus"]) > num_trials:
+            if len(predictor.stats["thrus"]) > num_trials:
                 break
 
-        save_results(self.configs, [self.predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
 
     def _get_vgg_feats_input(self):
         vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
