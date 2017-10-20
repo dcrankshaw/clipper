@@ -399,5 +399,5 @@ if __name__ == "__main__":
     cl.connect()
 
     fname = "{clients}_clients".format(clients=args.num_clients)
-    driver_utils.save_results(configs, cl, all_stats, "image_driver_1_e2e_exps", prefix=fname)
+    driver_utils.save_results(all_configs, cl, all_stats, "image_driver_1_e2e_exps", prefix=fname)
     sys.exit(0)
