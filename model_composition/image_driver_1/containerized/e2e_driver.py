@@ -195,7 +195,8 @@ def get_batch_sizes(metrics_json):
 
 class Predictor(object):
 
-    def __init__(self, clipper_metrics):
+    def __init__(self, clipper_metrics, trial_length):
+        self.trial_length = trial_length
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -254,7 +255,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            if self.batch_num_complete % 700 == 0:
+            if self.batch_num_complete % self.trial_length == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -299,8 +300,9 @@ class Predictor(object):
             .then(lgbm_continuation)
 
 class DriverBenchmarker(object):
-    def __init__(self, configs):
+    def __init__(self, configs, trial_length):
         self.configs = configs
+        self.trial_length = trial_length
 
     def run(self, num_trials, request_delay=.01):
         logger.info("Generating random inputs")
@@ -308,7 +310,7 @@ class DriverBenchmarker(object):
         inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         start_time = datetime.now()
-        predictor = Predictor(clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True, trial_length=self.trial_length)
         for vgg_feats_input, inception_input in inputs:
             predictor.predict(vgg_feats_input, inception_input)
             time.sleep(request_delay)
@@ -344,6 +346,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
     parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
+    parser.add_argument('-l', '--trial_length', type=float, default=.015, help="The length of each trial, in number of requests")
 
     args = parser.parse_args()
 
@@ -381,7 +384,7 @@ if __name__ == "__main__":
     #for request_delay in range(.01, .1, .01):
     setup_clipper(model_configs)
     output_config = RequestDelayConfig(args.request_delay)
-    benchmarker = DriverBenchmarker([output_config] + model_configs)
+    benchmarker = DriverBenchmarker([output_config] + model_configs, args.trial_length)
     p = Process(target=benchmarker.run, args=(args.num_trials, request_delay))
     p.start()
     p.join()
