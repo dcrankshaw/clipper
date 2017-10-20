@@ -280,15 +280,16 @@ class Server(threading.Thread):
                     if request_type == REQUEST_TYPE_PREDICT:
                         input_header_size = socket.recv()
                         input_header = socket.recv()
-                        raw_content_size = socket.recv()
-                        raw_content = socket.recv()
-
-                        t2 = datetime.now()
-
-                        parsed_input_header = np.frombuffer(
-                            input_header, dtype=np.int32)
-                        input_type, input_size, splits = parsed_input_header[
-                            0], parsed_input_header[1], parsed_input_header[2:]
+                        parsed_input_header = np.frombuffer(input_header, dtype=np.uint32)
+                        [
+                            input_type,
+                            num_inputs,
+                            input_sizes
+                        ] = [
+                            parsed_input_header[0],
+                            parsed_input_header[1],
+                            parsed_input_header[2:]
+                        ]
 
                         if int(input_type) != int(self.model_input_type):
                             print((
@@ -300,36 +301,25 @@ class Server(threading.Thread):
                                         int(input_type))))
                             raise
 
-                        if input_type == DATA_TYPE_STRINGS:
-                            # If we're processing string inputs, we delimit them using
-                            # the null terminator included in their serialized representation,
-                            # ignoring the extraneous final null terminator by
-                            # using a -1 slice
-                            inputs = np.array(
-                                raw_content.split('\0')[:-1],
-                                dtype=input_type_to_dtype(input_type))
-                        else:
-                            inputs = np.array(
-                                np.split(
-                                    np.frombuffer(
-                                        raw_content,
-                                        dtype=input_type_to_dtype(input_type)),
-                                    splits))
+                        inputs = []
+                        for _ in range(num_inputs):
+                            input_item = socket.recv()
+                            input_item = np.frombuffer(input_item, dtype=input_type_to_dtype(input_type))
+                            inputs.append(input_item)
 
-                        t3 = datetime.now()
+                        t2 = datetime.now()
 
                         prediction_request = PredictionRequest(
                             msg_id_bytes, inputs)
                         response = self.handle_prediction_request(
                             prediction_request)
 
-                        t4 = datetime.now()
+                        t3 = datetime.now()
 
                         response.send(socket, self.event_history)
 
-                        print("recv: %f us, parse: %f us, handle: %f us" %
-                              ((t2 - t1).microseconds, (t3 - t2).microseconds,
-                               (t4 - t3).microseconds))
+                        print("recv and parse: %f us, handle: %f us" %
+                              ((t2 - t1).microseconds, (t3 - t2).microseconds))
                         sys.stdout.flush()
                         sys.stderr.flush()
 
@@ -363,9 +353,9 @@ class PredictionRequest:
     Parameters
     ----------
     msg_id : bytes
-        The raw message id associated with the RPC 
+        The raw message id associated with the RPC
         prediction request message
-    inputs : 
+    inputs :
         One of [[byte]], [[int]], [[float]], [[double]], [string]
     """
 
@@ -513,4 +503,13 @@ class RPCService:
         self.server.model_version = model_version
         self.server.model_input_type = model_input_type
         self.server.model = model
+        print("Starting RPC Server. Model: {}:{}, host: {}, port: {}".format(
+            model_name, model_version, host, port))
         self.server.run()
+
+
+
+
+
+
+
