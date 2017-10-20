@@ -297,7 +297,7 @@ class DriverBenchmarker(object):
         inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         start_time = datetime.now()
-        predictor = Predictor()
+        predictor = Predictor(client_metrics=True)
         for vgg_feats_input, inception_input in inputs:
             predictor.predict(vgg_feats_input, inception_input)
             time.sleep(request_delay)
