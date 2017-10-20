@@ -192,7 +192,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > num_trials:
                 break
 
-        save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments", process_num)
+        save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments", self.process_num)
 
     def _get_vgg_feats_input(self):
         vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
