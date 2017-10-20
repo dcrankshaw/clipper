@@ -342,8 +342,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-t', '--num_trials', type=int, default=30, help='The number of trials to complete for the benchmarking process')
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
+    parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
 
     args = parser.parse_args()
 
@@ -379,9 +379,8 @@ if __name__ == "__main__":
 
 
     #for request_delay in range(.01, .1, .01):
-    request_delay = .03
     setup_clipper(model_configs)
-    output_config = RequestDelayConfig(request_delay)
+    output_config = RequestDelayConfig(args.request_delay)
     benchmarker = DriverBenchmarker([output_config] + model_configs)
     p = Process(target=benchmarker.run, args=(args.num_trials, request_delay))
     p.start()
