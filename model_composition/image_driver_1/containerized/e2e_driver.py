@@ -14,7 +14,7 @@ from io import BytesIO
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -300,9 +300,9 @@ class Predictor(object):
             .then(lgbm_continuation)
 
 class DriverBenchmarker(object):
-    def __init__(self, configs, trial_length):
-        self.configs = configs
+    def __init__(self, trial_length, queue):
         self.trial_length = trial_length
+        self.queue = queue
 
     def run(self, num_trials, request_delay=.01):
         logger.info("Generating random inputs")
@@ -318,9 +318,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > num_trials:
                 break
 
-        cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-        cl.connect()
-        driver_utils.save_results(self.configs, cl, [predictor.stats], "gpu_and_batch_size_experiments")
+        self.queue.put(predictor.stats)
 
     def _get_vgg_feats_input(self):
         input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
@@ -347,6 +345,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
     parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
     parser.add_argument('-l', '--trial_length', type=float, default=.015, help="The length of each trial, in number of requests")
+    parser.add_argument('-n', '--num_clients', type=int, help='number of clients')
 
     args = parser.parse_args()
 
@@ -379,13 +378,26 @@ if __name__ == "__main__":
                                         allocated_gpus=[])
 
     model_configs = [vgg_feats_config, vgg_svm_config, inception_feats_config, lgbm_config]
-
-
-    #for request_delay in range(.01, .1, .01):
-    setup_clipper(model_configs)
     output_config = RequestDelayConfig(args.request_delay)
-    benchmarker = DriverBenchmarker([output_config] + model_configs, args.trial_length)
-    p = Process(target=benchmarker.run, args=(args.num_trials, args.request_delay))
-    p.start()
-    p.join()
+    all_configs = model_configs + [output_config]
+    setup_clipper(model_configs)
 
+    queue = Queue()
+
+    procs = []
+    for i in range(args.num_clients):
+        benchmarker = DriverBenchmarker(args.trial_length, queue)
+        p = Process(target=benchmarker.run, args=(args.num_trials, args.request_delay))
+        p.start()
+        procs.append(p)
+
+    all_stats = []
+    for i in range(args.num_clients):
+        all_stats.append(queue.get())
+
+    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+    cl.connect()
+
+    fname = "{clients}_clients".format(clients=args.num_clients)
+    driver_utils.save_results(configs, cl, all_stats, "image_driver_1_e2e_exps", prefix=fname)
+    sys.exit(0)
