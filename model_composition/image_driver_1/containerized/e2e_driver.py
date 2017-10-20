@@ -193,6 +193,18 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_queue_sizes(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_queue_sizes = {}
+    for h in hists:
+        if "queue_size" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            mean = h[name][mean]
+            mean_queue_sizes[model] = round(float(mean), 2)
+
+    return mean_queue_sizes
+
 class Predictor(object):
 
     def __init__(self, clipper_metrics, trial_length):
@@ -213,6 +225,7 @@ class Predictor(object):
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
             self.stats["mean_batch_sizes"] = []
+            self.stats["mean_queue_sizes"] = []
 
     def init_stats(self):
         self.latencies = []
@@ -233,12 +246,16 @@ class Predictor(object):
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             batch_sizes = get_batch_sizes(metrics)
+            queue_sizes = get_queue_sizes(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
+            self.stats["mean_queue_sizes"].append(queue_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
+                         "batch_sizes: {batches} queue_sizes: {queues}").format(p99=p99, mean=mean, thru=thru,
                                                           batches=json.dumps(
-                                                              batch_sizes, sort_keys=True)))
+                                                              batch_sizes, sort_keys=True), 
+                                                          queues=json.dumps(
+                                                              queue_sizes, sort_keys=True)))
         else:
             logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
                                                                            mean=mean,
@@ -300,9 +317,10 @@ class Predictor(object):
             .then(lgbm_continuation)
 
 class DriverBenchmarker(object):
-    def __init__(self, trial_length, queue):
+    def __init__(self, trial_length, queue, clipper_metrics):
         self.trial_length = trial_length
         self.queue = queue
+        self.clipper_metrics = clipper_metrics
 
     def run(self, num_trials, request_delay=.01):
         logger.info("Generating random inputs")
@@ -310,7 +328,7 @@ class DriverBenchmarker(object):
         inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         start_time = datetime.now()
-        predictor = Predictor(clipper_metrics=True, trial_length=self.trial_length)
+        predictor = Predictor(clipper_metrics=self.clipper_metrics, trial_length=self.trial_length)
         for vgg_feats_input, inception_input in inputs:
             predictor.predict(vgg_feats_input, inception_input)
             time.sleep(request_delay)
@@ -386,7 +404,8 @@ if __name__ == "__main__":
 
     procs = []
     for i in range(args.num_clients):
-        benchmarker = DriverBenchmarker(args.trial_length, queue)
+        clipper_metrics = (i == 0)
+        benchmarker = DriverBenchmarker(args.trial_length, queue, clipper_metrics)
         p = Process(target=benchmarker.run, args=(args.num_trials, args.request_delay))
         p.start()
         procs.append(p)
