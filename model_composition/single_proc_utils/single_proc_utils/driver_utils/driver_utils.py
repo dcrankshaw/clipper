@@ -26,7 +26,7 @@ class HeavyNodeConfig(object):
     def to_json(self):
         return json.dumps(self.__dict__)
 
-def save_results(configs, client_metrics, results_dir):
+def save_results(configs, client_metrics, results_dir, process_num):
     """
     Parameters
     ----------
@@ -46,7 +46,7 @@ def save_results(configs, client_metrics, results_dir):
         "client_metrics": client_metrics,
     }
     results_file = os.path.join(results_dir,
-                                "results-{:%y%m%d_%H%M%S}.json".format(datetime.datetime.now()))
+                                "results-{:%y%m%d_%H%M%S}-{}.json".format(datetime.datetime.now(), process_num))
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))

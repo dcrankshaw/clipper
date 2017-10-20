@@ -161,9 +161,10 @@ class Predictor(object):
             self.init_stats()
 
 class DriverBenchmarker(object):
-    def __init__(self, models_dict, trial_length):
+    def __init__(self, models_dict, trial_length, process_num):
         self.models_dict = models_dict
         self.trial_length = trial_length
+        self.process_num = process_num
 
     def set_configs(self, configs):
         self.configs = configs
@@ -191,7 +192,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > num_trials:
                 break
 
-        save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments")
+        save_results(self.configs, [predictor.stats], "single_proc_gpu_and_batch_size_experiments", process_num)
 
     def _get_vgg_feats_input(self):
         vgg_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
@@ -210,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--inception_gpu', type=int, default=0, help="The GPU on which to run the inception featurization model")
     parser.add_argument('-t', '--num_trials', type=int, default=15, help="The number of trials to run")
     parser.add_argument('-tl', '--trial_length', type=int, default=200, help="The length of each trial, in requests")
+    parser.add_argument('-p', '--process_number', type=int, default=0)
     
     args = parser.parse_args()
 
@@ -220,7 +222,7 @@ if __name__ == "__main__":
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     
     models_dict = load_models(args.vgg_gpu, args.inception_gpu)
-    benchmarker = DriverBenchmarker(models_dict, args.trial_length)
+    benchmarker = DriverBenchmarker(models_dict, args.trial_length, args.process_number)
 
     for batch_size in batch_size_confs:
         configs = get_heavy_node_configs(batch_size=batch_size,
