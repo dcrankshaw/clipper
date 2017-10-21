@@ -10,17 +10,17 @@ INPUT_VECTOR_SIZE = 2048
 
 class TFLogRegContainer(rpc.ModelContainerBase):
 
-	def __init__(self, gpu_mem_frac=.95):
-		self.weights = self._generate_weights()
-		self.bias = self._generate_bias()
+    def __init__(self, gpu_mem_frac=.95):
+        self.weights = self._generate_weights()
+        self.bias = self._generate_bias()
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
-		self._create_prediction_graph()
+        self._create_prediction_graph()
 
 
-	def predict_floats(self, inputs):
+    def predict_floats(self, inputs):
         """
         Parameters
         --------------
@@ -29,32 +29,32 @@ class TFLogRegContainer(rpc.ModelContainerBase):
             represented as numpy arrays
         """
         
-		feed_dict = {
-			self.t_weights : self.weights,
-			self.t_bias : self.bias,
-			self.t_inputs : inputs
-		}
+        feed_dict = {
+            self.t_weights : self.weights,
+            self.t_bias : self.bias,
+            self.t_inputs : inputs
+        }
 
-		outputs = sess.run(self.t_predictions, feed_dict=feed_dict)
+        outputs = sess.run(self.t_predictions, feed_dict=feed_dict)
 
-		return outputs
+        return outputs
 
-	def _create_prediction_graph(self):
-		with tf.device("/gpu:0"):
-			self.t_inputs = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
-			self.t_weights = tf.placeholder(tf.float32, [INPUT_VECTOR_SIZE])
-			self.t_bias = tf.placeholder(tf.float32)
+    def _create_prediction_graph(self):
+        with tf.device("/gpu:0"):
+            self.t_inputs = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
+            self.t_weights = tf.placeholder(tf.float32, [INPUT_VECTOR_SIZE])
+            self.t_bias = tf.placeholder(tf.float32)
 
             t_apply_weights = tf.reduce_sum(tf.multiply(self.t_weights, tf.transpose(self.t_inputs)), axis=0)
             t_sig_input = t_apply_weights + self.tf_bias
 
             self.t_predictions = tf.sigmoid(t_sig_input)
 
-	def _generate_bias(self):
-		return np.random.uniform(-1,1) * 100
+    def _generate_bias(self):
+        return np.random.uniform(-1,1) * 100
 
-	def _generate_weights(self):
-		return np.random.uniform(-1,1, size=(INPUT_VECTOR_SIZE,))
+    def _generate_weights(self):
+        return np.random.uniform(-1,1, size=(INPUT_VECTOR_SIZE,))
 
 if __name__ == "__main__":
     print("Starting Tensorflow Logistic Regression Container")
