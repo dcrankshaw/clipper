@@ -40,11 +40,9 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
         }
 
         outputs = self.sess.run(self.t_outputs, feed_dict=feed_dict)
+        outputs = outputs.flatten()
 
-        print(outputs)
-        print(outputs.shape)
-
-        return outputs
+        return list(outputs)
 
     def _create_prediction_graph(self):
         with tf.device("/gpu:0"):
