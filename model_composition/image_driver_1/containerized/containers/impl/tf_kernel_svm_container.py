@@ -41,6 +41,9 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
 
         outputs = self.sess.run(self.t_predictions, feed_dict=feed_dict)
 
+        print(outputs)
+        print(outputs.shape)
+
         return outputs
 
     def _create_prediction_graph(self):
