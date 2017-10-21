@@ -58,7 +58,7 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
             # Taken from https://github.com/nfmcclure/tensorflow_cookbook
             rA = tf.reshape(tf.reduce_sum(tf.square(self.t_kernel), 1),[-1,1])
             rB = tf.reshape(tf.reduce_sum(tf.square(self.t_inputs), 1),[-1,1])
-            pred_sq_dist = tf.add(tf.subtract(rA, tf.multiply(2.0, tf.matmul(self.t_inputs, tf.transpose(self.t_kernel)))), tf.transpose(rB))
+            pred_sq_dist = tf.add(tf.subtract(rA, tf.multiply(2.0, tf.matmul(self.t_kernel, tf.transpose(self.t_inputs)))), tf.transpose(rB))
             pred_kernel = tf.exp(tf.multiply(gamma, tf.abs(pred_sq_dist)))
 
             t_preds = tf.matmul(tf.multiply(tf.transpose(tf.multiply(self.t_labels, self.t_weights)), self.t_bias), pred_kernel)
