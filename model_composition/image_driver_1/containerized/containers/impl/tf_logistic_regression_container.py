@@ -35,7 +35,7 @@ class TFLogRegContainer(rpc.ModelContainerBase):
             self.t_inputs : inputs
         }
 
-        outputs = sess.run(self.t_predictions, feed_dict=feed_dict)
+        outputs = self.sess.run(self.t_predictions, feed_dict=feed_dict)
 
         return outputs
 
