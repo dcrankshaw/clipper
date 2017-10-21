@@ -35,9 +35,10 @@ class TFLogRegContainer(rpc.ModelContainerBase):
             self.t_inputs : inputs
         }
 
-        outputs = self.sess.run(self.t_predictions, feed_dict=feed_dict)
+        outputs = self.sess.run(self.t_outputs, feed_dict=feed_dict)
+        outputs = outputs.flatten()
 
-        return outputs
+        return [np.array(item, dtype=np.float32) for item in outputs]
 
     def _create_prediction_graph(self):
         with tf.device("/gpu:0"):
@@ -46,9 +47,9 @@ class TFLogRegContainer(rpc.ModelContainerBase):
             self.t_bias = tf.placeholder(tf.float32)
 
             t_apply_weights = tf.reduce_sum(tf.multiply(self.t_weights, tf.transpose(self.t_inputs)), axis=0)
-            t_sig_input = t_apply_weights + self.tf_bias
+            t_sig_input = t_apply_weights + self.t_bias
 
-            self.t_predictions = tf.sigmoid(t_sig_input)
+            self.t_outputs = tf.sigmoid(t_sig_input)
 
     def _generate_bias(self):
         return np.random.uniform(-1,1) * 100
