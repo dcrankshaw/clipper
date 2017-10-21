@@ -58,7 +58,8 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
             pred_sq_dist = tf.add(tf.subtract(rA, tf.multiply(2.0, tf.matmul(self.t_inputs, tf.transpose(self.t_kernel)))), tf.transpose(rB))
             pred_kernel = tf.exp(tf.multiply(gamma, tf.abs(pred_sq_dist)))
 
-            self.t_predictions = tf.matmul(tf.multiply(tf.transpose(tf.multiply(self.t_labels, self.t_weights)), self.t_bias), pred_kernel)
+            t_preds = tf.matmul(tf.multiply(tf.transpose(tf.multiply(self.t_labels, self.t_weights)), self.t_bias), pred_kernel)
+            self.t_outputs = tf.sign(tf_preds - tf.reduce_mean(t_preds))
 
     def _generate_bias(self):
         return np.random.uniform(-1,1) * 100
