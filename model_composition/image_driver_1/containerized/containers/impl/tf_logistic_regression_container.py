@@ -21,6 +21,14 @@ class TFLogRegContainer(rpc.ModelContainerBase):
 
 
 	def predict_floats(self, inputs):
+        """
+        Parameters
+        --------------
+        inputs : [np.ndarray]
+            A list of float vectors of length 2048,
+            represented as numpy arrays
+        """
+        
 		feed_dict = {
 			self.t_weights : self.weights,
 			self.t_bias : self.bias,
