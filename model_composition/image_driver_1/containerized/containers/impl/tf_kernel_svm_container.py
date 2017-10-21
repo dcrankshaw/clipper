@@ -39,7 +39,7 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
             self.t_inputs : inputs
         }
 
-        outputs = self.sess.run(self.t_predictions, feed_dict=feed_dict)
+        outputs = self.sess.run(self.t_outputs, feed_dict=feed_dict)
 
         print(outputs)
         print(outputs.shape)
