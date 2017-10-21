@@ -12,8 +12,8 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
 
     def __init__(self, kernel_size=2000, gpu_mem_frac=.95):
         self.kernel_data = self._generate_kernel_data(kernel_size)
-        self.weights = self._generate_weights()
-        self.labels = self._generate_labels()
+        self.weights = self._generate_weights(kernel_size)
+        self.labels = self._generate_labels(kernel_size)
         self.bias = self._generate_bias()
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
@@ -63,11 +63,11 @@ class TFKernelSvmContainer(rpc.ModelContainerBase):
     def _generate_bias(self):
         return np.random.uniform(-1,1) * 100
 
-    def _generate_weights(self, kernel_size):
-        return np.random.uniform(-1,1, size=(kernel_size, 1))
+    def _generate_weights(self, training_data_size):
+        return np.random.uniform(-1,1, size=(training_data_size, 1))
 
-    def _generate_labels(self, kernel_size):
-        return np.array(np.random.choice([-1,1], size=(kernel_size, 1)), dtype=np.float32)
+    def _generate_labels(self, training_data_size):
+        return np.array(np.random.choice([-1,1], size=(training_data_size, 1)), dtype=np.float32)
 
     def _generate_kernel_data(self, kernel_size):
         return np.random.rand(kernel_size, INPUT_VECTOR_SIZE) * 10
