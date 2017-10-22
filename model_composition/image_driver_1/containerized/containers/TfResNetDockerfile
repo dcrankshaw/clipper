@@ -8,4 +8,4 @@ COPY tf_resnet_model_data/ /model
 ENV CLIPPER_MODEL_GRAPH_PATH=/model/tf_resnet_feats_graph.meta
 ENV CLIPPER_MODEL_CHECKPOINT_PATH=/model/tf_resnet_feats.ckpt
 
-CMD ["python", "/container/inception_feats_container.py"]
+CMD ["python", "/container/tf_resnet_container.py"]
