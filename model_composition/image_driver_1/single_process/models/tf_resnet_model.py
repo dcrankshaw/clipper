@@ -7,15 +7,24 @@ import tensorflow as tf
 
 from single_proc_utils import ModelBase
 
+GRAPH_RELATIVE_PATH = "tf_resnet_152_feats_graph.meta"
+CHECKPOINT_RELATIVE_PATH = "tf_resnet_152_feats.ckpt"
+
 class TfResNetModel(ModelBase):
 
-    def __init__(self, model_graph_path, model_ckpt_path, gpu_mem_frac=.95):
+    def __init__(self, model_data_path):
         ModelBase.__init__(self)
+
+        graph_path = os.path.join(model_data_path, GRAPH_RELATIVE_PATH)
+        checkpoint_path = os.path.join(model_data_path, CHECKPOINT_RELATIVE_PATH)
+
+        assert os.path.exists(graph_path)
+        assert os.path.exists(checkpoint_path)
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
-        self._load_model(model_graph_path, model_ckpt_path)
+        self._load_model(graph_path, checkpoint_path)
 
     def predict(self, inputs):
         """
@@ -25,7 +34,7 @@ class TfResNetModel(ModelBase):
             A list of 3-channel, 224 x 224 images, each represented
             as a numpy array
         """
-        
+
         reshaped_inputs = [input_item.reshape(224,224,3) for input_item in inputs]
         all_img_features = self._get_image_features(reshaped_inputs)
         return [np.array(item, dtype=np.float32) for item in all_img_features]
