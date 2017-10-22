@@ -313,7 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
     parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
     parser.add_argument('-l', '--trial_length', type=int, default=10, help="The length of each trial, in number of requests")
-    parser.add_argument('-n', '--num_clients', type=int, help='number of clients')
+    parser.add_argument('-n', '--num_clients', type=int, defaukt=1, help='number of clients')
 
     args = parser.parse_args()
 
