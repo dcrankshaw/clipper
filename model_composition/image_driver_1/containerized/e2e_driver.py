@@ -25,28 +25,15 @@ logger = logging.getLogger(__name__)
 
 # Models and applications for each heavy node
 # will share the same name
-VGG_FEATS_MODEL_APP_NAME = "vgg"
-VGG_KPCA_SVM_MODEL_APP_NAME = "kpca-svm"
-VGG_KERNEL_SVM_MODEL_APP_NAME = "kernel-svm"
-VGG_ELASTIC_NET_MODEL_APP_NAME = "elastic-net"
 INCEPTION_FEATS_MODEL_APP_NAME = "inception"
-LGBM_MODEL_APP_NAME = "lgbm"
+TF_KERNEL_SVM_MODEL_APP_NAME = "tf-kernel-svm"
+TF_LOG_REG_MODEL_APP_NAME = "tf-log-reg"
+TF_RESNET_MODEL_APP_NAME = "tf-resnet-feats"
 
-VGG_FEATS_IMAGE_NAME = "model-comp/vgg-feats"
-VGG_KPCA_SVM_IMAGE_NAME = "model-comp/kpca-svm"
-VGG_KERNEL_SVM_IMAGE_NAME = "model-comp/kernel-svm"
-VGG_ELASTIC_NET_IMAGE_NAME = "model-comp/elastic-net"
 INCEPTION_FEATS_IMAGE_NAME = "model-comp/inception-feats"
-LGBM_IMAGE_NAME = "model-comp/lgbm"
-
-VALID_MODEL_NAMES = [
-    VGG_FEATS_MODEL_APP_NAME,
-    VGG_KPCA_SVM_MODEL_APP_NAME,
-    VGG_KERNEL_SVM_MODEL_APP_NAME,
-    VGG_ELASTIC_NET_MODEL_APP_NAME,
-    INCEPTION_FEATS_MODEL_APP_NAME,
-    LGBM_MODEL_APP_NAME
-]
+TF_KERNEL_SVM_IMAGE_NAME = "model-comp/tf-kernel-svm"
+TF_LOG_REG_IMAGE_NAME = "model-comp/tf-log-reg"
+TF_RESNET_IMAGE_NAME = "model-comp/tf-resnet-feats"
 
 CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
@@ -72,25 +59,7 @@ def setup_clipper(configs):
     return config
 
 def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
-    if model_name == VGG_FEATS_MODEL_APP_NAME:
-        if not cpus_per_replica:
-            cpus_per_replica = 2
-        if not allocated_cpus:
-            allocated_cpus = [6,7,14,15]
-        if not allocated_gpus:
-            allocated_gpus = [0]
-
-        return driver_utils.HeavyNodeConfig(name=VGG_FEATS_MODEL_APP_NAME,
-                                            input_type="floats",
-                                            model_image=VGG_FEATS_IMAGE_NAME,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
-
-    elif model_name == INCEPTION_FEATS_MODEL_APP_NAME:
+    if model_name == INCEPTION_FEATS_MODEL_APP_NAME:
         if not cpus_per_replica:
             cpus_per_replica = 1
         if not allocated_cpus:
@@ -108,17 +77,17 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True)
 
-    elif model_name == VGG_KPCA_SVM_MODEL_APP_NAME:
+    elif model_name == TF_KERNEL_SVM_MODEL_APP_NAME:
         if not cpus_per_replica:
-            cpus_per_replica = 2
+            cpus_per_replica = 1
         if not allocated_cpus:
-            allocated_cpus = range(20,27)
+            allocated_cpus = [20]
         if not allocated_gpus:
-            allocated_gpus = []
+            allocated_gpus = [1]
 
-        return driver_utils.HeavyNodeConfig(name=VGG_KPCA_SVM_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=TF_KERNEL_SVM_MODEL_APP_NAME,
                                             input_type="floats",
-                                            model_image=VGG_KPCA_SVM_IMAGE_NAME,
+                                            model_image=TF_KERNEL_SVM_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
                                             gpus=allocated_gpus,
@@ -126,16 +95,17 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True)
 
-    elif model_name == VGG_KERNEL_SVM_MODEL_APP_NAME:
+    elif model_name == TF_LOG_REG_MODEL_APP_NAME:
         if not cpus_per_replica:
             cpus_per_replica = 1
         if not allocated_cpus:
-            allocated_cpus = range(20,27)
+            allocated_cpus = [20]
         if not allocated_gpus:
-            allocated_gpus = []
-        return driver_utils.HeavyNodeConfig(name=VGG_KERNEL_SVM_MODEL_APP_NAME,
+            allocated_gpus = [1]
+
+        return driver_utils.HeavyNodeConfig(name=TF_LOG_REG_MODEL_APP_NAME,
                                             input_type="floats",
-                                            model_image=VGG_KERNEL_SVM_IMAGE_NAME,
+                                            model_image=TF_LOG_REG_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
                                             gpus=allocated_gpus,
@@ -143,35 +113,17 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True)
 
-    elif model_name == VGG_ELASTIC_NET_MODEL_APP_NAME:
+    elif model_name == TF_RESNET_MODEL_APP_NAME:
         if not cpus_per_replica:
             cpus_per_replica = 1
         if not allocated_cpus:
-            allocated_cpus = range(20,27)
+            allocated_cpus = [20]
         if not allocated_gpus:
-            allocated_gpus = []
-        return driver_utils.HeavyNodeConfig(name=VGG_ELASTIC_NET_MODEL_APP_NAME,
+            allocated_gpus = [1]
+
+        return driver_utils.HeavyNodeConfig(name=TF_RESNET_MODEL_APP_NAME,
                                             input_type="floats",
-                                            model_image=VGG_ELASTIC_NET_IMAGE_NAME,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)        
-
-
-    elif model_name == LGBM_MODEL_APP_NAME:
-        if not cpus_per_replica:
-            cpus_per_replica = 1
-        if not allocated_cpus:
-            allocated_cpus = [28,29]
-        if not allocated_gpus:
-            allocated_gpus = []
-
-        return driver_utils.HeavyNodeConfig(name=LGBM_MODEL_APP_NAME,
-                                            input_type="floats",
-                                            model_image=LGBM_IMAGE_NAME,
+                                            model_image=TF_RESNET_IMAGE_NAME,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
                                             gpus=allocated_gpus,
@@ -261,7 +213,7 @@ class Predictor(object):
                                                                            mean=mean,
                                                                            thru=thru))
 
-    def predict(self, vgg_input, inception_input):
+    def predict(self, resnet_input, inception_input):
         begin_time = datetime.now()
         classifications_lock = Lock()
         classifications = {}
@@ -276,18 +228,18 @@ class Predictor(object):
                 self.print_stats()
                 self.init_stats()
 
-        def vgg_feats_continuation(vgg_features):
-            if vgg_features == DEFAULT_OUTPUT:
+        def resnet_feats_continuation(resnet_features):
+            if resnet_features == DEFAULT_OUTPUT:
                 return
-            return self.client.send_request(VGG_KERNEL_SVM_MODEL_APP_NAME, vgg_features)
+            return self.client.send_request(TF_KERNEL_SVM_MODEL_APP_NAME, resnet_features)
 
         def svm_continuation(svm_classification):
             if svm_classification == DEFAULT_OUTPUT:
                 return
             else:
                 classifications_lock.acquire()
-                if LGBM_MODEL_APP_NAME not in classifications:
-                    classifications[VGG_KERNEL_SVM_MODEL_APP_NAME] = svm_classification
+                if TF_LOG_REG_MODEL_APP_NAME not in classifications:
+                    classifications[TF_KERNEL_SVM_MODEL_APP_NAME] = svm_classification
                 else:
                     update_perf_stats()
                 classifications_lock.release()
@@ -295,26 +247,27 @@ class Predictor(object):
         def inception_feats_continuation(inception_features):
             if inception_features == DEFAULT_OUTPUT:
                 return
-            return self.client.send_request(LGBM_MODEL_APP_NAME, inception_features)
+            return self.client.send_request(TF_LOG_REG_MODEL_APP_NAME, inception_features)
 
-        def lgbm_continuation(lgbm_classification):
-            if lgbm_classification == DEFAULT_OUTPUT:
+
+        def log_reg_continuation(log_reg_vals):
+            if log_reg_vals == DEFAULT_OUTPUT:
                 return
             else:
                 classifications_lock.acquire()
-                if VGG_KERNEL_SVM_MODEL_APP_NAME not in classifications:
-                    classifications[LGBM_MODEL_APP_NAME] = lgbm_classification
+                if TF_KERNEL_SVM_MODEL_APP_NAME not in classifications:
+                    classifications[TF_LOG_REG_MODEL_APP_NAME] = log_reg_vals
                 else:
                     update_perf_stats()
                 classifications_lock.release()
 
-        self.client.send_request(VGG_FEATS_MODEL_APP_NAME, vgg_input) \
-            .then(vgg_feats_continuation) \
+        self.client.send_request(TF_RESNET_MODEL_APP_NAME, resnet_input) \
+            .then(resnet_feats_continuation) \
             .then(svm_continuation)
 
         self.client.send_request(INCEPTION_FEATS_MODEL_APP_NAME, inception_input) \
             .then(inception_feats_continuation) \
-            .then(lgbm_continuation)
+            .then(log_reg_continuation)
 
 class DriverBenchmarker(object):
     def __init__(self, trial_length, queue, clipper_metrics):
@@ -324,13 +277,13 @@ class DriverBenchmarker(object):
 
     def run(self, num_trials, request_delay=.01):
         logger.info("Generating random inputs")
-        base_inputs = [(self._get_vgg_feats_input(), self._get_inception_input()) for _ in range(1000)]
+        base_inputs = [(self._get_resnet_input(), self._get_inception_input()) for _ in range(1000)]
         inputs = [i for _ in range(40) for i in base_inputs]
         logger.info("Starting predictions")
         start_time = datetime.now()
         predictor = Predictor(clipper_metrics=self.clipper_metrics, trial_length=self.trial_length)
-        for vgg_feats_input, inception_input in inputs:
-            predictor.predict(vgg_feats_input, inception_input)
+        for resnet_input, inception_input in inputs:
+            predictor.predict(resnet_input, inception_input)
             time.sleep(request_delay)
 
             if len(predictor.stats["thrus"]) > num_trials:
@@ -338,12 +291,9 @@ class DriverBenchmarker(object):
 
         self.queue.put(predictor.stats)
 
-    def _get_vgg_feats_input(self):
-        input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        input_img = Image.fromarray(input_img.astype(np.uint8))
-        vgg_img = input_img.resize((224, 224)).convert('RGB')
-        vgg_input = np.array(vgg_img, dtype=np.float32)
-        return vgg_input.flatten()
+    def _get_resnet_input(self):
+        resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
+        return resnet_input.flatten()
 
     def _get_inception_input(self):
         inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
@@ -367,35 +317,34 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    vgg_feats_config = get_heavy_node_config(model_name=VGG_FEATS_MODEL_APP_NAME, 
-                                             batch_size=64, 
-                                             num_replicas=1, 
-                                             cpus_per_replica=1, 
-                                             allocated_cpus=[14,18,19,20], 
-                                             allocated_gpus=[0,2,3,4])
+    resnet_feats_config = get_heavy_node_config(model_name=TF_RESNET_MODEL_APP_NAME,
+                                                batch_size=64,
+                                                num_replicas=1,
+                                                cpus_per_replica=1,
+                                                allocated_cpus=[14,15,16,17],
+                                                allocated_gpus=[0,1,2,3])
 
-    vgg_svm_config = get_heavy_node_config(model_name=VGG_KERNEL_SVM_MODEL_APP_NAME, 
-                                           batch_size=32, 
-                                           num_replicas=1, 
-                                           cpus_per_replica=1, 
-                                           allocated_cpus=[15,21,22], 
-                                           allocated_gpus=[])
+    kernel_svm_config = get_heavy_node_config(model_name=TF_KERNEL_SVM_MODEL_APP_NAME,
+                                              batch_size=32,
+                                              num_replicas=1,
+                                              cpus_per_replica=1,
+                                              allocated_cpus=[18,19])
 
     inception_feats_config = get_heavy_node_config(model_name=INCEPTION_FEATS_MODEL_APP_NAME, 
                                                    batch_size=20, 
                                                    num_replicas=1, 
                                                    cpus_per_replica=1, 
-                                                   allocated_cpus=[16,23,24,25], 
-                                                   allocated_gpus=[1,5,6,7])
+                                                   allocated_cpus=[20,21,22,23], 
+                                                   allocated_gpus=[4,5,6,7])
 
-    lgbm_config = get_heavy_node_config(model_name=LGBM_MODEL_APP_NAME, 
-                                        batch_size=1, 
-                                        num_replicas=1, 
-                                        cpus_per_replica=1, 
-                                        allocated_cpus=[17], 
-                                        allocated_gpus=[])
+    log_reg_config = get_heavy_node_config(model_name=TF_LOG_REG_MODEL_APP_NAME,
+                                           batch_size=1,
+                                           num_replicas=1,
+                                           cpus_per_replica=1,
+                                           allocated_cpus=[24])
 
-    model_configs = [vgg_feats_config, vgg_svm_config, inception_feats_config, lgbm_config]
+    model_configs = [resnet_feats_config, kernel_svm_config, inception_feats_config, log_reg_config]
+
     output_config = RequestDelayConfig(args.request_delay)
     all_configs = model_configs + [output_config]
     setup_clipper(model_configs)
