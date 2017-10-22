@@ -43,7 +43,7 @@ class TFLogRegContainer(rpc.ModelContainerBase):
     def _create_prediction_graph(self):
         with tf.device("/gpu:0"):
             self.t_inputs = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
-            self.t_weights = tf.placeholder(tf.float32, [INPUT_VECTOR_SIZE])
+            self.t_weights = tf.placeholder(tf.float32, [INPUT_VECTOR_SIZE, 1])
             self.t_bias = tf.placeholder(tf.float32)
 
             t_apply_weights = tf.reduce_sum(tf.multiply(self.t_weights, tf.transpose(self.t_inputs)), axis=0)
@@ -55,7 +55,7 @@ class TFLogRegContainer(rpc.ModelContainerBase):
         return np.random.uniform(-1,1) * 100
 
     def _generate_weights(self):
-        return np.random.uniform(-1,1, size=(INPUT_VECTOR_SIZE,))
+        return np.random.uniform(-1,1, size=(INPUT_VECTOR_SIZE,1))
 
 if __name__ == "__main__":
     print("Starting Tensorflow Logistic Regression Container")
