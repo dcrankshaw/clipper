@@ -36,7 +36,8 @@ def get_heavy_node_configs(batch_size, allocated_cpus, resnet_gpus=[], inception
     resnet_config = HeavyNodeConfig(model_name=TF_RESNET_MODEL_NAME,
                                     input_type="floats",
                                     allocated_cpus=allocated_cpus,
-                                    gpus=resnet_gpus) 
+                                    gpus=resnet_gpus,
+                                    batch_size=batch_size)
 
     inception_config = HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
                                        input_type="floats",
