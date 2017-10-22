@@ -14,8 +14,8 @@ class TFKernelSVM(ModelBase):
         ModelBase.__init__(self)
 
         self.kernel_data = self._generate_kernel_data(kernel_size)
-        self.weights = self._generate_weights()
-        self.labels = self._generate_labels()
+        self.weights = self._generate_weights(kernel_size)
+        self.labels = self._generate_labels(kernel_size)
         self.bias = self._generate_bias()
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
