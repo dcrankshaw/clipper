@@ -40,7 +40,7 @@ class InceptionFeaturizationModel(ModelBase):
         
         reshaped_inputs = [input_item.reshape(299,299,3) for input_item in inputs]
         all_img_features = self._get_image_features(reshaped_inputs)
-        return [np.array(item, dtype=np.float32) for item in all_img_features]
+        return [np.array(item.flatten(), dtype=np.float32) for item in all_img_features]
 
     def _load_inception_model(self, inception_model_path):
         inception_file = open(inception_model_path, mode='rb')
