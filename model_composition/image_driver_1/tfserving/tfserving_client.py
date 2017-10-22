@@ -89,7 +89,7 @@ class Benchmarker(object):
             for r in range(reqs_per_trial):
                 data = self.images[r % len(self.images)]
                 request = predict_pb2.PredictRequest()
-                request.model_spec.name = 'kernel_svm'
+                request.model_spec.name = 'log_reg'
                 request.model_spec.signature_name = 'predict_inputs'
                 # TODO: remove this copy
                 request.inputs['inputs'].CopyFrom(
