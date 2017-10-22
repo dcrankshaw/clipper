@@ -12,16 +12,16 @@ INPUT_VECTOR_SIZE = 2048
 
 class TfLogRegModel(ModelBase):
 
-	def __init__(self, gpu_mem_frac=.95):
+    def __init__(self, gpu_mem_frac=.95):
         ModelBase.__init__(self)
 
-		self.weights = self._generate_weights()
-		self.bias = self._generate_bias()
+        self.weights = self._generate_weights()
+        self.bias = self._generate_bias()
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
-		self._create_prediction_graph()
+        self._create_prediction_graph()
 
 
     def predict(self, inputs):

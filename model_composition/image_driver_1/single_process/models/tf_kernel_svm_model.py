@@ -10,18 +10,18 @@ INPUT_VECTOR_SIZE = 2048
 
 class TFKernelSVM(ModelBase):
 
-	def __init__(self, kernel_size=2000, gpu_mem_frac=.95):
+    def __init__(self, kernel_size=2000, gpu_mem_frac=.95):
         ModelBase.__init__(self)
 
-		self.kernel_data = self._generate_kernel_data(kernel_size)
-		self.weights = self._generate_weights()
-		self.labels = self._generate_labels()
-		self.bias = self._generate_bias()
+        self.kernel_data = self._generate_kernel_data(kernel_size)
+        self.weights = self._generate_weights()
+        self.labels = self._generate_labels()
+        self.bias = self._generate_bias()
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
 
-		self._create_prediction_graph()
+        self._create_prediction_graph()
 
 
     def predict(self, inputs):
