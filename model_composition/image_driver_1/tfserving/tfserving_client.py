@@ -42,15 +42,9 @@ logger = logging.getLogger(__name__)
 
 def gen_imagenet_image():
 
-    input_img = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+    input_img = np.array(np.random.rand(2048), dtype=np.float32)
+    # input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
     return input_img
-    # input_img = Image.fromarray(input_img.astype(np.uint8))
-    # inmem_inception_jpeg = BytesIO()
-    # resized_inception = input_img.resize((299, 299)).convert('RGB')
-    # resized_inception.save(inmem_inception_jpeg, format="JPEG")
-    # inmem_inception_jpeg.seek(0)
-    # data = inmem_inception_jpeg.read()
-    # return data
 
 
 def run_benchmark(q):
@@ -95,15 +89,15 @@ class Benchmarker(object):
             for r in range(reqs_per_trial):
                 data = self.images[r % len(self.images)]
                 request = predict_pb2.PredictRequest()
-                request.model_spec.name = 'inception_feats'
+                request.model_spec.name = 'kernel_svm'
                 request.model_spec.signature_name = 'predict_inputs'
                 # TODO: remove this copy
                 request.inputs['inputs'].CopyFrom(
-                    tf.contrib.util.make_tensor_proto(data, shape=[1, 299, 299, 3]))
+                    tf.contrib.util.make_tensor_proto(data, shape=[1, 2048]))
                 rstart = datetime.now()
                 result = self.stub.Predict(request, 5.0)
-                # print(result.outputs["feats"])
-                # return
+                print(result)
+                return
                 lat = (datetime.now() - rstart).total_seconds()
                 self.latencies.append(lat)
                 self.batch_num_complete += 1
@@ -124,7 +118,7 @@ def mean_throughput(stats):
 if __name__ == '__main__':
 
     # for num_procs in [1, 5, 10, 15, 20]:
-    num_procs = 5
+    num_procs = 1
     q = Queue()
     processes = []
     stats = []

@@ -5,8 +5,7 @@ import tensorflow as tf
 
 def export():
     inception_model_path = os.path.abspath("./raw_data/inception_feats_graph_def.pb")
-    output_path = os.path.join(os.path.abspath("./exported_tf_models/inception_tfserve/1"),
-                               "inception_tfserve.pb")
+    output_path = os.path.abspath("./exported_tf_models/inception_tfserve/1")
     with tf.Session() as sess:
         with open(inception_model_path, mode='rb') as inception_file:
             inception_text = inception_file.read()
