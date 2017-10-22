@@ -24,7 +24,7 @@ class TFKernelSVM(ModelBase):
 		self._create_prediction_graph()
 
 
-	def predict(self, inputs):
+    def predict(self, inputs):
         """
         Parameters
         --------------
@@ -33,43 +33,45 @@ class TFKernelSVM(ModelBase):
             represented as numpy arrays
         """
         
-		feed_dict = {
-			self.t_kernel : self.kernel_data,
-			self.t_weights : self.weights,
-			self.t_labels : self.labels,
-			self.t_bias : self.bias,
-			self.t_inputs : inputs
-		}
+        feed_dict = {
+            self.t_kernel : self.kernel_data,
+            self.t_weights : self.weights,
+            self.t_labels : self.labels,
+            self.t_bias : self.bias,
+            self.t_inputs : inputs
+        }
 
-		outputs = sess.run(self.t_predictions, feed_dict=feed_dict)
+        outputs = self.sess.run(self.t_outputs, feed_dict=feed_dict)
+        outputs = outputs.flatten()
 
-		return outputs
+        return [np.array(item, dtype=np.float32) for item in outputs]
 
-	def _create_prediction_graph(self):
-		with tf.device("/gpu:0"):
-			self.t_kernel = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
-			self.t_inputs = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
-			self.t_weights = tf.placeholder(tf.float32, [None, 1])
-			self.t_labels = tf.placeholder(tf.float32, [None, 1])
-			self.t_bias = tf.placeholder(tf.float32)
-			gamma = tf.constant(-50.0)
+    def _create_prediction_graph(self):
+        with tf.device("/gpu:0"):
+            self.t_kernel = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
+            self.t_inputs = tf.placeholder(tf.float32, [None, INPUT_VECTOR_SIZE])
+            self.t_weights = tf.placeholder(tf.float32, [None, 1])
+            self.t_labels = tf.placeholder(tf.float32, [None, 1])
+            self.t_bias = tf.placeholder(tf.float32)
+            gamma = tf.constant(-50.0)
 
-			# Taken from https://github.com/nfmcclure/tensorflow_cookbook
-			rA = tf.reshape(tf.reduce_sum(tf.square(self.t_kernel), 1),[-1,1])
-			rB = tf.reshape(tf.reduce_sum(tf.square(self.t_inputs), 1),[-1,1])
-			pred_sq_dist = tf.add(tf.subtract(rA, tf.multiply(2.0, tf.matmul(self.t_inputs, tf.transpose(self.t_kernel)))), tf.transpose(rB))
-			pred_kernel = tf.exp(tf.multiply(gamma, tf.abs(pred_sq_dist)))
+            # Taken from https://github.com/nfmcclure/tensorflow_cookbook
+            rA = tf.reshape(tf.reduce_sum(tf.square(self.t_kernel), 1),[-1,1])
+            rB = tf.reshape(tf.reduce_sum(tf.square(self.t_inputs), 1),[-1,1])
+            pred_sq_dist = tf.add(tf.subtract(rA, tf.multiply(2.0, tf.matmul(self.t_kernel, tf.transpose(self.t_inputs)))), tf.transpose(rB))
+            pred_kernel = tf.exp(tf.multiply(gamma, tf.abs(pred_sq_dist)))
 
-			self.t_predictions = tf.matmul(tf.multiply(tf.transpose(tf.multiply(self.t_labels, self.t_weights)), self.t_bias), pred_kernel)
+            t_preds = tf.matmul(tf.multiply(tf.transpose(tf.multiply(self.t_labels, self.t_weights)), self.t_bias), pred_kernel)
+            self.t_outputs = tf.sign(t_preds - tf.reduce_mean(t_preds))
 
-	def _generate_bias(self):
-		return np.random.uniform(-1,1) * 100
+    def _generate_bias(self):
+        return np.random.uniform(-1,1) * 100
 
-	def _generate_weights(self, kernel_size):
-		return np.random.uniform(-1,1, size=(kernel_size, 1))
+    def _generate_weights(self, training_data_size):
+        return np.random.uniform(-1,1, size=(training_data_size, 1))
 
-	def _generate_labels(self, kernel_size):
-		return np.array(np.random.choice([-1,1], size=(kernel_size, 1)), dtype=np.float32)
+    def _generate_labels(self, training_data_size):
+        return np.array(np.random.choice([-1,1], size=(training_data_size, 1)), dtype=np.float32)
 
-	def _generate_kernel_data(self, kernel_size):
-		return np.random.rand(kernel_size, INPUT_VECTOR_SIZE) * 10
+    def _generate_kernel_data(self, kernel_size):
+        return np.random.rand(kernel_size, INPUT_VECTOR_SIZE) * 10
