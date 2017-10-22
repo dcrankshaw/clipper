@@ -33,7 +33,7 @@ class TfResNetContainer(rpc.ModelContainerBase):
     def _load_model(self, model_graph_path, model_ckpt_path):
         with tf.device("/gpu:0"):
             saver = tf.train.import_meta_graph(model_graph_path, clear_devices=True)
-            saver.restore(self.sess, ckpt_path)
+            saver.restore(self.sess, model_ckpt_path)
             self.t_images = tf.get_default_graph().get_tensor_by_name('images:0')
             self.t_features = tf.get_default_graph().get_tensor_by_name('avg_pool:0')
 
