@@ -83,7 +83,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
         if not allocated_cpus:
             allocated_cpus = [20]
         if not allocated_gpus:
-            allocated_gpus = [1]
+            allocated_gpus = []
 
         return driver_utils.HeavyNodeConfig(name=TF_KERNEL_SVM_MODEL_APP_NAME,
                                             input_type="floats",
@@ -101,7 +101,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
         if not allocated_cpus:
             allocated_cpus = [20]
         if not allocated_gpus:
-            allocated_gpus = [1]
+            allocated_gpus = []
 
         return driver_utils.HeavyNodeConfig(name=TF_LOG_REG_MODEL_APP_NAME,
                                             input_type="floats",
