@@ -272,7 +272,7 @@ class Predictor(object):
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
-        self.stats["all_lats"] += self.latencies
+        self.stats["all_lats"].append(lats)
         logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
                                                                        mean=mean,
                                                                        thru=thru))
