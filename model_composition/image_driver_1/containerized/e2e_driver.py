@@ -193,7 +193,7 @@ class Predictor(object):
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
-        self.stats["all_lats"] = self.stats["all_lats"] + self.latencies
+        self.stats["all_lats"].append(lats)
         self.stats["mean_lats"].append(mean)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
