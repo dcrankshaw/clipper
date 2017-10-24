@@ -253,7 +253,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 class Predictor(object):
 
-    def __init__(self, config, clipper_metrics):
+    def __init__(self, clipper_metrics):
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -265,7 +265,6 @@ class Predictor(object):
             "all_lats": [],
         }
         self.total_num_complete = 0
-        self.config = config
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
         self.get_clipper_metrics = clipper_metrics
@@ -341,7 +340,7 @@ class ModelBenchmarker(object):
         self.delay = 0.001
         setup_clipper(self.config)
         time.sleep(5)
-        predictor = Predictor(self.config, clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True)
         idx = 0
         while len(predictor.stats["thrus"]) < 5:
             predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
