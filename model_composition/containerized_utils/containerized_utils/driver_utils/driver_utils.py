@@ -20,7 +20,8 @@ class HeavyNodeConfig(object):
                  batch_size,
                  use_nvidia_docker,
                  slo=5000000,
-                 input_size=-1):
+                 input_size=-1,
+                 no_diverge=False):
         self.name = name
         self.input_type = input_type
         self.model_image = model_image
@@ -38,6 +39,7 @@ class HeavyNodeConfig(object):
             self.gpus_per_replica = 0
         else:
             self.gpus_per_replica = 1
+        self.no_diverge = no_diverge
 
     def to_json(self):
         return json.dumps(self.__dict__)
