@@ -354,7 +354,7 @@ class ModelBenchmarker(object):
         logger.info("Initializing delay to {}".format(self.delay))
 
     def find_steady_state(self):
-        setup_clipper(self.configs)
+        setup_clipper(self.config)
         time.sleep(7)
         predictor = Predictor(clipper_metrics=True)
         idx = 0
@@ -369,7 +369,7 @@ class ModelBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs)
+                convergence_state = driver_utils.check_convergence(predictor.stats, self.config)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
