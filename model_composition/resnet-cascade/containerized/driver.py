@@ -150,9 +150,10 @@ def check_convergence(stats, config):
         return (False, np.sign(lr.slope))
     else:
         # Slope is 0, now check to see if mean batch_sizes are less than
-        # configured batch size. We allow at most 2 of the trials to have
-        # max batch size
-        if mean_batch_size < (config.batch_size - 0.05):
+        # configured batch size.
+        if config.batch_size == 1.0:
+            return (True, 0.0)
+        elif mean_batch_size < config.batch_size:
             return (True, 0.0)
         else:
             logger.info("Slope is 0 but batch_sizes are too big")
@@ -310,7 +311,8 @@ if __name__ == "__main__":
 
     # args = parser.parse_args()
 
-    models = ["alexnet", "res50", "res152"]
+    # models = ["alexnet", "res50", "res152", "res18"]
+    models = ["res152", "res18"]
 
     cpus = 1
     gpus = 1
