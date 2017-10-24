@@ -311,7 +311,7 @@ class ModelBenchmarker(object):
         base_inputs = [self.input_generator_fn() for _ in range(1000)]
         self.inputs = [i for _ in range(60) for i in base_inputs]
 
-    def run(self, client_num=0)
+    def run(self, client_num=0):
         assert client_num == 0
         self.initialize_request_rate()
         self.find_steady_state()
