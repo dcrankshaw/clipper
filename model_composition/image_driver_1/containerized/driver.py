@@ -253,7 +253,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 class Predictor(object):
 
-    def __init__(self):
+    def __init__(self, config, clipper_metrics):
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -265,6 +265,13 @@ class Predictor(object):
             "all_lats": [],
         }
         self.total_num_complete = 0
+        self.config = config
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        self.cl.connect()
+        self.get_clipper_metrics = clipper_metrics
+        if self.get_clipper_metrics:
+            self.stats["all_metrics"] = []
+            self.stats["mean_batch_sizes"] = []
 
     def init_stats(self):
         self.latencies = []
@@ -282,9 +289,19 @@ class Predictor(object):
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
         self.stats["all_lats"].append(lats)
-        logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
-                                                                       mean=mean,
-                                                                       thru=thru))
+        if self.get_clipper_metrics:
+        metrics = self.cl.inspect_instance()
+            batch_sizes = get_batch_sizes(metrics)
+            self.stats["mean_batch_sizes"].append(batch_sizes)
+            self.stats["all_metrics"].append(metrics)
+            logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
+                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
+                                                          batches=json.dumps(
+                                                              batch_sizes, sort_keys=True)))
+        else:
+            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                           mean=mean,
+                                                                           thru=thru))
 
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
@@ -303,7 +320,7 @@ class Predictor(object):
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
-    def __init__(self, config, queue,):
+    def __init__(self, config, queue):
         self.config = config
         self.queue = queue
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
