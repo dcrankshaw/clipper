@@ -4,8 +4,16 @@ import logging
 import os
 import datetime
 import requests
+from scipy.stats import linregress
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+INCREASING = "increasing"
+CONVERGED_HIGH = "converged_high"
+DECREASING = "decreasing"
+CONVERGED = "converged"
+UNKNOWN = "unknown"
 
 
 class HeavyNodeConfig(object):
@@ -99,3 +107,77 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))
+
+
+def check_convergence(stats, configs):
+    """
+    Returns
+    -------
+    boolean : whether we're in a steady state yet
+    slope_sign : if we're not in a steady state, the sign of
+        the slope of the function computing latency
+        as a function of time. If the slope is negative, we're
+        draining the queues and we should keep waiting. If the slope is
+        positive, we're filling the queues faster than they can be drained
+        and we should quit and increase the delay.
+
+    """
+    window_size = min(15, len(stats["p99_lats"]) - 1)
+    p99_lats = stats["p99_lats"][-1*window_size:]
+    mean_batch_sizes = {}
+    for c in configs:
+        mean_batch_sizes[c.name] = np.mean([b[c.name] for b in stats["mean_batch_sizes"][-1*window_size:]])
+    lr = linregress(x=range(len(p99_lats)), y=p99_lats)
+    logger.info(lr)
+    # pvalue checks against the null hypothesis that the
+    # slope is 0. We are checking for the slope to be 0,
+    # so we want to the null hypothesis to be true.
+
+    # If pvalue less than 0.001, the line definitely has a slope
+    if lr.pvalue < 0.001:
+        if lr.slope > 0:
+            return INCREASING
+        else:
+            return DECREASING
+    elif lr.pvalue > 0.2:
+        # Slope is 0, now check to see
+        # if mean batch_sizes are less
+        # than
+        # configured batch size.
+
+        # If any of the nodes batch sizes are set to 1 and we have a slope of 0, we've converged.
+        for c in configs:
+            if c.batch_size == 1.0:
+                return CONVERGED
+
+        # We don't know which node is the bottleneck, so we check that all the nodes have batch
+        # sizes slightly less than the configured batch size.
+        for c in configs:
+            if mean_batch_sizes[c.name] == c.batch_size:
+                logger.info("Slope is 0 but batch_sizes too big for node {name}.".format(name=c.name))
+                return CONVERGED_HIGH
+        return CONVERGED
+    else:
+        return UNKNOWN
+
+    # if lr.pvalue < 0.1:
+    #     return (False, np.sign(lr.slope))
+    # else:
+    #     # Slope is 0, now check to see if mean batch_sizes are less than
+    #     # configured batch size.
+    #
+    #     # If any of the nodes batch sizes are set to 1 and we have a slope of 0, we've converged.
+    #     for c in configs:
+    #         if c.batch_size == 1.0:
+    #             return (True, 0.0)
+    #
+    #     # We don't know which node is the bottleneck, so we check that all the nodes have batch
+    #     # sizes slightly less than the configured batch size.
+    #     for c in configs:
+    #         if mean_batch_sizes[c.name] == c.batch_size:
+    #             logger.info("Slope is 0 but batch_sizes too big for node {name}.\n{config}".format(
+    #                 name=c.name,
+    #                 config=json.dumps(c.__dict__, sort_keys=True, indent=2)
+    #             ))
+    #             return (False, np.sign(1.))
+    #     return (True, 0.0)
