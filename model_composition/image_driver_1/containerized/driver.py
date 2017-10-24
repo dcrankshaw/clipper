@@ -361,7 +361,7 @@ class ModelBenchmarker(object):
         # start checking for steady state after 7 trials
         last_checked_length = 6
         while not done:
-            predictor.predict(input_item=self.inputs[idx])
+            predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
