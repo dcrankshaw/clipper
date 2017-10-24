@@ -95,7 +95,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
     elif model_name == INCEPTION_FEATS_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -113,7 +114,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
     elif model_name == VGG_KPCA_SVM_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -130,7 +132,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             cpus_per_replica=cpus_per_replica,
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
-                                            num_replicas=num_replicas)
+                                            num_replicas=num_replicas,
+                                            no_diverge=True)
 
     elif model_name == VGG_KERNEL_SVM_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -147,7 +150,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=False)
+                                            use_nvidia_docker=False,
+                                            no_diverge=True)
 
     elif model_name == VGG_ELASTIC_NET_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -164,7 +168,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=False)       
+                                            use_nvidia_docker=False,
+                                            no_diverge=True)     
 
 
     elif model_name == LGBM_MODEL_APP_NAME:
@@ -183,7 +188,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=False)
+                                            use_nvidia_docker=False,
+                                            no_diverge=True)
 
     elif model_name == TF_KERNEL_SVM_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -201,7 +207,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
     elif model_name == TF_LOG_REG_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -219,7 +226,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
     elif model_name == TF_RESNET_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -237,7 +245,8 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
 
 ########## Benchmarking ##########
@@ -294,28 +303,78 @@ class Predictor(object):
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
-    def __init__(self, config, queue):
+    def __init__(self, config, queue,):
         self.config = config
         self.queue = queue
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
-
-    def run(self, duration_seconds=120):
         logger.info("Generating random inputs")
-        inputs = [self.input_generator_fn() for _ in range(10000)]
-        logger.info("Starting predictions")
-        start_time = datetime.now()
-        predictor = Predictor()
-        for input_item in inputs:
-            predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            # time.sleep(0.005)
-            time.sleep(0)
-        while True:
-            curr_time = datetime.now()
-            if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
-                break
-            time.sleep(1)
+        base_inputs = [self.input_generator_fn() for _ in range(1000)]
+        self.inputs = [i for _ in range(60) for i in base_inputs]
 
-        self.queue.put(predictor.stats)
+    def run(self, client_num=0)
+        assert client_num == 0
+        self.initialize_request_rate()
+        self.find_steady_state()
+        return
+
+    # start with an overly aggressive request rate
+    # then back off
+    def initialize_request_rate(self):
+        # initialize delay to be very small
+        self.delay = 0.001
+        setup_clipper(self.config)
+        time.sleep(5)
+        predictor = Predictor(self.config, clipper_metrics=True)
+        idx = 0
+        while len(predictor.stats["thrus"]) < 5:
+            predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
+            time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+
+        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        self.delay = 1.0 / max_thruput
+        logger.info("Initializing delay to {}".format(self.delay))
+
+    def find_steady_state(self):
+        setup_clipper(self.config)
+        time.sleep(7)
+        predictor = Predictor(self.config, clipper_metrics=True)
+        idx = 0
+        done = False
+        # start checking for steady state after 7 trials
+        last_checked_length = 7
+        divergence_possible = True
+        while not done:
+            predictor.predict(model_app_name=self.config.name,
+                              input_item=self.inputs[idx])
+            time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+            if len(predictor.stats["thrus"]) > last_checked_length:
+                last_checked_length = len(predictor.stats["thrus"]) + 5
+                is_converged, slope_sign = driver_utils.check_convergence(predictor.stats,
+                                                                          [self.config])
+                # Diverging, try again with higher delay
+                if (not is_converged) and divergence_possible and slope_sign > 0.0:
+                    self.delay += 0.0005  # Increase by 500 us
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                elif is_converged:
+                    logger.info("Converged with delay of {}".format(self.delay))
+                    done = True
+                    self.queue.put(predictor.stats)
+                    return
+                elif len(predictor.stats) > 50:
+                    self.delay += 0.0005  # Increase by 500 us
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                else:
+                    logger.info("Not converged yet. Still waiting")
+                    if slope_sign < 0.0:
+                        divergence_possible = False
 
     def _get_vgg_feats_input(self):
         input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
@@ -359,7 +418,6 @@ class ModelBenchmarker(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
     parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic-net', 'inception', 'lgbm', 'tf-kernel-svm', 'tf-log-reg', 'tf-resnet-feats'")
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
@@ -391,14 +449,13 @@ if __name__ == "__main__":
                                                      cpus_per_replica=cpus_per_replica,
                                                      allocated_cpus=args.model_cpus,                               
                                                      allocated_gpus=args.model_gpus)
-                setup_clipper(model_config)
                 queue = Queue()
                 benchmarker = ModelBenchmarker(model_config, queue)
 
                 processes = []
                 all_stats = []
-                for _ in range(args.num_clients):
-                    p = Process(target=benchmarker.run, args=(args.duration,))
+                for client_num in range(args.num_clients):
+                    p = Process(target=benchmarker.run, args=(client_num,))
                     p.start()
                     processes.append(p)
                 for p in processes:
