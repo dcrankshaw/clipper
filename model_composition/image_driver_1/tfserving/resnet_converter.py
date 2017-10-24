@@ -9,7 +9,7 @@ def export():
     model_ckpt_path = os.path.abspath("./raw_data/tf_resnet_model_data/tf_resnet_152_feats.ckpt")
     output_path = os.path.abspath("./exported_tf_models/resnet_tfserve/1")
     with tf.Session() as sess:
-        saver = tf.train.import_meta_graph(model_graph_path)
+        saver = tf.train.import_meta_graph(model_graph_path, clear_devices=True)
         saver.restore(sess, model_ckpt_path)
         inputs_tensor = tf.get_default_graph().get_tensor_by_name('images:0')
         feats_tensor = tf.get_default_graph().get_tensor_by_name('avg_pool:0')
