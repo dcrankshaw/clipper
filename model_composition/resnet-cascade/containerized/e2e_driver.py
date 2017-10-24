@@ -1,6 +1,5 @@
 import sys
 # import os
-# import argparse
 import numpy as np
 import time
 # import base64
@@ -12,9 +11,10 @@ from datetime import datetime
 # from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
+from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN
 from multiprocessing import Process, Queue
 import json
-import argparse
+# import argparse
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -44,9 +44,9 @@ def setup_clipper(configs):
     cl.stop_all()
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
-        redis_cpu_str="4",
-        mgmt_cpu_str="4",
-        query_cpu_str="5,6,7,21,22,23")
+        redis_cpu_str="0",
+        mgmt_cpu_str="0",
+        query_cpu_str="1-8")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -63,14 +63,15 @@ def setup_alexnet(batch_size,
 
     return driver_utils.HeavyNodeConfig(name="alexnet",
                                         input_type="floats",
-                                        # model_image="model-comp/pytorch-alexnet",
-                                        model_image="model-comp/pytorch-alex-sleep",
+                                        model_image="model-comp/pytorch-alexnet",
                                         allocated_cpus=allocated_cpus,
                                         cpus_per_replica=cpus_per_replica,
                                         gpus=allocated_gpus,
                                         batch_size=batch_size,
                                         num_replicas=num_replicas,
-                                        use_nvidia_docker=True)
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
 def setup_res50(batch_size,
@@ -78,15 +79,17 @@ def setup_res50(batch_size,
                 cpus_per_replica,
                 allocated_cpus,
                 allocated_gpus):
-        return driver_utils.HeavyNodeConfig(name="res50",
-                                            input_type="floats",
-                                            model_image="model-comp/pytorch-res50",
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+    return driver_utils.HeavyNodeConfig(name="res50",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-res50",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
 def setup_res152(batch_size,
@@ -94,15 +97,17 @@ def setup_res152(batch_size,
                  cpus_per_replica,
                  allocated_cpus,
                  allocated_gpus):
-        return driver_utils.HeavyNodeConfig(name="res152",
-                                            input_type="floats",
-                                            model_image="model-comp/pytorch-res152",
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True)
+    return driver_utils.HeavyNodeConfig(name="res152",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-res152",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
 def get_batch_sizes(metrics_json):
@@ -202,8 +207,7 @@ class Predictor(object):
             if output == DEFAULT_OUTPUT:
                 return
             else:
-                # idk = np.random.random() > 0.192
-                idk = False
+                idk = np.random.random() > 0.192
                 if idk:
                     self.client.send_request("res50", input_item).then(res50_cont)
                 else:
@@ -213,99 +217,153 @@ class Predictor(object):
 
 
 class ModelBenchmarker(object):
-    def __init__(self, queue, delay, client_num):
+    def __init__(self, configs, queue, client_num):
+        self.configs = configs
         self.queue = queue
-        self.delay = delay
+        assert client_num == 0
         self.client_num = client_num
-
-    def run(self):
         logger.info("Generating random inputs")
         base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
-        inputs = [i for _ in range(50) for i in base_inputs]
-        logger.info("Starting predictions")
-        if self.client_num == 0:
-            predictor = Predictor(clipper_metrics=True)
-        else:
-            predictor = Predictor(clipper_metrics=False)
-        i = 0
-        while len(predictor.stats["thrus"]) < 8:
-            input_item = inputs[i % len(inputs)]
-            predictor.predict(input_item=input_item)
-            # if i % 2 == 0:
+        self.inputs = [i for _ in range(60) for i in base_inputs]
+
+    # start with an overly aggressive request rate
+    # then back off
+    def initialize_request_rate(self):
+        # initialize delay to be very small
+        self.delay = 0.001
+        setup_clipper(self.configs)
+        time.sleep(5)
+        predictor = Predictor(clipper_metrics=True)
+        idx = 0
+        while len(predictor.stats["thrus"]) < 6:
+            predictor.predict(input_item=self.inputs[idx])
             time.sleep(self.delay)
-            # if len(predictor.stats["thrus"]) > 20:
-            #     break
-            i += 1
-        self.queue.put(predictor.stats)
-        print("DONE")
+            idx += 1
+            idx = idx % len(self.inputs)
+
+        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        self.delay = 1.0 / max_thruput - 0.0005
+        logger.info("Initializing delay to {}".format(self.delay))
+
+    def increase_delay(self):
+        if self.delay < 0.005:
+            self.delay += 0.0002
+        else:
+            self.delay += 0.0005
+
+    def find_steady_state(self):
+        setup_clipper(self.configs)
+        time.sleep(7)
+        predictor = Predictor(clipper_metrics=True)
+        idx = 0
+        done = False
+        # start checking for steady state after 7 trials
+        last_checked_length = 6
+        while not done:
+            predictor.predict(input_item=self.inputs[idx])
+            time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+
+            if len(predictor.stats["thrus"]) > last_checked_length:
+                last_checked_length = len(predictor.stats["thrus"]) + 4
+                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs)
+                # Diverging, try again with higher
+                # delay
+                if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
+                    self.increase_delay()
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                elif convergence_state == CONVERGED:
+                    logger.info("Converged with delay of {}".format(self.delay))
+                    done = True
+                    self.queue.put(predictor.stats)
+                    return
+                elif len(predictor.stats) > 100:
+                    self.increase_delay()
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                elif convergence_state == DECREASING or convergence_state == UNKNOWN:
+                    logger.info("Not converged yet. Still waiting")
+                else:
+                    logger.error("Unknown convergence state: {}".format(convergence_state))
+                    sys.exit(1)
+
+    def run(self):
+        self.initialize_request_rate()
+        self.find_steady_state()
         return
 
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--delay', type=float, help='inter-request delay')
-    parser.add_argument('-c', '--num_clients', type=int, help='number of clients')
-
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('-d', '--delay', type=float, help='inter-request delay')
+    # parser.add_argument('-c', '--num_clients', type=int, help='number of clients')
+    #
+    # args = parser.parse_args()
 
     queue = Queue()
 
-    # total_cpus = list(reversed(range(12, 32)))
-    total_cpus = range(8, 16) + range(24, 32)
+    alex_batch = 35
+    res50_batch = 27
+    res152_batch = 14
 
-    def get_cpus(num_cpus):
-        return [total_cpus.pop() for _ in range(num_cpus)]
+    # alexnet_reps = 1
+    # res50_reps = 1
+    # res152_reps = 1
+    reps = [(1, 1, 1),
+            (1, 1, 2),
+            (1, 2, 2),
+            (2, 2, 2),
+            (2, 2, 3),
+            (2, 3, 3)]
 
-    total_gpus = range(8)
+    for alexnet_reps, res50_reps, res152_reps in reps:
+        total_cpus = range(9, 29)
 
-    def get_gpus(num_gpus):
-        return [total_gpus.pop() for _ in range(num_gpus)]
+        def get_cpus(num_cpus):
+            return [total_cpus.pop() for _ in range(num_cpus)]
 
-    alexnet_reps = 5
-    res50_reps = 1
-    res152_reps = 1
+        total_gpus = range(8)
 
-    alex_batch = 30
-    res50_batch = 30
-    res152_batch = 30
+        def get_gpus(num_gpus):
+            return [total_gpus.pop() for _ in range(num_gpus)]
 
-    configs = [
-        setup_alexnet(batch_size=alex_batch,
-                      num_replicas=alexnet_reps,
-                      cpus_per_replica=1,
-                      allocated_cpus=get_cpus(8),
-                      allocated_gpus=get_gpus(alexnet_reps)),
-        # setup_res50(batch_size=res50_batch,
-        #             num_replicas=res50_reps,
-        #             cpus_per_replica=1,
-        #             allocated_cpus=get_cpus(4),
-        #             allocated_gpus=get_gpus(res50_reps)),
-        # setup_res152(batch_size=res152_batch,
-        #              num_replicas=res152_reps,
-        #              cpus_per_replica=1,
-        #              allocated_cpus=get_cpus(4),
-        #              allocated_gpus=get_gpus(res152_reps))
-    ]
+        configs = [
+            setup_alexnet(batch_size=alex_batch,
+                          num_replicas=alexnet_reps,
+                          cpus_per_replica=1,
+                          allocated_cpus=get_cpus(alexnet_reps),
+                          allocated_gpus=get_gpus(alexnet_reps)),
+            setup_res50(batch_size=res50_batch,
+                        num_replicas=res50_reps,
+                        cpus_per_replica=1,
+                        allocated_cpus=get_cpus(res50_reps),
+                        allocated_gpus=get_gpus(res50_reps)),
+            setup_res152(batch_size=res152_batch,
+                         num_replicas=res152_reps,
+                         cpus_per_replica=1,
+                         allocated_cpus=get_cpus(res152_reps),
+                         allocated_gpus=get_gpus(res152_reps))
+        ]
 
-    setup_clipper(configs)
-    procs = []
-    for i in range(args.num_clients):
-        benchmarker = ModelBenchmarker(queue, args.delay, i)
+        benchmarker = ModelBenchmarker(configs, queue, 0)
         p = Process(target=benchmarker.run)
         p.start()
-        procs.append(p)
 
-    all_stats = []
-    for i in range(args.num_clients):
+        all_stats = []
         all_stats.append(queue.get())
-    # p.join()
+        p.join()
 
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-    cl.connect()
-    # fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
-    # driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
-    fname = "{clients}_clients-{alex_reps}_reps".format(clients=args.num_clients,
-                                                        alex_reps=alexnet_reps)
-    driver_utils.save_results(configs, cl, all_stats, "alexnet-thruput-replicas", prefix=fname)
+        cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        cl.connect()
+        fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
+        driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
+        # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
+        # driver_utils.save_results(configs, cl, all_stats, "e2e_500_slo_resnet-cascade", prefix=fname)
+        # driver_utils.save_results(configs, cl, all_stats,
+        #                           "e2e_alex_no_gpu_resnet-cascade", prefix=fname)
     sys.exit(0)

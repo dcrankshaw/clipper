@@ -28,6 +28,9 @@ class TorchContainer(rpc.ModelContainerBase):
         elif model_arch == "res50":
             logger.info("Using PyTorch Resnet 50")
             self.model = models.resnet50(pretrained=True)
+        elif model_arch == "res18":
+            logger.info("Using PyTorch Resnet 18")
+            self.model = models.resnet18(pretrained=True)
         elif model_arch == "res152":
             logger.info("Using PyTorch Resnet 152")
             self.model = models.resnet152(pretrained=True)
