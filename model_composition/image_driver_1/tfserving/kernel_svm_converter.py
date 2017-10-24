@@ -46,7 +46,10 @@ def export():
 
             t_preds = tf.matmul(tf.multiply(tf.transpose(
                 tf.multiply(t_labels, t_weights)), t_bias), pred_kernel)
-            outputs_tensor = tf.sign(t_preds - tf.reduce_mean(t_preds))
+
+            transposed_outputs = tf.sign(t_preds - tf.reduce_mean(t_preds))
+
+            outputs_tensor = tf.transpose(transposed_outputs)
 
         sess.run(tf.global_variables_initializer())
 
