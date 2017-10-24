@@ -368,7 +368,7 @@ class ModelBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state = driver_utils.check_convergence(predictor.stats, self.config)
+                convergence_state = driver_utils.check_convergence(predictor.stats, [self.config])
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
