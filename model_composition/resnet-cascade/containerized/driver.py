@@ -1,6 +1,6 @@
 # import sys
 # import os
-import argparse
+# import argparse
 import numpy as np
 import time
 # import base64
@@ -14,7 +14,7 @@ from datetime import datetime
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
-from scipy.stats import linregress
+# from scipy.stats import linregress
 
 
 logging.basicConfig(
@@ -125,41 +125,6 @@ def get_batch_sizes(metrics_json):
     return mean_batch_sizes
 
 
-def check_convergence(stats, config):
-    """
-    Returns
-    -------
-    boolean : whether we're in a steady state yet
-    slope_sign : if we're not in a steady state, the sign of
-        the slope of the function computing latency
-        as a function of time. If the slope is negative, we're
-        draining the queues and we should keep waiting. If the slope is
-        positive, we're filling the queues faster than they can be drained
-        and we should quit and increase the delay.
-
-    """
-    window_size = 20
-    p99_lats = stats["p99_lats"][-1*window_size:]
-    mean_batch_size = np.mean([b[config.name] for b in stats["mean_batch_sizes"][-1*window_size:]])
-    lr = linregress(x=range(len(p99_lats)), y=p99_lats)
-    logger.info(lr)
-    # pvalue checks against the null hypothesis that the
-    # slope is 0. We are checking for the slope to be 0,
-    # so we want to the null hypothesis to be true.
-    if lr.pvalue < 0.1:
-        return (False, np.sign(lr.slope))
-    else:
-        # Slope is 0, now check to see if mean batch_sizes are less than
-        # configured batch size.
-        if config.batch_size == 1.0:
-            return (True, 0.0)
-        elif mean_batch_size < config.batch_size:
-            return (True, 0.0)
-        else:
-            logger.info("Slope is 0 but batch_sizes are too big")
-            return (False, np.sign(1.))
-
-
 class Predictor(object):
 
     def __init__(self, config, clipper_metrics):
@@ -222,7 +187,7 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            queries_per_batch = max(400, 20*self.config.batch_size)
+            queries_per_batch = max(300, 20*self.config.batch_size)
             if self.batch_num_complete % queries_per_batch == 0:
                 self.print_stats()
                 self.init_stats()
@@ -245,7 +210,7 @@ class ModelBenchmarker(object):
     def initialize_request_rate(self):
         # initialize delay to be very small
         self.delay = 0.001
-        setup_clipper(model_config)
+        setup_clipper(self.config)
         time.sleep(5)
         predictor = Predictor(self.config, clipper_metrics=True)
         idx = 0
@@ -256,11 +221,11 @@ class ModelBenchmarker(object):
             idx = idx % len(self.inputs)
 
         max_thruput = np.mean(predictor.stats["thrus"][1:])
-        self.delay = 1.0 / max_thruput - 0.0005
+        self.delay = 1.0 / max_thruput
         logger.info("Initializing delay to {}".format(self.delay))
 
     def find_steady_state(self):
-        setup_clipper(model_config)
+        setup_clipper(self.config)
         time.sleep(7)
         predictor = Predictor(self.config, clipper_metrics=True)
         idx = 0
@@ -276,8 +241,8 @@ class ModelBenchmarker(object):
             idx = idx % len(self.inputs)
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 5
-                is_converged, slope_sign = check_convergence(predictor.stats,
-                                                             self.config)
+                is_converged, slope_sign = driver_utils.check_convergence(predictor.stats,
+                                                                          [self.config])
                 # Diverging, try again with higher delay
                 if (not is_converged) and divergence_possible and slope_sign > 0.0:
                     self.delay += 0.0005  # Increase by 500 us
@@ -289,6 +254,11 @@ class ModelBenchmarker(object):
                     done = True
                     self.queue.put(predictor.stats)
                     return
+                elif len(predictor.stats) > 50:
+                    self.delay += 0.0005  # Increase by 500 us
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
                 else:
                     logger.info("Not converged yet. Still waiting")
                     if slope_sign < 0.0:
@@ -340,5 +310,5 @@ if __name__ == "__main__":
             cl = ClipperConnection(DockerContainerManager(redis_port=6380))
             cl.connect()
             driver_utils.save_results([model_config], cl,
-                                    all_stats,
-                                    "no-diverge-single_model_prof_{}".format(model_config.name))
+                                      all_stats,
+                                      "no-diverge-single_model_prof_{}".format(model_config.name))
