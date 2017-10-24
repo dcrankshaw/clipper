@@ -354,44 +354,44 @@ class ModelBenchmarker(object):
         logger.info("Initializing delay to {}".format(self.delay))
 
     def find_steady_state(self):
-        setup_clipper(self.config)
+        setup_clipper(self.configs)
         time.sleep(7)
-        predictor = Predictor(self.config, clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
-        last_checked_length = 7
-        divergence_possible = True
+        last_checked_length = 6
         while not done:
-            predictor.predict(model_app_name=self.config.name,
-                              input_item=self.inputs[idx])
+            predictor.predict(input_item=self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
+
             if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 5
-                is_converged, slope_sign = driver_utils.check_convergence(predictor.stats,
-                                                                          [self.config])
-                # Diverging, try again with higher delay
-                if (not is_converged) and divergence_possible and slope_sign > 0.0:
-                    self.delay += 0.0005  # Increase by 500 us
+                last_checked_length = len(predictor.stats["thrus"]) + 4
+                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs)
+                # Diverging, try again with higher
+                # delay
+                if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
+                    self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
                     return self.find_steady_state()
-                elif is_converged:
+                elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
                     self.queue.put(predictor.stats)
                     return
-                elif len(predictor.stats) > 50:
-                    self.delay += 0.0005  # Increase by 500 us
+                elif len(predictor.stats) > 100:
+                    self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
                     return self.find_steady_state()
-                else:
+                elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
-                    if slope_sign < 0.0:
-                        divergence_possible = False
+                else:
+                    logger.error("Unknown convergence state: {}".format(convergence_state))
+                    sys.exit(1)
 
     def _get_vgg_feats_input(self):
         input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
