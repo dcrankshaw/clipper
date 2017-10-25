@@ -290,7 +290,7 @@ class Predictor(object):
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
-        self.stats["all_lats"].append(lats)
+        self.stats["all_lats"].append(self.latencies)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             batch_sizes = get_batch_sizes(metrics)
