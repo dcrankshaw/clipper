@@ -5,6 +5,7 @@ import numpy as np
 import time
 import base64
 import logging
+import json
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
