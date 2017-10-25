@@ -255,6 +255,17 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 ########## Benchmarking ##########
 
+def get_batch_sizes(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_batch_sizes = {}
+    for h in hists:
+        if "batch_size" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            mean = h[name]["mean"]
+            mean_batch_sizes[model] = round(float(mean), 2)
+    return mean_batch_sizes
+
 class Predictor(object):
 
     def __init__(self, clipper_metrics):
