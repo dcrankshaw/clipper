@@ -455,7 +455,7 @@ if __name__ == "__main__":
                              num_replicas=ksvm_reps,
                              cpus_per_replica=1,
                              allocated_cpus=get_cpus(ksvm_reps),
-                             allocated_gpus=get_gpus(ksvm_reps))
+                             allocated_gpus=get_gpus(ksvm_reps)),
             setup_resnet(batch_size=five_hundred_ms_batches[resnet_batch_idx],
                          num_replicas=resnet_reps,
                          cpus_per_replica=1,
