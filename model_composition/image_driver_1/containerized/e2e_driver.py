@@ -469,7 +469,6 @@ if __name__ == "__main__":
 
         p = Process(target=benchmarker.run)
         p.start()
-        procs.append(p)
 
         all_stats = []
         all_stats.append(queue.get())
