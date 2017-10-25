@@ -358,7 +358,7 @@ class ModelBenchmarker(object):
         self.delay = 0.001
         setup_clipper(self.config)
         time.sleep(5)
-        predictor = Predictor(clipper_metrics=True, batch_size=config.batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
         idx = 0
         while len(predictor.stats["thrus"]) < 5:
             predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
