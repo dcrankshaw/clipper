@@ -378,58 +378,58 @@ if __name__ == "__main__":
 
     ## THIS IS FOR 500MS
     ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    500ms_reps = [(1, 1, 1, 1),
-                  (1, 1, 1, 2),
-                  (1, 1, 1, 3),
-                  (2, 1, 1, 3),
-                  (2, 1, 1, 4),
-                  (2, 1, 1, 5),
-                  (3, 1, 1, 5)]
+    five_hundred_ms_reps = [(1, 1, 1, 1),
+                            (1, 1, 1, 2),
+                            (1, 1, 1, 3),
+                            (2, 1, 1, 3),
+                            (2, 1, 1, 4),
+                            (2, 1, 1, 5),
+                            (3, 1, 1, 5)]
 
     ## THIS IS FOR 500MS
     ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    500ms_batches = (10, 2, 16, 6)
+    five_hundred_ms_batches = (10, 2, 16, 6)
 
-    500ms_latency_upper_bound = 1.500
-
-    ## THIS IS FOR 375MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    375ms_reps = [(1, 1, 1, 1),
-                  (1, 1, 1, 2),
-                  (1, 1, 1, 3),
-                  (1, 1, 1, 4),
-                  (1, 1, 1, 5),
-                  (2, 1, 1, 5),
-                  (2, 1, 1, 6)]
+    five_hundred_ms_latency_upper_bound = 1.500
 
     ## THIS IS FOR 375MS
     ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    375ms_batches = (7, 2, 9, 2)
-
-    375ms_latency_upper_bound = 1.000
+    three_seven_five_ms_reps = [(1, 1, 1, 1),
+                                (1, 1, 1, 2),
+                                (1, 1, 1, 3),
+                                (1, 1, 1, 4),
+                                (1, 1, 1, 5),
+                                (2, 1, 1, 5),
+                                (2, 1, 1, 6)]
 
     ## THIS IS FOR 375MS
     ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    1000ms_reps = [(1, 1, 1, 1),
-                   (1, 1, 1, 2),
-                   (2, 1, 1, 2),
-                   (2, 1, 1, 3),
-                   (2, 1, 1, 4),
-                   (3, 1, 1, 4),
-                   (3, 1, 1, 5)]
+    three_seven_five_ms_batches = (7, 2, 9, 2)
+
+    three_seven_five_ms_latency_upper_bound = 1.000
+
+    ## THIS IS FOR 375MS
+    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
+    thousand_ms_reps = [(1, 1, 1, 1),
+                        (1, 1, 1, 2),
+                        (2, 1, 1, 2),
+                        (2, 1, 1, 3),
+                        (2, 1, 1, 4),
+                        (3, 1, 1, 4),
+                        (3, 1, 1, 5)]
 
     ## THIS IS FOR 1000MS
     ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    1000ms_batches = (16, 2, 16, 15)
+    thousand_ms_batches = (16, 2, 16, 15)
 
-    1000ms_latency_upper_bound = 3.000
+    thousand_ms_latency_upper_bound = 3.000
 
     inception_batch_idx = 0
     log_reg_batch_idx = 1
     ksvm_batch_idx = 2
     resnet_batch_idx = 3
 
-    for inception_reps, log_reg_reps, ksvm_reps, resnet_reps in 500ms_reps:
+    for inception_reps, log_reg_reps, ksvm_reps, resnet_reps in five_hundred_ms_reps:
         total_cpus = range(9,29)
 
         def get_cpus(num_cpus):
@@ -441,22 +441,22 @@ if __name__ == "__main__":
             return [total_gpus.pop() for _ in range(num_gpus)]
 
         configs = [
-            setup_inception(batch_size=500ms_batches[inception_batch_idx],
+            setup_inception(batch_size=five_hundred_ms_batches[inception_batch_idx],
                             num_replicas=alexnet_reps,
                             cpus_per_replica=1,
                             allocated_cpus=get_cpus(inception_reps),
                             allocated_gpus=get_gpus(inception_reps)),
-            setup_log_reg(batch_size=500ms_batches[log_reg_batch_idx],
+            setup_log_reg(batch_size=five_hundred_ms_batches[log_reg_batch_idx],
                           num_replicas=log_reg_reps,
                           cpus_per_replica=1,
                           allocated_cpus=get_cpus(log_reg_reps),
                           allocated_gpus=get_gpus(log_reg_reps)),
-            setup_kernel_svm(batch_size=500ms_batches[ksvm_batch_idx],
+            setup_kernel_svm(batch_size=five_hundred_ms_batches[ksvm_batch_idx],
                              num_replicas=ksvm_reps,
                              cpus_per_replica=1,
                              allocated_cpus=get_cpus(ksvm_reps),
                              allocated_gpus=get_gpus(ksvm_reps))
-            setup_resnet(batch_size=500ms_batches[resnet_batch_idx],
+            setup_resnet(batch_size=five_hundred_ms_batches[resnet_batch_idx],
                          num_replicas=resnet_reps,
                          cpus_per_replica=1,
                          allocated_cpus=get_cpus(resnet_reps),
@@ -465,7 +465,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(model_configs, queue, client_num, 500ms_latency_upper_bound)
+        benchmarker = DriverBenchmarker(model_configs, queue, client_num, five_hundred_ms_latency_upper_bound)
 
         p = Process(target=benchmarker.run)
         p.start()
