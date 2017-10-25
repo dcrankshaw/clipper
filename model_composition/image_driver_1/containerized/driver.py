@@ -268,7 +268,7 @@ def get_batch_sizes(metrics_json):
 
 class Predictor(object):
 
-    def __init__(self, clipper_metrics):
+    def __init__(self, clipper_metrics, batch_size):
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -282,6 +282,7 @@ class Predictor(object):
         self.total_num_complete = 0
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
+        self.batch_size = batch_size
         self.get_clipper_metrics = clipper_metrics
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
@@ -289,7 +290,7 @@ class Predictor(object):
 
     def init_stats(self):
         self.latencies = []
-        self.batch_num_complete = 0
+        self.trial_num_complete = 0
         self.cur_req_id = 0
         self.start_time = datetime.now()
 
@@ -298,7 +299,7 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
+        thru = float(self.trial_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
@@ -326,8 +327,10 @@ class Predictor(object):
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
             self.total_num_complete += 1
-            self.batch_num_complete += 1
-            if self.batch_num_complete % 50 == 0:
+            self.trial_num_complete += 1
+
+            trial_length = max(300, 10 * self.batch_size)
+            if self.trial_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -355,7 +358,7 @@ class ModelBenchmarker(object):
         self.delay = 0.001
         setup_clipper(self.config)
         time.sleep(5)
-        predictor = Predictor(clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True, batch_size=config.batch_size)
         idx = 0
         while len(predictor.stats["thrus"]) < 5:
             predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
