@@ -158,8 +158,7 @@ def get_queue_sizes(metrics_json):
 
 class Predictor(object):
 
-    def __init__(self, clipper_metrics, trial_length):
-        self.trial_length = trial_length
+    def __init__(self, clipper_metrics, batch_size):
         self.outstanding_reqs = {}
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -172,6 +171,7 @@ class Predictor(object):
         self.total_num_complete = 0
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
+        self.batch_size = batch_size
         self.get_clipper_metrics = clipper_metrics
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
@@ -219,6 +219,8 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
+
+            trial_length = max(300, 10 * self.batch_size)
             if self.batch_num_complete % self.trial_length == 0:
                 self.print_stats()
                 self.init_stats()
@@ -287,7 +289,7 @@ class DriverBenchmarker(object):
         self.delay = 0.001
         setup_clipper(self.configs)
         time.sleep(5)
-        predictor = Predictor(clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
         idx = 0
         while len(predictor.stats["thrus"]) < 6:
             predictor.predict(input_item=self.inputs[idx])
@@ -311,7 +313,7 @@ class DriverBenchmarker(object):
     def find_steady_state(self):
         setup_clipper(self.configs)
         time.sleep(7)
-        predictor = Predictor(clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
