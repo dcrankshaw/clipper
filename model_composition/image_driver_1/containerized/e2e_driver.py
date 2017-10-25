@@ -270,26 +270,87 @@ class Predictor(object):
             .then(log_reg_continuation)
 
 class DriverBenchmarker(object):
-    def __init__(self, trial_length, queue, clipper_metrics):
+    def __init__(self, trial_length, queue, clipper_metrics, configs):
         self.trial_length = trial_length
         self.queue = queue
         self.clipper_metrics = clipper_metrics
-
-    def run(self, num_trials, request_delay=.01):
+        self.configs = configs
         logger.info("Generating random inputs")
         base_inputs = [(self._get_resnet_input(), self._get_inception_input()) for _ in range(1000)]
-        inputs = [i for _ in range(40) for i in base_inputs]
-        logger.info("Starting predictions")
-        start_time = datetime.now()
-        predictor = Predictor(clipper_metrics=self.clipper_metrics, trial_length=self.trial_length)
-        for resnet_input, inception_input in inputs:
-            predictor.predict(resnet_input, inception_input)
-            time.sleep(request_delay)
+        self.inputs = [i for _ in range(40) for i in base_inputs]
 
-            if len(predictor.stats["thrus"]) > num_trials:
-                break
+    def run(self):
+        self.initialize_request_rate()
+        self.find_steady_state()
+        return
 
-        self.queue.put(predictor.stats)
+    # start with an overly aggressive request rate
+    # then back off
+    def initialize_request_rate(self):
+        # initialize delay to be very small
+        self.delay = 0.001
+        setup_clipper(self.configs)
+        time.sleep(5)
+        predictor = Predictor(clipper_metrics=True)
+        idx = 0
+        while len(predictor.stats["thrus"]) < 6:
+            predictor.predict(input_item=self.inputs[idx])
+            time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+
+        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        self.delay = 1.0 / max_thruput
+        logger.info("Initializing delay to {}".format(self.delay))
+
+    def increase_delay(self):
+        if self.delay < 0.005:
+            self.delay += 0.0002
+        elif self.delay < 0.01:
+            self.delay += 0.0005
+        else:
+            self.delay += 0.001
+
+
+    def find_steady_state(self):
+        setup_clipper(self.configs)
+        time.sleep(7)
+        predictor = Predictor(clipper_metrics=True)
+        idx = 0
+        done = False
+        # start checking for steady state after 7 trials
+        last_checked_length = 6
+        while not done:
+            predictor.predict(input_item=self.inputs[idx])
+            time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+
+            if len(predictor.stats["thrus"]) > last_checked_length:
+                last_checked_length = len(predictor.stats["thrus"]) + 4
+                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs, self.latency_upper_bound)
+                # Diverging, try again with higher
+                # delay
+                if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
+                    self.increase_delay()
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                elif convergence_state == CONVERGED:
+                    logger.info("Converged with delay of {}".format(self.delay))
+                    done = True
+                    self.queue.put(predictor.stats)
+                    return
+                elif len(predictor.stats) > 100:
+                    self.increase_delay()
+                    logger.info("Increasing delay to {}".format(self.delay))
+                    done = True
+                    return self.find_steady_state()
+                elif convergence_state == DECREASING or convergence_state == UNKNOWN:
+                    logger.info("Not converged yet. Still waiting")
+                else:
+                    logger.error("Unknown convergence state: {}".format(convergence_state))
+                    sys.exit(1)
 
     def _get_resnet_input(self):
         resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
@@ -354,7 +415,7 @@ if __name__ == "__main__":
     procs = []
     for i in range(args.num_clients):
         clipper_metrics = (i == 0)
-        benchmarker = DriverBenchmarker(args.trial_length, queue, clipper_metrics)
+        benchmarker = DriverBenchmarker(args.trial_length, queue, clipper_metrics, model_configs)
         p = Process(target=benchmarker.run, args=(args.num_trials, args.request_delay))
         p.start()
         procs.append(p)
