@@ -379,7 +379,7 @@ class ModelBenchmarker(object):
     def find_steady_state(self):
         setup_clipper(self.config)
         time.sleep(7)
-        predictor = Predictor(clipper_metrics=True)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
