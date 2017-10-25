@@ -442,7 +442,7 @@ if __name__ == "__main__":
 
         configs = [
             setup_inception(batch_size=five_hundred_ms_batches[inception_batch_idx],
-                            num_replicas=alexnet_reps,
+                            num_replicas=inception_reps,
                             cpus_per_replica=1,
                             allocated_cpus=get_cpus(inception_reps),
                             allocated_gpus=get_gpus(inception_reps)),
