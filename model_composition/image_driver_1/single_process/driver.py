@@ -163,7 +163,6 @@ class DriverBenchmarker(object):
     def __init__(self, models_dict, trial_length):
         self.models_dict = models_dict
         self.trial_length = trial_length
-        self.process_num = process_num
 
     def set_configs(self, configs):
         self.configs = configs
@@ -219,7 +218,7 @@ if __name__ == "__main__":
     batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
     
     models_dict = load_models(args.resnet_gpu, args.inception_gpu)
-    benchmarker = DriverBenchmarker(models_dict, args.trial_length, args.process_number)
+    benchmarker = DriverBenchmarker(models_dict, args.trial_length)
 
     num_cpus = len(args.cpus)
 
