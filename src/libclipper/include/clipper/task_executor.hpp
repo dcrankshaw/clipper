@@ -319,6 +319,10 @@ class TaskExecutor {
                 vm, replica_id, [this, vm, replica_id]() {
                   on_container_ready(vm, replica_id);
                 });
+            TaskExecutionThreadPool::submit_job(
+                vm, replica_id, [this, vm, replica_id]() {
+                  on_container_ready(vm, replica_id);
+                });
             bool created_queue = create_model_queue_if_necessary(vm);
             if (created_queue) {
               log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,

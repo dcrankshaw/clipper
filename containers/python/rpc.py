@@ -9,6 +9,9 @@ import socket
 import sys
 from collections import deque
 
+from threading import Thread
+from Queue import Queue
+
 DATA_TYPE_BYTES = 0
 DATA_TYPE_INTS = 1
 DATA_TYPE_FLOATS = 2
@@ -120,24 +123,20 @@ class PredictionError(Exception):
         return repr(self.value)
 
 
-class Server(threading.Thread):
-    def __init__(self, context, clipper_ip, clipper_port):
-        threading.Thread.__init__(self)
-        self.context = context
-        self.clipper_ip = clipper_ip
-        self.clipper_port = clipper_port
-        self.event_history = EventHistory(EVENT_HISTORY_BUFFER_SIZE)
+def handle_predictions(predict_fn, request_queue, response_queue):
+    """
+    Returns
+    -------
+    PredictionResponse
+        A prediction response containing an output
+        for each input included in the specified
+        predict response
+    """
 
-    def handle_prediction_request(self, prediction_request):
-        """
-        Returns
-        -------
-        PredictionResponse
-            A prediction response containing an output
-            for each input included in the specified
-            predict response
-        """
-        predict_fn = self.get_prediction_function()
+    while True:
+        prediction_request = request_queue.get(block=True)
+        t1 = datetime.now()
+
         outputs = predict_fn(prediction_request.inputs)
         # Type check the outputs:
         if not type(outputs) == list:
@@ -165,12 +164,30 @@ class Server(threading.Thread):
         total_length_elements = sum(len(o) for o in outputs)
 
         response = PredictionResponse(prediction_request.msg_id,
-                                      len(outputs), total_length_elements,
-                                      outputs_type)
+                                        len(outputs), total_length_elements,
+                                        outputs_type)
         for output in outputs:
             response.add_output(output)
 
-        return response
+        response_queue.put(response)
+
+        t2 = datetime.now()
+        print("handle: {pred_time} us".format((t2 - t1).microseconds))
+
+
+
+
+class Server(threading.Thread):
+    def __init__(self, context, clipper_ip, clipper_port):
+        threading.Thread.__init__(self)
+        self.context = context
+        self.clipper_ip = clipper_ip
+        self.clipper_port = clipper_port
+        self.event_history = EventHistory(EVENT_HISTORY_BUFFER_SIZE)
+        self.full_buffers = 0
+        self.request_queue = Queue()
+        self.response_queue = Queue()
+
 
     def handle_feedback_request(self, feedback_request):
         """
@@ -204,6 +221,12 @@ class Server(threading.Thread):
         return self.event_history.get_events()
 
     def run(self):
+        self.handler_thread = Thread(target=handle_predictions,
+                                     args=(self.get_prediction_function(),
+                                           self.request_queue,
+                                           self.response_queue))
+        self.handler_thread.start()
+
         print("Serving predictions for {0} input type.".format(
             input_type_to_string(self.model_input_type)))
         connected = False
@@ -311,23 +334,19 @@ class Server(threading.Thread):
 
                         prediction_request = PredictionRequest(
                             msg_id_bytes, inputs)
-                        response = self.handle_prediction_request(
-                            prediction_request)
 
-                        t3 = datetime.now()
+                        self.request_queue.put(prediction_request)
+                        self.full_buffers += 1
 
-                        response.send(socket, self.event_history)
+                        if not self.response_queue.empty() or self.full_buffers == 2:
+                            response = self.response_queue.get()
+                            self.full_buffers -= 1
+                            # t3 = datetime.now()
+                            response.send(socket, self.event_history)
 
-                        print("recv and parse: %f us, handle: %f us" %
-                              ((t2 - t1).microseconds, (t3 - t2).microseconds))
                         sys.stdout.flush()
                         sys.stderr.flush()
 
-                    else:
-                        feedback_request = FeedbackRequest(msg_id_bytes, [])
-                        response = self.handle_feedback_request(received_msg)
-                        response.send(socket, self.event_history)
-                        print("recv: %f us" % ((t2 - t1).microseconds))
 
                 sys.stdout.flush()
                 sys.stderr.flush()
