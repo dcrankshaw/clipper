@@ -10,7 +10,6 @@ from datetime import datetime
 
 from single_proc_utils import HeavyNodeConfig, save_results
 from models import tf_resnet_model, inception_feats_model, tf_kernel_svm_model, tf_log_reg_model
-from models.deps import kernel_svm_utils
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -26,6 +25,8 @@ INCEPTION_FEATS_MODEL_NAME = "inception_feats"
 TF_KERNEL_SVM_MODEL_NAME = "kernel_svm"
 TF_LOG_REG_MODEL_NAME = "tf_log_reg"
 TF_RESNET_MODEL_NAME = "tf_resnet_feats"
+
+RESULTS_DIR = "/results"
 
 INCEPTION_MODEL_PATH = os.path.join(MODELS_DIR, "inception_model_data", "inception_feats_graph_def.pb")
 RESNET_MODEL_PATH = os.path.join(MODELS_DIR, "tf_resnet_model_data")
@@ -202,7 +203,6 @@ class DriverBenchmarker(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Single Process Image Driver 1')
-    parser.add_argument('-d',  '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
     parser.add_argument('-b',  '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the driver. Each configuration will be benchmarked separately.")
     parser.add_argument('-c',  '--cpus', type=int, nargs='+', help="The set of cpu cores on which to run the single process driver")
     parser.add_argument('-r',  '--resnet_gpu', type=int, default=0, help="The GPU on which to run the ResNet 152 featurization model")
