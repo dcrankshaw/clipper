@@ -293,7 +293,8 @@ class DriverBenchmarker(object):
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
         while len(predictor.stats["thrus"]) < 6:
-            predictor.predict(input_item=self.inputs[idx])
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
@@ -320,7 +321,8 @@ class DriverBenchmarker(object):
         # start checking for steady state after 7 trials
         last_checked_length = 6
         while not done:
-            predictor.predict(input_item=self.inputs[idx])
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
