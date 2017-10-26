@@ -221,7 +221,7 @@ class Predictor(object):
             self.batch_num_complete += 1
 
             trial_length = max(300, 10 * self.batch_size)
-            if self.batch_num_complete % self.trial_length == 0:
+            if self.batch_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
 
