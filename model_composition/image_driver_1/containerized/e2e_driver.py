@@ -269,6 +269,7 @@ class Predictor(object):
 class DriverBenchmarker(object):
     def __init__(self, configs, queue, client_num, latency_upper_bound):
         self.configs = configs
+        self.max_batch_size = np.max([config.batch_size for config in configs])
         self.queue = queue
         assert client_num == 0
         self.client_num = client_num
@@ -289,7 +290,7 @@ class DriverBenchmarker(object):
         self.delay = 0.001
         setup_clipper(self.configs)
         time.sleep(5)
-        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
         while len(predictor.stats["thrus"]) < 6:
             predictor.predict(input_item=self.inputs[idx])
@@ -313,7 +314,7 @@ class DriverBenchmarker(object):
     def find_steady_state(self):
         setup_clipper(self.configs)
         time.sleep(7)
-        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
