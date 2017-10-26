@@ -1,10 +1,13 @@
 FROM model-comp/tf-rpc:latest
 
-RUN pip install futures
-
 COPY models/ /models
 
+COPY single_proc_utils/ /single_proc_utils
+
 COPY driver.py /
+
+RUN pip install futures
+RUN pip install -e single_proc_utils
 
 ENV CUDA_VISIBLE_DEVICES=0,1
 
