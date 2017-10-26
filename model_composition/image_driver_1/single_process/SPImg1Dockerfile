@@ -11,4 +11,4 @@ RUN pip install -e /single_proc_utils
 
 ENV CUDA_VISIBLE_DEVICES=0,1
 
-CMD ["python", "/driver.py", "-t 12", "-b 1 2 4 6 8 10 16 24 32 48 64", "-c 17", "-r 0", "-i 1", "-tl 100"]
+ENTRYPOINT ["python", "/driver.py"]
