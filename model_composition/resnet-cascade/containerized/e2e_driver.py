@@ -311,11 +311,11 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    alex_batch = 1
-    res50_batch = 1
-    res152_batch = 1
+    alex_batch = 35
+    res50_batch = 27
+    res152_batch = 14
 
-    latency_upper_bound = 0.300
+    latency_upper_bound = None
 
     # alexnet_reps = 1
     # res50_reps = 1
@@ -328,7 +328,7 @@ if __name__ == "__main__":
             (2, 3, 3)]
 
     for alexnet_reps, res50_reps, res152_reps in reps:
-        total_cpus = range(9, 29)
+        total_cpus = range(9, 32)
 
         def get_cpus(num_cpus):
             return [total_cpus.pop() for _ in range(num_cpus)]
@@ -368,8 +368,8 @@ if __name__ == "__main__":
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
         fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
-        # driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
-        driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
+        # driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
         # driver_utils.save_results(configs, cl, all_stats, "e2e_500_slo_resnet-cascade", prefix=fname)
         # driver_utils.save_results(configs, cl, all_stats,
         #                           "e2e_alex_no_gpu_resnet-cascade", prefix=fname)
