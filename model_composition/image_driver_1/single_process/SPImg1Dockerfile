@@ -1,5 +1,7 @@
 FROM model-comp/tf-rpc:latest
 
+RUN pip install futures
+
 COPY models/ /models
 
 COPY driver.py /
