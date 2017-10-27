@@ -381,60 +381,66 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    ## THIS IS FOR 500MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    five_hundred_ms_reps = [(1, 1, 1, 1),
-                            (1, 1, 1, 2),
-                            (1, 1, 1, 3),
-                            (2, 1, 1, 3),
-                            (2, 1, 1, 4),
-                            (2, 1, 1, 5),
-                            (3, 1, 1, 5)]
+    ## THIS IS FOR MAX THRU
+    ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
+    max_thru_reps = [(1, 1, 1, 1),
+                    (1, 1, 2, 1),
+                    (2, 1, 2, 1),
+                    (2, 1, 3, 1),
+                    (3, 1, 3, 1),
+                    (3, 1, 4, 1),
+                    (3, 1, 5, 1)]
 
-    ## THIS IS FOR 500MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    five_hundred_ms_batches = (10, 2, 16, 6)
 
-    five_hundred_ms_latency_upper_bound = 1.500
+    ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
+    max_thru_batches = (48, 2, 64, 16)
 
-    ## THIS IS FOR 375MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    three_seven_five_ms_reps = [(1, 1, 1, 1),
-                                (1, 1, 1, 2),
-                                (1, 1, 1, 3),
-                                (1, 1, 1, 4),
-                                (1, 1, 1, 5),
-                                (2, 1, 1, 5),
-                                (2, 1, 1, 6)]
+    max_thru_latency_upper_bound = 7.0
 
-    ## THIS IS FOR 375MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    three_seven_five_ms_batches = (7, 2, 9, 2)
+    # ## THIS IS FOR 500MS
+    # ## FORMAT IS (INCEPTION, LOG_REG, RESNET, KSVM)
+    # five_hundred_ms_batches = (
 
-    three_seven_five_ms_latency_upper_bound = 1.000
+    # five_hundred_ms_latency_upper_bound = 1.500
 
-    ## THIS IS FOR 375MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    thousand_ms_reps = [(1, 1, 1, 1),
-                        (1, 1, 1, 2),
-                        (2, 1, 1, 2),
-                        (2, 1, 1, 3),
-                        (2, 1, 1, 4),
-                        (3, 1, 1, 4),
-                        (3, 1, 1, 5)]
+    # ## THIS IS FOR 375MS
+    # ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
+    # three_seven_five_ms_reps = [(1, 1, 1, 1),
+    #                             (1, 1, 1, 2),
+    #                             (1, 1, 1, 3),
+    #                             (1, 1, 1, 4),
+    #                             (1, 1, 1, 5),
+    #                             (2, 1, 1, 5),
+    #                             (2, 1, 1, 6)]
 
-    ## THIS IS FOR 1000MS
-    ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
-    thousand_ms_batches = (16, 2, 16, 15)
+    # ## THIS IS FOR 375MS
+    # ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
+    # three_seven_five_ms_batches = (7, 2, 9, 2)
 
-    thousand_ms_latency_upper_bound = 3.000
+    # three_seven_five_ms_latency_upper_bound = 1.000
+
+    # ## THIS IS FOR 375MS
+    # ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
+    # thousand_ms_reps = [(1, 1, 1, 1),
+    #                     (1, 1, 1, 2),
+    #                     (2, 1, 1, 2),
+    #                     (2, 1, 1, 3),
+    #                     (2, 1, 1, 4),
+    #                     (3, 1, 1, 4),
+    #                     (3, 1, 1, 5)]
+
+    # ## THIS IS FOR 1000MS
+    # ## FORMAT IS (INCEPTION, LOG_REG, KSVM, RESNET)
+    # thousand_ms_batches = (16, 2, 16, 15)
+
+    # thousand_ms_latency_upper_bound = 3.000
 
     inception_batch_idx = 0
     log_reg_batch_idx = 1
-    ksvm_batch_idx = 2
-    resnet_batch_idx = 3
+    resnet_batch_idx = 2
+    ksvm_batch_idx = 3
 
-    for inception_reps, log_reg_reps, ksvm_reps, resnet_reps in five_hundred_ms_reps:
+    for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in max_thru_reps:
         total_cpus = range(9,29)
 
         def get_cpus(num_cpus):
@@ -446,22 +452,22 @@ if __name__ == "__main__":
             return [total_gpus.pop() for _ in range(num_gpus)]
 
         configs = [
-            setup_inception(batch_size=five_hundred_ms_batches[inception_batch_idx],
+            setup_inception(batch_size=max_thru_batches[inception_batch_idx],
                             num_replicas=inception_reps,
                             cpus_per_replica=1,
                             allocated_cpus=get_cpus(inception_reps),
                             allocated_gpus=get_gpus(inception_reps)),
-            setup_log_reg(batch_size=five_hundred_ms_batches[log_reg_batch_idx],
+            setup_log_reg(batch_size=max_thru_batches[log_reg_batch_idx],
                           num_replicas=log_reg_reps,
                           cpus_per_replica=1,
                           allocated_cpus=get_cpus(log_reg_reps),
-                          allocated_gpus=get_gpus(log_reg_reps)),
-            setup_kernel_svm(batch_size=five_hundred_ms_batches[ksvm_batch_idx],
+                          allocated_gpus=[]),
+            setup_kernel_svm(batch_size=max_thru_batches[ksvm_batch_idx],
                              num_replicas=ksvm_reps,
                              cpus_per_replica=1,
                              allocated_cpus=get_cpus(ksvm_reps),
-                             allocated_gpus=get_gpus(ksvm_reps)),
-            setup_resnet(batch_size=five_hundred_ms_batches[resnet_batch_idx],
+                             allocated_gpus=[]),
+            setup_resnet(batch_size=max_thru_batches[resnet_batch_idx],
                          num_replicas=resnet_reps,
                          cpus_per_replica=1,
                          allocated_cpus=get_cpus(resnet_reps),
@@ -470,7 +476,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(configs, queue, client_num, five_hundred_ms_latency_upper_bound)
+        benchmarker = DriverBenchmarker(configs, queue, client_num, max_thru_latency_upper_bound)
 
         p = Process(target=benchmarker.run)
         p.start()
@@ -482,6 +488,6 @@ if __name__ == "__main__":
         cl.connect()
 
         fname = "incep_{}-logreg_{}-ksvm_{}-resnet_{}".format(inception_reps, log_reg_reps, ksvm_reps, resnet_reps)
-        driver_utils.save_results(configs, cl, all_stats, "e2e_500ms_slo_img_driver_1", prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_slo_img_driver_1", prefix=fname)
     
     sys.exit(0)
