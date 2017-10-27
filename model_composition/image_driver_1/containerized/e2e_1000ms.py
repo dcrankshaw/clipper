@@ -180,7 +180,7 @@ class Predictor(object):
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
-        self.stats["all_lats"].append(lats)
+        self.stats["all_lats"].append(self.latencies)
         self.stats["mean_lats"].append(mean)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
@@ -293,11 +293,11 @@ class DriverBenchmarker(object):
 
     def increase_delay(self):
         if self.delay < 0.005:
-            self.delay += 0.0002
-        elif self.delay < 0.01:
             self.delay += 0.0005
-        else:
+        elif self.delay < 0.01:
             self.delay += 0.001
+        else:
+            self.delay += 0.002
 
 
     def find_steady_state(self):
