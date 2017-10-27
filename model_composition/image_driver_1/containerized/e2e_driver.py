@@ -144,18 +144,6 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
-def get_queue_sizes(metrics_json):
-    hists = metrics_json["histograms"]
-    mean_queue_sizes = {}
-    for h in hists:
-        if "queue_size" in h.keys()[0]:
-            name = h.keys()[0]
-            model = name.split(":")[1]
-            mean = h[name]["mean"]
-            mean_queue_sizes[model] = round(float(mean), 2)
-
-    return mean_queue_sizes
-
 class Predictor(object):
 
     def __init__(self, clipper_metrics, batch_size):
@@ -196,11 +184,10 @@ class Predictor(object):
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             batch_sizes = get_batch_sizes(metrics)
-            queue_sizes = get_queue_sizes(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches} queue_sizes: {queues}").format(p99=p99, mean=mean, thru=thru,
+                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
                                                           batches=json.dumps(
                                                               batch_sizes, sort_keys=True)))
         else:
