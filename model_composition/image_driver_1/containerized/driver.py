@@ -337,7 +337,7 @@ class Predictor(object):
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
-    def __init__(self, config, queue, latency_upper_bound)
+    def __init__(self, config, queue, latency_upper_bound):
         self.latency_upper_bound = latency_upper_bound
         self.config = config
         self.queue = queue
