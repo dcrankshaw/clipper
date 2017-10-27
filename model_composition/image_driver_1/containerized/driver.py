@@ -337,7 +337,8 @@ class Predictor(object):
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
-    def __init__(self, config, queue):
+    def __init__(self, config, queue, latency_upper_bound)
+        self.latency_upper_bound = latency_upper_bound
         self.config = config
         self.queue = queue
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
@@ -392,7 +393,7 @@ class ModelBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state = driver_utils.check_convergence(predictor.stats, [self.config])
+                convergence_state = driver_utils.check_convergence(predictor.stats, [self.config], self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
@@ -489,8 +490,11 @@ if __name__ == "__main__":
                                                      cpus_per_replica=cpus_per_replica,
                                                      allocated_cpus=args.model_cpus,                               
                                                      allocated_gpus=args.model_gpus)
+
+                resnet_latency_upper_bound = .4
+
                 queue = Queue()
-                benchmarker = ModelBenchmarker(model_config, queue)
+                benchmarker = ModelBenchmarker(model_config, queue, resnet_latency_upper_bound)
 
                 processes = []
                 all_stats = []
