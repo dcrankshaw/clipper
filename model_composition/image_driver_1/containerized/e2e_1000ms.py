@@ -449,7 +449,7 @@ if __name__ == "__main__":
                           cpus_per_replica=1,
                           allocated_cpus=get_cpus(log_reg_reps),
                           allocated_gpus=[]),
-            setup_kernel_svm(batch_size=mbatches[ksvm_batch_idx],
+            setup_kernel_svm(batch_size=batches[ksvm_batch_idx],
                              num_replicas=ksvm_reps,
                              cpus_per_replica=1,
                              allocated_cpus=get_cpus(ksvm_reps),
