@@ -208,7 +208,7 @@ class Predictor(object):
             self.total_num_complete += 1
             self.batch_num_complete += 1
 
-            trial_length = max(300, 10 * self.batch_size)
+            trial_length = max(150, 10 * self.batch_size)
             if self.batch_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
@@ -293,11 +293,11 @@ class DriverBenchmarker(object):
 
     def increase_delay(self):
         if self.delay < 0.005:
-            self.delay += 0.0005
-        elif self.delay < 0.01:
             self.delay += 0.001
-        else:
+        elif self.delay < 0.01:
             self.delay += 0.002
+        else:
+            self.delay += 0.004
 
 
     def find_steady_state(self):
