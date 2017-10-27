@@ -463,7 +463,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(configs, queue, client_num, max_thru_latency_upper_bound)
+        benchmarker = DriverBenchmarker(configs, queue, client_num, latency_upper_bound)
 
         p = Process(target=benchmarker.run)
         p.start()
