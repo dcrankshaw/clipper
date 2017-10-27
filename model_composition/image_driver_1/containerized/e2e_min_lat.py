@@ -369,21 +369,20 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    ## THIS IS FOR MAX THRU
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
-    max_thru_reps = [(1, 1, 1, 1),
+    min_lat_reps = [(1, 1, 1, 1),
                     (1, 1, 2, 1),
-                    (2, 1, 2, 1),
+                    (1, 1, 3, 1),
                     (2, 1, 3, 1),
-                    (3, 1, 3, 1),
-                    (3, 1, 4, 1),
+                    (2, 1, 4, 1),
+                    (2, 1, 5, 1),
                     (3, 1, 5, 1)]
 
 
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
-    max_thru_batches = (48, 2, 64, 16)
+    min_lat_batches = (1, 1, 1, 1)
 
-    max_thru_latency_upper_bound = 7.0
+    min_lat_latency_upper_bound = 0.04
 
     # ## THIS IS FOR 500MS
     # ## FORMAT IS (INCEPTION, LOG_REG, RESNET, KSVM)
@@ -439,26 +438,29 @@ if __name__ == "__main__":
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
 
+        inception_cpus_per_replica = 2
+        resnet_cpus_per_replica = 3
+
         configs = [
-            setup_inception(batch_size=max_thru_batches[inception_batch_idx],
+            setup_inception(batch_size=min_lat_batches[inception_batch_idx],
                             num_replicas=inception_reps,
-                            cpus_per_replica=1,
-                            allocated_cpus=get_cpus(inception_reps),
+                            cpus_per_replica=inception_cpus_per_replica,
+                            allocated_cpus=get_cpus(inception_cpus_per_replica * inception_reps),
                             allocated_gpus=get_gpus(inception_reps)),
-            setup_log_reg(batch_size=max_thru_batches[log_reg_batch_idx],
+            setup_log_reg(batch_size=min_lat_batches[log_reg_batch_idx],
                           num_replicas=log_reg_reps,
                           cpus_per_replica=1,
                           allocated_cpus=get_cpus(log_reg_reps),
                           allocated_gpus=[]),
-            setup_kernel_svm(batch_size=max_thru_batches[ksvm_batch_idx],
+            setup_kernel_svm(batch_size=min_lat_batches[ksvm_batch_idx],
                              num_replicas=ksvm_reps,
                              cpus_per_replica=1,
                              allocated_cpus=get_cpus(ksvm_reps),
                              allocated_gpus=[]),
-            setup_resnet(batch_size=max_thru_batches[resnet_batch_idx],
+            setup_resnet(batch_size=min_lat_batches[resnet_batch_idx],
                          num_replicas=resnet_reps,
-                         cpus_per_replica=1,
-                         allocated_cpus=get_cpus(resnet_reps),
+                         cpus_per_replica=resnet_cpus_per_replica,
+                         allocated_cpus=get_cpus(resnet_reps * resnet_cpus_per_replica),
                          allocated_gpus=get_gpus(resnet_reps))
         ]
 
