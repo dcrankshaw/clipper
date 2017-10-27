@@ -15,7 +15,7 @@ NUM_PROCS=$1
 if [ "$NUM_PROCS" -ge "1" ]
 	then
 		echo '1'
-		(export CUDA_VISIBLE_DEVICES=0,1; numactl -C 1-11 python driver.py -c 1 2 3 4 5 6 7 8 9 10 11 -r 0 -i 1 -b 64 -p 1 -t 8 -tl 300) &
+		(export CUDA_VISIBLE_DEVICES=0,1; numactl -C 1-11 python driver.py -c 1 2 3 4 5 6 7 8 9 10 11 -r 0 -i 1 -b 64 -t 8 -tl 300) &
 fi
 
 # if [ "$NUM_PROCS" -ge "2" ]
