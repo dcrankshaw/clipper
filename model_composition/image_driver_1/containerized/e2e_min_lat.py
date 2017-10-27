@@ -427,7 +427,7 @@ if __name__ == "__main__":
     resnet_batch_idx = 2
     ksvm_batch_idx = 3
 
-    for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in max_thru_reps:
+    for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in min_lat_reps:
         total_cpus = range(9,29)
 
         def get_cpus(num_cpus):
@@ -466,7 +466,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(configs, queue, client_num, max_thru_latency_upper_bound)
+        benchmarker = DriverBenchmarker(configs, queue, client_num, min_latency_upper_bound)
 
         p = Process(target=benchmarker.run)
         p.start()
