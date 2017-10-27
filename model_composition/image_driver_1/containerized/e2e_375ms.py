@@ -477,6 +477,6 @@ if __name__ == "__main__":
         cl.connect()
 
         fname = "incep_{}-logreg_{}-ksvm_{}-resnet_{}".format(inception_reps, log_reg_reps, ksvm_reps, resnet_reps)
-        driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_slo_img_driver_1", prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "e2e_375ms_slo_img_driver_1", prefix=fname)
     
     sys.exit(0)
