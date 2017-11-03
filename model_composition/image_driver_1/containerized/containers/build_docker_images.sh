@@ -21,9 +21,9 @@ cd $DIR
 time docker build -t model-comp/tf-kernel-svm -f TfKernelSvmDockerfile ./
 time docker build -t model-comp/tf-resnet-feats -f TfResNetDockerfile ./
 time docker build -t model-comp/tf-log-reg -f TfLogisticRegressionDockerfile ./
-time docker build -t model-comp/vgg-feats -f VggFeaturizationDockerfile ./
-time docker build -t model-comp/kpca-svm -f VggKpcaSvmDockerfile ./
-time docker build -t model-comp/kernel-svm -f VggKernelSvmDockerfile ./
-time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
+# time docker build -t model-comp/vgg-feats -f VggFeaturizationDockerfile ./
+# time docker build -t model-comp/kpca-svm -f VggKpcaSvmDockerfile ./
+# time docker build -t model-comp/kernel-svm -f VggKernelSvmDockerfile ./
+# time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
 time docker build -t model-comp/inception-feats -f InceptionFeaturizationDockerfile ./
-time docker build -t model-comp/lgbm -f LgbmDockerfile ./
+# time docker build -t model-comp/lgbm -f LgbmDockerfile ./

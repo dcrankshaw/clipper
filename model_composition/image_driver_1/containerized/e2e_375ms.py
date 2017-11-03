@@ -352,7 +352,7 @@ class DriverBenchmarker(object):
 class RequestDelayConfig:
     def __init__(self, request_delay):
         self.request_delay = request_delay
-        
+
     def to_json(self):
         return json.dumps(self.__dict__)
 
@@ -458,7 +458,7 @@ if __name__ == "__main__":
                              allocated_gpus=[]),
             setup_resnet(batch_size=batches[resnet_batch_idx],
                          num_replicas=resnet_reps,
-                         cpus_per_replica=1,
+                         cpus_per_replica=resnet_cpus_per_replica,
                          allocated_cpus=get_cpus(resnet_cpus_per_replica * resnet_reps),
                          allocated_gpus=get_gpus(resnet_reps))
         ]
@@ -478,5 +478,5 @@ if __name__ == "__main__":
 
         fname = "incep_{}-logreg_{}-ksvm_{}-resnet_{}".format(inception_reps, log_reg_reps, ksvm_reps, resnet_reps)
         driver_utils.save_results(configs, cl, all_stats, "e2e_375ms_slo_img_driver_1", prefix=fname)
-    
+
     sys.exit(0)
