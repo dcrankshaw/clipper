@@ -152,7 +152,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
         outputs_type = type(outputs[0])
         if outputs_type == np.ndarray:
             outputs_type = outputs[0].dtype
-        if not outputs_type in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
+        if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
             raise PredictionError(
                 "Model outputs list contains outputs of invalid type: {}!".
                 format(outputs_type))
@@ -195,10 +195,10 @@ class Server(threading.Thread):
         self.response_queue = Queue()
 
     def connect(self):
-        // 7000
+        # 7000
         recv_address = "tcp://{0}:{1}".format(self.clipper_ip,
                                                  self.recv_port)
-        // 7001
+        # 7001
         send_address = "tcp://{0}:{1}".format(self.clipper_ip,
                                                  self.send_port)
 
@@ -207,19 +207,42 @@ class Server(threading.Thread):
         self.recv_poller = zmq.Poller()
         self.recv_poller.register(self.recv_socket, zmq.POLLIN)
 
-        self.recv_socket.connect(clipper_recv_address)
+        print("Sending first connection message")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+
+        self.recv_socket.connect(recv_address)
         # Send a blank message to establish a connection
+        # self.recv_socket.send("", zmq.SNDMORE)
+        # self.recv_socket.send("")
+
+
+        # Now send container metadata to establish a connection
+
         self.recv_socket.send("", zmq.SNDMORE)
-        self.recv_socket.send("")
-        receivable_sockets = dict(self.recv_poller.poll(0))
+        self.recv_socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_CONTAINER), zmq.SNDMORE)
+        self.recv_socket.send_string(self.model_name, zmq.SNDMORE)
+        self.recv_socket.send_string(str(self.model_version), zmq.SNDMORE)
+        self.recv_socket.send_string(str(self.model_input_type))
+        print("Sent container metadata!")
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+
+        receivable_sockets = dict(self.recv_poller.poll(None))
         if not(self.recv_socket in receivable_sockets and receivable_sockets[self.recv_socket] == zmq.POLLIN):
             raise RuntimeError
 
         self.recv_socket.recv()
         connection_id_bytes = self.recv_socket.recv()
-        self.connection_id = struct.unpack("<I", client_id_bytes)[0]
+        self.connection_id = struct.unpack("<I", connection_id_bytes)[0]
+
+        print("Assigned connection ID: {}".format(self.connection_id))
+        sys.stdout.flush()
+        sys.stderr.flush()
         self.send_socket = self.context.socket(zmq.DEALER)
-        self.send_socket.connect(clipper_send_address)
+        self.send_socket.connect(send_address)
 
 
 
@@ -315,31 +338,18 @@ class Server(threading.Thread):
         print("Serving predictions for {0} input type.".format(
             input_type_to_string(self.model_input_type)))
         self.connect()
+        print("Connected")
         sys.stdout.flush()
         sys.stderr.flush()
         while True:
             receivable_sockets = dict(self.recv_poller.poll(SOCKET_POLLING_TIMEOUT_MILLIS))
             if self.recv_socket in receivable_sockets and receivable_sockets[self.recv_socket] == zmq.POLLIN:
                 self.recv_request()
-            self.send_response()
 
+            self.send_response()
             sys.stdout.flush()
             sys.stderr.flush()
 
-    def send_container_metadata(self, socket):
-        socket.send("", zmq.SNDMORE)
-        socket.send(struct.pack("<I", MESSAGE_TYPE_NEW_CONTAINER), zmq.SNDMORE)
-        socket.send_string(self.model_name, zmq.SNDMORE)
-        socket.send_string(str(self.model_version), zmq.SNDMORE)
-        socket.send_string(str(self.model_input_type))
-        self.event_history.insert(EVENT_HISTORY_SENT_CONTAINER_METADATA)
-        print("Sent container metadata!")
-
-    def send_heartbeat(self, socket):
-        socket.send("", zmq.SNDMORE)
-        socket.send(struct.pack("<I", MESSAGE_TYPE_HEARTBEAT))
-        self.event_history.insert(EVENT_HISTORY_SENT_HEARTBEAT)
-        print("Sent heartbeat!")
 
 
 class PredictionRequest:
@@ -407,7 +417,7 @@ class PredictionResponse:
     def send(self, socket, connection_id):
         socket.send("", flags=zmq.SNDMORE)
         socket.send(
-            struct.pack("<I", self.connection_id),
+            struct.pack("<I", connection_id),
             flags=zmq.SNDMORE)
         socket.send(
             struct.pack("<I", MESSAGE_TYPE_CONTAINER_CONTENT),
@@ -476,7 +486,7 @@ class RPCService:
             print("Cannot retrieve message history for inactive RPC service!")
             raise
 
-    def start(self, model, host, send_port, recv_port, model_name, model_version, input_type):
+    def start(self, model, host, model_name, model_version, input_type):
         """
         Args:
             model (object): The loaded model object ready to make predictions.
@@ -486,6 +496,9 @@ class RPCService:
             model_version (int): The version of the model
             input_type (str): One of ints, doubles, floats, bytes, strings.
         """
+
+        recv_port = 7010
+        send_port = 7011
 
         try:
             ip = socket.gethostbyname(host)

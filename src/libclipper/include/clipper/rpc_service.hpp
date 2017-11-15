@@ -80,23 +80,19 @@ class RPCService {
   void manage_send_service(const string address);
   void manage_recv_service(const string address);
   void send_messages(socket_t &socket, int max_num_messages);
+  void receive_message(socket_t &socket);
 
-void handle_new_connection(
-    zmq::socket_t &socket,
-    int &zmq_connection_id,
-    std::shared_ptr<redox::Redox> redis_connection);
+  void handle_new_connection(
+      socket_t &socket,
+      int &zmq_connection_id,
+      std::shared_ptr<redox::Redox> redis_connection);
 
-  void receive_message(
-      socket_t &socket, boost::bimap<int, vector<uint8_t>> &connections,
-      int &zmq_connection_id, std::shared_ptr<redox::Redox> redis_connection);
 
-  void send_heartbeat_response(socket_t &socket,
-                               const vector<uint8_t> &connection_id,
-                               bool request_container_metadata);
 
   void shutdown_service(socket_t &socket);
-  std::thread send_rpc_thread_;
-  std::thread recv_rpc_thread_;
+
+  std::thread rpc_send_thread_;
+  std::thread rpc_recv_thread_;
   shared_ptr<moodycamel::ConcurrentQueue<RPCRequest>> request_queue_;
   shared_ptr<moodycamel::ConcurrentQueue<RPCResponse>> response_queue_;
   // Flag indicating whether rpc service is active
@@ -109,14 +105,14 @@ void handle_new_connection(
   std::function<void(VersionedModelId, int)> container_ready_callback_;
   std::function<void(RPCResponse)> new_response_callback_;
 
-  // Mapping from zmq_connection_id id to routing id
-  std::unordered_map<size_t, const std::vector<uint8_t>> connection_routing_map_;
+  // Mapping from zmq_connection_id to routing id (for sending)
+  std::unordered_map<int, const std::vector<uint8_t>> connection_routing_map_;
   std::mutex connection_routing_mutex_;
 
   // Map from zmq_connection_id to container metadata.
   // Values are pairs of model id and integer replica id.
-  std::unordered_map<size_t, std::pair<VersionedModelId, int>> connections_containers_map_;
-  std::mutex connections_container_map_mutex_;
+  std::unordered_map<int, std::pair<VersionedModelId, int>> connections_containers_map_;
+  std::mutex connections_containers_map_mutex_;
 
 };
 

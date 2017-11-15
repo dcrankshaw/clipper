@@ -253,7 +253,7 @@ class TaskExecutor {
         model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
     rpc_->start(
-        "*", RPC_SERVICE_PORT, [ this, task_executor_valid = active_ ](
+        "*", RPC_SERVICE_SEND_PORT, RPC_SERVICE_RECV_PORT, [ this, task_executor_valid = active_ ](
                                    VersionedModelId model, int replica_id) {
           if (*task_executor_valid) {
             on_container_ready(model, replica_id);

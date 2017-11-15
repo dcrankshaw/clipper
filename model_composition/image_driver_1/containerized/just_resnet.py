@@ -368,7 +368,7 @@ if __name__ == "__main__":
     # resnet_reps = 6
 
     # for resnet_batch_size in [2, 10]:
-    for resnet_reps in [6,]:
+    for resnet_reps in [1, 6]:
         total_cpus = range(9,29)
 
         def get_cpus(num_cpus):
@@ -418,6 +418,6 @@ if __name__ == "__main__":
         cl.connect()
 
         fname = "resnet_{}".format(resnet_reps)
-        driver_utils.save_results(configs, cl, all_stats, "resnet_measure_dequeue_batch_{}".format(resnet_batch_size), prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "resnet_upgraded_rpc_batch_{}".format(resnet_batch_size), prefix=fname)
 
     sys.exit(0)

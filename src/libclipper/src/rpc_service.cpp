@@ -63,11 +63,11 @@ void RPCService::start(
   // 7001
   const string recv_address = "tcp://" + ip + ":" + std::to_string(recv_port);
   active_ = true;
-  send_rpc_thread_ = std::thread(
+  rpc_send_thread_ = std::thread(
       [this, send_address]() {
         manage_send_service(send_address);
       });
-  recv_rpc_thread_ = std::thread(
+  rpc_recv_thread_ = std::thread(
       [this, recv_address]() {
         manage_recv_service(recv_address);
       });
@@ -224,14 +224,14 @@ void RPCService::receive_message(socket_t &socket) {
   message_t msg_type;
   socket.recv(&msg_routing_identity, 0);
   socket.recv(&msg_delimiter, 0);
-  socket.recv(&msg_client_id, 0);
+  socket.recv(&msg_zmq_connection_id, 0);
   socket.recv(&msg_type, 0);
 
   MessageType type =
       static_cast<MessageType>(static_cast<int *>(msg_type.data())[0]);
 
-  size_t zmq_connection_id = static_cast<size_t *>(msg_zmq_connection_id.data())[0];
-  if (type != MessageType::ContainerContent: {
+  int zmq_connection_id = static_cast<int *>(msg_zmq_connection_id.data())[0];
+  if (type != MessageType::ContainerContent) {
     throw std::runtime_error("Received wrong message type");
   }
   // This message is a response to a container query
@@ -259,9 +259,10 @@ void RPCService::receive_message(socket_t &socket) {
   auto container_info_entry =
       connections_containers_map_.find(zmq_connection_id);
   if (container_info_entry == connections_containers_map_.end()) {
-    throw std::runtime_error(
-        "Failed to find container that was previously registered via "
-        "RPC");
+    std::stringstream ss;
+    ss <<  "Failed to find container with ID " << zmq_connection_id;
+    ss << " that was previously registered via RPC.";
+    throw std::runtime_error(ss.str());
   }
   std::pair<VersionedModelId, int> container_info =
       container_info_entry->second;
@@ -277,9 +278,11 @@ void RPCService::receive_message(socket_t &socket) {
 }
 
 void RPCService::handle_new_connection(
-    zmq::socket_t &socket,
+    socket_t &socket,
     int &zmq_connection_id,
     std::shared_ptr<redox::Redox> redis_connection) {
+
+  std::cout << "New connection detected" << std::endl;
 
   message_t msg_routing_identity;
   message_t msg_delimiter;
@@ -293,8 +296,11 @@ void RPCService::handle_new_connection(
       static_cast<MessageType>(static_cast<int *>(msg_type.data())[0]);
 
   if (type != MessageType::NewContainer) {
-    throw std::runtime_error(
-        "Wrong message type in RPCService::HandleNewConnection");
+    std::stringstream ss;
+    ss <<  "Wrong message type in RPCService::HandleNewConnection. Expected ";
+    ss << static_cast<std::underlying_type<MessageType>::type>(MessageType::NewContainer);
+    ss << ". Found " << static_cast<std::underlying_type<MessageType>::type>(type);
+    throw std::runtime_error(ss.str());
   }
 
   const vector<uint8_t> routing_id(

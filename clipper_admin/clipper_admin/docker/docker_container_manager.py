@@ -139,6 +139,8 @@ class DockerContainerManager(ContainerManager):
                 '4456/tcp': 4456,
                 '9999/tcp': 9999,  # for gdbserver
                 '1337/tcp': 1337,
+                '7010/tcp': 7010,
+                '7011/tcp': 7011,
                 '%s/tcp' % CLIPPER_INTERNAL_RPC_PORT: self.clipper_rpc_port
             },
             labels=query_labels,
