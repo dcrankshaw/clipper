@@ -132,15 +132,26 @@ def handle_predictions(predict_fn, request_queue, response_queue):
         for each input included in the specified
         predict response
     """
-    t2 = datetime.now()
+    loop_times = []
+    queue_get_times = []
+    handle_times = []
+
+    last_loop_start = datetime.now()
 
     while True:
-        prediction_request = request_queue.get(block=True)
-        t1 = datetime.now()
+        cur_loop_start = datetime.now()
+        loop_duration = (cur_loop_start - last_loop_start).microseconds
+        loop_times.append(loop_duration)
+        last_loop_start = cur_loop_start
 
-        print("batch_delay: {} us".format((t1 - t2).microseconds))
+        t1 = datetime.now()
+        prediction_request = request_queue.get(block=True)
+        t2 = datetime.now()
+        queue_get_times.append((t2 - t1).microseconds)
 
         outputs = predict_fn(prediction_request.inputs)
+        t3 = datetime.now()
+        handle_times.append((t3 - t2).microseconds)
         # Type check the outputs:
         if not type(outputs) == list:
             raise PredictionError("Model did not return a list")
@@ -174,8 +185,13 @@ def handle_predictions(predict_fn, request_queue, response_queue):
 
         response_queue.put(response)
 
-        t2 = datetime.now()
-        print("handle: {pred_time} us".format(pred_time=(t2 - t1).microseconds))
+        if len(loop_times) > 100:
+            print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
+            print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
+            print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
+            loop_times = []
+            queue_get_times = []
+            handle_times = []
         sys.stdout.flush()
         sys.stderr.flush()
 
@@ -286,7 +302,7 @@ class Server(threading.Thread):
         msg_id_bytes = self.recv_socket.recv()
         msg_id = int(struct.unpack("<I", msg_id_bytes)[0])
 
-        print("Got start of message %d " % msg_id)
+        # print("Got start of message %d " % msg_id)
         # list of byte arrays
         request_header = self.recv_socket.recv()
         request_type = struct.unpack("<I", request_header)[0]

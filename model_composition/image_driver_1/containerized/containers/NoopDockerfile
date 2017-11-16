@@ -1,0 +1,7 @@
+FROM model-comp/py-rpc:latest
+
+WORKDIR /container
+
+COPY noop_container.py /container/
+
+CMD ["python", "/container/noop_container.py"]

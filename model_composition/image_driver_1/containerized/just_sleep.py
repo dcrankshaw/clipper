@@ -6,7 +6,6 @@ import time
 import base64
 import logging
 import json
-from random import shuffle
 
 from clipper_admin import ClipperConnection, DockerContainerManager
 from threading import Lock
@@ -35,7 +34,7 @@ TF_RESNET_MODEL_APP_NAME = "tf-resnet-feats"
 INCEPTION_FEATS_IMAGE_NAME = "model-comp/inception-feats"
 TF_KERNEL_SVM_IMAGE_NAME = "model-comp/tf-kernel-svm"
 TF_LOG_REG_IMAGE_NAME = "model-comp/tf-log-reg"
-TF_RESNET_IMAGE_NAME = "model-comp/tf-resnet-feats"
+TF_RESNET_IMAGE_NAME = "model-comp/noop-gpu"
 
 CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
@@ -283,8 +282,7 @@ class DriverBenchmarker(object):
         time.sleep(5)
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
-        # while len(predictor.stats["thrus"]) < 6:
-        while True:
+        while len(predictor.stats["thrus"]) < 6:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
             time.sleep(self.delay)
@@ -377,7 +375,6 @@ if __name__ == "__main__":
             return [total_cpus.pop() for _ in range(num_cpus)]
 
         total_gpus = range(8)
-        shuffle(total_gpus)
 
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
@@ -421,6 +418,6 @@ if __name__ == "__main__":
         cl.connect()
 
         fname = "resnet_{}".format(resnet_reps)
-        driver_utils.save_results(configs, cl, all_stats, "resnet_upgraded_rpc_batch_{}".format(resnet_batch_size), prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "sleep_upgraded_rpc_batch_{}".format(resnet_batch_size), prefix=fname)
 
     sys.exit(0)
