@@ -203,7 +203,7 @@ class DriverBenchmarker(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Single Process Image Driver 1')
     parser.add_argument('-b',  '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the driver. Each configuration will be benchmarked separately.")
-    parser.add_argument('-c',  '--cpus', type=int, nargs='+', help="The set of cpu cores on which to run the single process driver")
+    parser.add_argument('-c',  '--cpus', type=int, nargs='+', help="The set of VIRTUAL cpu cores on which to run the single process driver")
     parser.add_argument('-r',  '--resnet_gpu', type=int, default=0, help="The GPU on which to run the ResNet 152 featurization model")
     parser.add_argument('-i',  '--inception_gpu', type=int, default=0, help="The GPU on which to run the inception featurization model")
     parser.add_argument('-t',  '--num_trials', type=int, default=15, help="The number of trials to run")

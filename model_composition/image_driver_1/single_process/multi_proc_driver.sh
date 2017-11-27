@@ -15,23 +15,23 @@ NUM_PROCS=$1
 if [ "$NUM_PROCS" -ge "1" ]
 	then
 		echo '1'
-		(export CUDA_VISIBLE_DEVICES=0,1; numactl -C 1-11 python driver.py -c 1 2 3 4 5 6 7 8 9 10 11 -r 0 -i 1 -b 64 -p 1 -t 8) &
+		(export CUDA_VISIBLE_DEVICES=0,1; numactl -C 0,16,1,17,2,18,3,19 python driver.py -c 0 16 1 17 2 18 3 19 -r 0 -i 1 -b 64 -t 8 -tl 200) &
 fi
 
-# if [ "$NUM_PROCS" -ge "2" ]
-# 	then
-# 		echo '2'
-# 		(export CUDA_VISIBLE_DEVICES=2,3; numactl -C 5,6,7,8 python driver.py -c 5 6 7 8 -r 0 -i 1 -b 32 -p 2 -t 8) &
-# fi
+if [ "$NUM_PROCS" -ge "2" ]
+	then
+		echo '2'
+		(export CUDA_VISIBLE_DEVICES=2,3; numactl -C 4,20,5,21,6,22,7,23 python driver.py -c 0 16 1 17 2 18 3 19 -r 0 -i 1 -b 64 -t 8 -tl 200) &
+fi
 
-# if [ "$NUM_PROCS" -ge "3" ]
-# 	then
-# 		echo '3'
-# 		(export CUDA_VISIBLE_DEVICES=4,5; numactl -C 9,10,11,12 python driver.py -c 9 10 11 12 -r 0 -i 1 -b 32 -p 3 -t 8) &
-# fi
+if [ "$NUM_PROCS" -ge "3" ]
+	then
+		echo '3'
+		(export CUDA_VISIBLE_DEVICES=4,5; numactl -C 8,24,9,25,10,26,11,27 python driver.py -c 0 16 1 17 2 18 3 19 -r 0 -i 1 -b 64 -t 8 -tl 200) &
+fi
 
-# if [ "$NUM_PROCS" -ge "4" ]
-# 	then
-# 		echo '4'
-# 		(export CUDA_VISIBLE_DEVICES=6,7; numactl -C 13,14,15,16 python driver.py -c 13 14 15 16 -r 0 -i 1 -b 32 -p 4 -t 8)&
+if [ "$NUM_PROCS" -ge "4" ]
+	then
+		echo '4'
+		(export CUDA_VISIBLE_DEVICES=6,7; numactl -C 12,28,13,29,14,30,15,31 python driver.py -c 0 16 1 17 2 18 3 19 -r 0 -i 1 -b 64 -t 8 -tl 200) &
 fi
