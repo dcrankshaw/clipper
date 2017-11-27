@@ -34,4 +34,4 @@ fi
 # 	then
 # 		echo '4'
 # 		(export CUDA_VISIBLE_DEVICES=6,7; numactl -C 13,14,15,16 python driver.py -c 13 14 15 16 -r 0 -i 1 -b 32 -p 4 -t 8)&
-fi
+#fi
