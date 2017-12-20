@@ -16,5 +16,6 @@ setup(
     install_requires=[
         'numpy',
         'pyzmq',
-        'futures_then'
+        'futures_then',
+        'scipy',
     ])

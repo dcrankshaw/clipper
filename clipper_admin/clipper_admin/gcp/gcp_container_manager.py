@@ -344,7 +344,7 @@ class GCPContainerManager(ContainerManager):
                           "{image}").format(
                                   name=name,
                                   version=version,
-                                  ip=self.query_frontend_external_ip,
+                                  ip=self.query_frontend_internal_ip,
                                   input_type=input_type,
                                   rep_name=rep_name,
                                   image=image)
@@ -481,7 +481,7 @@ class GCPContainerManager(ContainerManager):
 
     def get_admin_addr(self):
         return "{host}:{port}".format(
-            host=self.mgmt_frontend_external_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
+            host=self.mgmt_frontend_internal_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
 
     def get_query_addr(self):
         raise NotImplementedError

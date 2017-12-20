@@ -32,6 +32,8 @@ setup(
         'docker',
         'kubernetes',
         'six',
+        'google-api-python-client',
+        'google-auth-httplib2',
     ],
     extras_require={
         'PySpark': ['pyspark'],
