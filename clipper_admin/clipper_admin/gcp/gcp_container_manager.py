@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import time
+import numpy as np
 from ..container_manager import (
     create_model_container_label, parse_model_container_label,
     ContainerManager, CLIPPER_DOCKER_LABEL, CLIPPER_MODEL_CONTAINER_LABEL,
@@ -15,23 +16,23 @@ from ..exceptions import ClipperException
 import subprocess32 as subprocess
 
 logger = logging.getLogger(__name__)
+logging.getLogger('googleapiclient').setLevel(logging.ERROR)
 
 PROJECT_ID = "clipper-model-comp"
-
 
 class GCPContainerManager(ContainerManager):
     def __init__(self, cluster_name):
         self.project = "clipper-model-comp"
-        self.zone = "us-east1-b"
+        self.zone = "us-west1-b"
         self.cluster_name = cluster_name
         self.compute = googleapiclient.discovery.build('compute', 'v1')
 
     def start_redis(self):
         redis_config = {
                 "name": "redis-{}".format(self.cluster_name),
-                "zone": "projects/clipper-model-comp/zones/us-east1-b",
+                "zone": "projects/clipper-model-comp/zones/us-west1-b",
                 "minCpuPlatform": "Automatic",
-                "machineType": "projects/clipper-model-comp/zones/us-east1-b/machineTypes/n1-standard-1",
+                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/n1-standard-1",
                 "metadata": {
                     "items": [
                         {
@@ -52,7 +53,7 @@ class GCPContainerManager(ContainerManager):
                         "deviceName": "redis-{}".format(self.cluster_name),
                         "initializeParams": {
                             "sourceImage": "projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
-                            "diskType": "projects/clipper-model-comp/zones/us-east1-b/diskTypes/pd-standard",
+                            "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
                             "diskSizeGb": "10"
                             }
                         }
@@ -61,7 +62,7 @@ class GCPContainerManager(ContainerManager):
                 "networkInterfaces": [
                     {
                         "network": "projects/clipper-model-comp/global/networks/default",
-                        "subnetwork": "projects/clipper-model-comp/regions/us-east1/subnetworks/default",
+                        "subnetwork": "projects/clipper-model-comp/regions/us-west1/subnetworks/default",
                         "accessConfigs": [
                             {
                                 "name": "External NAT",
@@ -74,7 +75,7 @@ class GCPContainerManager(ContainerManager):
                 "description": "",
                 "labels": {
                     "container-vm": "cos-stable-63-10032-71-0",
-                    "clipper-cluster": self.cluster_name 
+                    "clipper-cluster": self.cluster_name
                     },
                 "scheduling": {
                     "preemptible": False,
@@ -97,7 +98,7 @@ class GCPContainerManager(ContainerManager):
                     ]
             }
 
-        self.start_instance(redis_config)
+        self._start_instance(redis_config)
         instances = self.compute.instances().list(project=self.project, zone=self.zone).execute()
         self.redis_ip = None
         for inst in instances["items"]:
@@ -108,13 +109,13 @@ class GCPContainerManager(ContainerManager):
         if self.redis_ip is None:
             logger.error("No Redis instance found")
 
-        
+
     def start_mgmt_frontend(self):
         mgmt_config = {
           "name": "clipper-mgmt-{}".format(self.cluster_name),
-          "zone": "projects/clipper-model-comp/zones/us-east1-b",
+          "zone": "projects/clipper-model-comp/zones/us-west1-b",
           "minCpuPlatform": "Automatic",
-          "machineType": "projects/clipper-model-comp/zones/us-east1-b/machineTypes/n1-standard-1",
+          "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/n1-standard-1",
           "metadata": {
             "items": [
               {
@@ -124,7 +125,9 @@ class GCPContainerManager(ContainerManager):
             ]
           },
           "tags": {
-            "items": []
+            "items": [
+                    "clipper-mgmt"
+                ]
           },
           "disks": [
             {
@@ -135,7 +138,7 @@ class GCPContainerManager(ContainerManager):
               "deviceName": "clipper-mgmt-{}".format(self.cluster_name),
               "initializeParams": {
                 "sourceImage": "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
-                "diskType": "projects/clipper-model-comp/zones/us-east1-b/diskTypes/pd-standard",
+                "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
                 "diskSizeGb": "10"
               }
             }
@@ -144,7 +147,7 @@ class GCPContainerManager(ContainerManager):
           "networkInterfaces": [
             {
               "network": "projects/clipper-model-comp/global/networks/default",
-              "subnetwork": "projects/clipper-model-comp/regions/us-east1/subnetworks/default",
+              "subnetwork": "projects/clipper-model-comp/regions/us-west1/subnetworks/default",
               "accessConfigs": [
                 {
                   "name": "External NAT",
@@ -157,7 +160,7 @@ class GCPContainerManager(ContainerManager):
           "description": "",
           "labels": {
             "container-vm": "cos-stable-63-10032-71-0",
-            "clipper-cluster": self.cluster_name 
+            "clipper-cluster": self.cluster_name
           },
           "scheduling": {
             "preemptible": False,
@@ -180,14 +183,14 @@ class GCPContainerManager(ContainerManager):
           ]
         }
 
-        self.start_instance(mgmt_config)
+        self._start_instance(mgmt_config)
 
     def start_query_frontend(self):
         query_config = {
           "name": "clipper-query-{}".format(self.cluster_name),
-          "zone": "projects/clipper-model-comp/zones/us-east1-b",
+          "zone": "projects/clipper-model-comp/zones/us-west1-b",
           "minCpuPlatform": "Automatic",
-          "machineType": "projects/clipper-model-comp/zones/us-east1-b/machineTypes/custom-4-56320-ext",
+          "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-4-56320-ext",
           "metadata": {
             "items": [
               {
@@ -197,7 +200,9 @@ class GCPContainerManager(ContainerManager):
             ]
           },
           "tags": {
-            "items": []
+            "items": [
+                    "clipper-zmq-frontend"
+                ]
           },
           "disks": [
             {
@@ -208,7 +213,7 @@ class GCPContainerManager(ContainerManager):
               "deviceName": "clipper-query-{}".format(self.cluster_name),
               "initializeParams": {
                 "sourceImage": "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
-                "diskType": "projects/clipper-model-comp/zones/us-east1-b/diskTypes/pd-standard",
+                "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
                 "diskSizeGb": "10"
               }
             }
@@ -217,7 +222,7 @@ class GCPContainerManager(ContainerManager):
           "networkInterfaces": [
             {
               "network": "projects/clipper-model-comp/global/networks/default",
-              "subnetwork": "projects/clipper-model-comp/regions/us-east1/subnetworks/default",
+              "subnetwork": "projects/clipper-model-comp/regions/us-west1/subnetworks/default",
               "accessConfigs": [
                 {
                   "name": "External NAT",
@@ -230,7 +235,7 @@ class GCPContainerManager(ContainerManager):
           "description": "",
           "labels": {
             "container-vm": "cos-stable-63-10032-71-0",
-            "clipper-cluster": self.cluster_name 
+            "clipper-cluster": self.cluster_name
           },
           "scheduling": {
             "preemptible": False,
@@ -253,10 +258,9 @@ class GCPContainerManager(ContainerManager):
           ]
         }
 
-        self.start_instance(query_config)
+        self._start_instance(query_config)
 
-    def start_instance(self, config):
-        op = self.compute.instances().insert(project=self.project, zone=self.zone, body=config).execute()
+    def _wait_for_op(self, op):
         while True:
             result = self.compute.zoneOperations().get(
                     project=self.project, zone=self.zone, operation=op['name']).execute()
@@ -264,6 +268,14 @@ class GCPContainerManager(ContainerManager):
                 break
             else:
                 time.sleep(1)
+
+    def _start_instance(self, config):
+        op = self.compute.instances().insert(project=self.project, zone=self.zone, body=config).execute()
+        self._wait_for_op(op)
+
+    def _delete_instance(self, rep_name):
+        op = self.compute.instances().delete(project=self.project, zone=self.zone, instance=rep_name).execute()
+        return op
 
     def start_clipper(self, *args):
         self.start_redis()
@@ -275,11 +287,16 @@ class GCPContainerManager(ContainerManager):
         instances = self.compute.instances().list(project=self.project, zone=self.zone).execute()
         for inst in instances["items"]:
             if inst["name"] == "clipper-query-{}".format(self.cluster_name):
-                self.query_frontend_ip = inst["networkInterfaces"][0]["networkIP"]
-                logger.info("Setting ZMQ frontend IP to {}".format(self.query_frontend_ip))
-                break
-        if self.query_frontend_ip is None:
+                self.query_frontend_internal_ip = inst["networkInterfaces"][0]["networkIP"]
+                self.query_frontend_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+                logger.info("Setting ZMQ frontend internal IP to {}".format(self.query_frontend_internal_ip))
+            if inst["name"] == "clipper-mgmt-{}".format(self.cluster_name):
+                self.mgmt_frontend_internal_ip = inst["networkInterfaces"][0]["networkIP"]
+                self.mgmt_frontend_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+        if self.query_frontend_internal_ip is None:
             logger.error("No query frontend instance found")
+        if self.mgmt_frontend_internal_ip is None:
+            logger.error("No mgmt frontend instance found")
 
 
     def deploy_model(self, name, version, input_type, image, num_replicas=1, **kwargs):
@@ -293,71 +310,129 @@ class GCPContainerManager(ContainerManager):
         self.set_num_replicas(name, version, input_type, image, num_replicas, **kwargs)
 
     def _get_replicas(self, name, version):
-        containers = self.docker_client.containers.list(
-            filters={
-                "label":
-                "{key}={val}".format(
-                    key=CLIPPER_MODEL_CONTAINER_LABEL,
-                    val=create_model_container_label(name, version))
-            })
-        return containers
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-model eq {name}-{version}".format(name=name, version=version)).execute()
+        if "items" in replicas:
+            return replicas["items"]
+        else:
+            return []
 
     def get_num_replicas(self, name, version):
         return len(self._get_replicas(name, version))
 
-    def _add_replica(self, name, version, input_type, image, gpu_num=None, cpu_str=None, use_nvidia_docker=False):
-        containers = self.docker_client.containers.list(
-            filters={"label": CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL})
-        if len(containers) < 1:
-            logger.warning("No Clipper query frontend found.")
-            raise ClipperException(
-                "No Clipper query frontend to attach model container to")
-        query_frontend_hostname = containers[0].name
-        env_vars = {
-            "CLIPPER_MODEL_NAME": name,
-            "CLIPPER_MODEL_VERSION": version,
-            # NOTE: assumes this container being launched on same machine
-            # in same docker network as the query frontend
-            "CLIPPER_IP": query_frontend_hostname,
-            "CLIPPER_INPUT_TYPE": input_type,
-        }
-        labels = self.common_labels.copy()
-        labels[CLIPPER_MODEL_CONTAINER_LABEL] = create_model_container_label(
-            name, version)
-        if use_nvidia_docker:
-            # Even if a GPU-supported model isn't being deployed on a GPU,
-            # we may still need to launch it using nvidia-docker because
-            # the model framework may still depend on libcuda
-            env = os.environ.copy()
-            cmd = ["nvidia-docker", "run", "-d",
-                   "--network=%s" % self.docker_network]
-            if gpu_num is not None:
-                logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
-                    name=name, version=version, gpu_num=gpu_num))
-                env["NV_GPU"] = str(gpu_num)
+    def _add_replica(self, name, version, input_type, image, gpu_type=None, num_cpus=1, **kwargs):
+        """
+        Parameters
+        ----------
+        gpu_type : str
+            Either "p100" or "k80". Default is None.
+        """
+
+
+        rep_name = "{name}-{version}-{random}".format(name=name, version=version, random=np.random.randint(0, 100000))
+
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\nnvidia-docker run -d "
+                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          "--log-opt env=CLIPPER_MODEL_NAME "
+                          "--log-opt env=CLIPPER_MODEL_VERSION "
+                          "--log-opt labels=rep_name "
+                          "-e CLIPPER_MODEL_NAME={name} "
+                          "-e CLIPPER_MODEL_VERSION={version} "
+                          "-e CLIPPER_IP={ip} "
+                          "-e CLIPPER_INPUT_TYPE={input_type} "
+                          "-l rep_name={rep_name} "
+                          "{image}").format(
+                                  name=name,
+                                  version=version,
+                                  ip=self.query_frontend_internal_ip,
+                                  input_type=input_type,
+                                  rep_name=rep_name,
+                                  image=image)
+
+        logger.info("STARTUP SCRIPT:\n\n {script}".format(script=startup_script))
+
+        config = {
+                "name": rep_name,
+                "zone": "projects/clipper-model-comp/zones/us-west1-b",
+                "minCpuPlatform": "Automatic",
+                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-{num_cpus}-10240".format(num_cpus=num_cpus),
+                "metadata": {
+                    "items": [
+                        {
+                            "key": "startup-script",
+                            "value": startup_script
+                            }
+                        ]
+                    },
+                "tags": {
+                    "items": []
+                    },
+                "disks": [
+                    {
+                        "type": "PERSISTENT",
+                        "boot": True,
+                        "mode": "READ_WRITE",
+                        "autoDelete": True,
+                        "deviceName": rep_name,
+                        "initializeParams": {
+                                "sourceImage": "projects/clipper-model-comp/global/images/nvidia-docker-k80-image",
+                                "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
+                                "diskSizeGb": "50"
+                            }
+                        }
+                    ],
+                "canIpForward": False,
+                "networkInterfaces": [
+                    {
+                        "network": "projects/clipper-model-comp/global/networks/default",
+                        "subnetwork": "projects/clipper-model-comp/regions/us-west1/subnetworks/default",
+                        "accessConfigs": [
+                            {
+                                "name": "External NAT",
+                                "type": "ONE_TO_ONE_NAT"
+                                }
+                            ],
+                        "aliasIpRanges": []
+                        }
+                    ],
+                "description": "",
+                "labels": {
+                    "clipper-cluster": self.cluster_name,
+                    "clipper-model": "{name}-{version}".format(name=name, version=version)
+                    },
+                "scheduling": {
+                        "preemptible": False,
+                        "onHostMaintenance": "TERMINATE",
+                        "automaticRestart": True
+                        },
+                "deletionProtection": False,
+                "serviceAccounts": [
+                    {
+                      "email": "450655029092-compute@developer.gserviceaccount.com",
+                      "scopes": [
+                          "https://www.googleapis.com/auth/devstorage.read_only",
+                          "https://www.googleapis.com/auth/logging.write",
+                          "https://www.googleapis.com/auth/monitoring.write",
+                          "https://www.googleapis.com/auth/servicecontrol",
+                          "https://www.googleapis.com/auth/service.management.readonly",
+                          "https://www.googleapis.com/auth/trace.append"
+                          ]
+                      }
+                    ]
+                }
+
+        if gpu_type is not None:
+            if gpu_type in ["p100", "k80"]:
+                config["guestAccelerators"] = [
+                        {
+                            "acceleratorType": "projects/clipper-model-comp/zones/us-west1-b/acceleratorTypes/nvidia-tesla-{gpu_type}".format(gpu_type=gpu_type),
+                            "acceleratorCount": 1
+                            }
+                        ]
+                config["disks"][0]["initializeParams"]["sourceImage"] = "projects/clipper-model-comp/global/images/nvidia-docker-{gpu_type}-image".format(gpu_type=gpu_type)
             else:
-                # We're not running on a GPU, so we should mask all available
-                # GPU resources
-                cmd.append("-e")
-                cmd.append("CUDA_VISIBLE_DEVICES=''")
-            for k, v in labels.iteritems():
-                cmd.append("-l")
-                cmd.append("%s=%s" % (k, v))
-            for k, v in env_vars.iteritems():
-                cmd.append("-e")
-                cmd.append("%s=%s" % (k, v))
-            if cpu_str:
-                cmd.append("--cpuset-cpus=%s" % cpu_str)
-            cmd.append(image)
-            logger.info("Docker command: \"%s\"" % cmd)
-            subprocess.check_call(cmd, env=env)
-        else:
-            self.docker_client.containers.run(
-                image,
-                environment=env_vars,
-                labels=labels,
-                cpuset_cpus=cpu_str,
-                **self.extra_container_kwargs)
+                logger.error("{} is invalid gpu type. Starting replica without a GPU.".format(gpu_type))
+        self._start_instance(config)
 
     def set_num_replicas(self, name, version, input_type, image, num_replicas, **kwargs):
         current_replicas = self._get_replicas(name, version)
@@ -370,37 +445,8 @@ class GCPContainerManager(ContainerManager):
                     name=name,
                     version=version,
                     missing=(num_missing)))
-            if "gpus" in kwargs:
-                available_gpus = list(kwargs["gpus"])
-            if "use_nvidia_docker" in kwargs:
-                use_nvidia_docker = kwargs["use_nvidia_docker"]
-            else:
-                use_nvidia_docker = False
-
-            # Enumerated list of cpus that can be allocated (e.g [1, 2, 3, 8, 9])
-            if "allocated_cpus" in kwargs:
-                allocated_cpus = kwargs["allocated_cpus"]
-            if "cpus_per_replica" in kwargs:
-                cpus_per_replica = kwargs["cpus_per_replica"]
-            if (len(allocated_cpus) / cpus_per_replica) < num_missing:
-                raise ClipperException(
-                    "Not enough cpus available. Trying to allocate {reps} replicas \
-                    {cpus_per} CPUs each out of only {alloc_cpus} allocated cpus".format(
-                        reps=num_missing,
-                        cpus_per=cpus_per_replica,
-                        alloc_cpus=len(allocated_cpus)))
-            for i in range(num_missing):
-                if len(available_gpus) > 0:
-                    gpu_num = available_gpus.pop()
-                    use_nvidia_docker = True
-                else:
-                    gpu_num = None
-                cpus = allocated_cpus[i*cpus_per_replica: (i+1)*cpus_per_replica]
-                cpus = [str(c) for c in cpus]
-                cpu_str = ",".join(cpus)
-
-                self._add_replica(name, version, input_type, image, gpu_num=gpu_num,
-                                  cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
+            for _ in range(num_missing):
+                self._add_replica(name, version, input_type, image, **kwargs)
         elif len(current_replicas) > num_replicas:
             num_extra = len(current_replicas) - num_replicas
             logger.info(
@@ -411,56 +457,33 @@ class GCPContainerManager(ContainerManager):
                     version=version,
                     extra=(num_extra)))
             while len(current_replicas) > num_replicas:
-                cur_container = current_replicas.pop()
-                cur_container.stop()
+                cur_replica = current_replicas.pop()
+                self._delete_instance(cur_replica["name"])
 
     def get_logs(self, logging_dir):
-        containers = self.docker_client.containers.list(
-            filters={"label": CLIPPER_DOCKER_LABEL})
-        logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
-
-        log_files = []
-        if not os.path.exists(logging_dir):
-            os.makedirs(logging_dir)
-            logger.info("Created logging directory: %s" % logging_dir)
-        for c in containers:
-            log_file_name = "image_{image}:container_{id}.log".format(
-                image=c.image.short_id, id=c.short_id)
-            log_file = os.path.join(logging_dir, log_file_name)
-            with open(log_file, "w") as lf:
-                lf.write(c.logs(stdout=True, stderr=True))
-            log_files.append(log_file)
-        return log_files
+        raise NotImplementedError
 
     def stop_models(self, models):
-        containers = self.docker_client.containers.list(
-            filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
-        for c in containers:
-            c_name, c_version = parse_model_container_label(
-                c.labels[CLIPPER_MODEL_CONTAINER_LABEL])
-            if c_name in models and c_version in models[c_name]:
-                c.stop()
+        raise NotImplementedError
 
     def stop_all_model_containers(self):
-        containers = self.docker_client.containers.list(
-            filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
-        for c in containers:
-            c.stop()
+        raise NotImplementedError
 
     def stop_all(self):
-        containers = self.docker_client.containers.list(
-            filters={"label": CLIPPER_DOCKER_LABEL})
-        for c in containers:
-            c.stop(timeout=1)
-        try:
-            self.docker_client.containers.prune()
-        except docker.errors.APIError as e:
-            pass
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-cluster eq {}".format(self.cluster_name)).execute()
+        ops = []
+        if "items" in replicas:
+            for rep in replicas["items"]:
+                ops.append(self._delete_instance(rep["name"]))
+        for op in ops:
+            self._wait_for_op(op)
 
     def get_admin_addr(self):
         return "{host}:{port}".format(
-            host=self.public_hostname, port=self.clipper_management_port)
+            host=self.mgmt_frontend_external_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
 
     def get_query_addr(self):
-        return "{host}:{port}".format(
-            host=self.public_hostname, port=self.clipper_query_port)
+        raise NotImplementedError
+        # return "{host}:{port}".format(
+        #     host=self.query_frontend_internal, port=self.clipper_query_port)
