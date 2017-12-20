@@ -344,7 +344,7 @@ class GCPContainerManager(ContainerManager):
                           "{image}").format(
                                   name=name,
                                   version=version,
-                                  ip=self.query_frontend_internal_ip,
+                                  ip=self.query_frontend_external_ip,
                                   input_type=input_type,
                                   rep_name=rep_name,
                                   image=image)

@@ -165,9 +165,20 @@ class ClipperConnection(object):
             "latency_slo_micros": slo_micros
         })
         headers = {'Content-type': 'application/json'}
-        r = requests.post(url, headers=headers, data=req_json)
-        logger.debug(r.text)
-        if r.status_code != requests.codes.ok:
+        num_attempts = 0
+        registered = False
+        while num_attempts < 10:
+            try:
+                r = requests.post(url, headers=headers, data=req_json)
+                logger.debug(r.text)
+                registered = True
+                break
+            except requests.exceptions.ConnectionError as e:
+                num_attempts += 1
+                logger.info("Attempt {} failed. Sleeping 5".format(num_attempts))
+                time.sleep(5)
+
+        if not registered or r.status_code != requests.codes.ok:
             msg = "Received error status code: {code} and message: {msg}".format(
                 code=r.status_code, msg=r.text)
             logger.error(msg)
