@@ -56,7 +56,7 @@ VALID_MODEL_NAMES = [
     TF_RESNET_MODEL_APP_NAME
 ]
 
-CLIPPER_ADDRESS = "localhost"
+# CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
 CLIPPER_RECV_PORT = 4455
 
@@ -78,7 +78,6 @@ def setup_clipper(config):
     driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
-    return config
 
 def setup_clipper_gcp(config):
     cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
@@ -88,8 +87,9 @@ def setup_clipper_gcp(config):
     time.sleep(30)
     driver_utils.setup_heavy_node_gcp(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
-    logger.info("Clipper is set up!")
-    return config
+    clipper_address = cl.cm.query_frontend_external_ip
+    logger.info("Clipper is set up on {}".format(clipper_address))
+    return clipper_address
 
 def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
     if model_name == VGG_FEATS_MODEL_APP_NAME:
@@ -257,9 +257,9 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 class Predictor(object):
 
-    def __init__(self):
+    def __init__(self, clipper_address):
         self.outstanding_reqs = {}
-        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
+        self.client = Client(clipper_address, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
@@ -313,12 +313,13 @@ class ModelBenchmarker(object):
         self.queue = queue
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
 
-    def run(self, duration_seconds=120):
+    def run(self, clipper_address, duration_seconds=120):
         logger.info("Generating random inputs")
         inputs = [self.input_generator_fn() for _ in range(10000)]
+        time.sleep(30)
         logger.info("Starting predictions")
         start_time = datetime.now()
-        predictor = Predictor()
+        predictor = Predictor(clipper_address)
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
             # time.sleep(0.005)
@@ -403,14 +404,14 @@ if __name__ == "__main__":
            batch_size=2,
            num_replicas=1)
 
-    setup_clipper_gcp(model_config)
+    clipper_address = address = setup_clipper_gcp(model_config)
     queue = Queue()
     benchmarker = ModelBenchmarker(model_config, queue)
 
     processes = []
     all_stats = []
     for _ in range(1):
-        p = Process(target=benchmarker.run, args=(500,))
+        p = Process(target=benchmarker.run, args=(clipper_address, 500,))
         p.start()
         processes.append(p)
     for p in processes:

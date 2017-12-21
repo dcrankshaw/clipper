@@ -26,8 +26,13 @@ class GCPContainerManager(ContainerManager):
         self.zone = "us-west1-b"
         self.cluster_name = cluster_name
         self.compute = googleapiclient.discovery.build('compute', 'v1')
+        self.redis_port = 6380
 
     def start_redis(self):
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
+                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          "-p {redis_port}:6379 {image}").format(image="redis:alpine", redis_port=self.redis_port)
+
         redis_config = {
                 "name": "redis-{}".format(self.cluster_name),
                 "zone": "projects/clipper-model-comp/zones/us-west1-b",
@@ -35,9 +40,9 @@ class GCPContainerManager(ContainerManager):
                 "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/n1-standard-1",
                 "metadata": {
                     "items": [
-                        {
-                            "key": "gce-container-declaration",
-                            "value": "spec:\n  containers:\n    - name: redis-{cluster_name}\n      image: 'gcr.io/clipper-model-comp/redis:alpine'\n      stdin: false\n      tty: false\n  restartPolicy: Always\n".format(cluster_name=self.cluster_name)
+                            {
+                            "key": "startup-script",
+                            "value": startup_script
                             }
                         ]
                     },
@@ -52,9 +57,9 @@ class GCPContainerManager(ContainerManager):
                         "autoDelete": True,
                         "deviceName": "redis-{}".format(self.cluster_name),
                         "initializeParams": {
-                            "sourceImage": "projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
-                            "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
-                            "diskSizeGb": "10"
+                                "sourceImage": "projects/clipper-model-comp/global/images/clipper-core-docker",
+                                "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
+                                "diskSizeGb": "50"
                             }
                         }
                     ],
@@ -74,7 +79,6 @@ class GCPContainerManager(ContainerManager):
                     ],
                 "description": "",
                 "labels": {
-                    "container-vm": "cos-stable-63-10032-71-0",
                     "clipper-cluster": self.cluster_name
                     },
                 "scheduling": {
@@ -100,17 +104,25 @@ class GCPContainerManager(ContainerManager):
 
         self._start_instance(redis_config)
         instances = self.compute.instances().list(project=self.project, zone=self.zone).execute()
-        self.redis_ip = None
+        self.redis_internal_ip = None
         for inst in instances["items"]:
             if inst["name"] == "redis-{}".format(self.cluster_name):
-                self.redis_ip = inst["networkInterfaces"][0]["networkIP"]
-                logger.info("Setting redis IP to {}".format(self.redis_ip))
+                self.redis_internal_ip = inst["networkInterfaces"][0]["networkIP"]
+                self.redis_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
+                logger.info("Setting redis IP to {}".format(self.redis_internal_ip))
                 break
-        if self.redis_ip is None:
+        if self.redis_internal_ip is None:
             logger.error("No Redis instance found")
 
 
     def start_mgmt_frontend(self):
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
+                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          "-p {mgmt_port}:{mgmt_port} {image} --redis_ip={redis_ip} --redis_port={redis_port}"
+                          ).format(mgmt_port=CLIPPER_INTERNAL_MANAGEMENT_PORT,
+                                   image="gcr.io/clipper-model-comp/management_frontend:debug",
+                                   redis_ip=self.redis_internal_ip, redis_port=self.redis_port)
+
         mgmt_config = {
           "name": "clipper-mgmt-{}".format(self.cluster_name),
           "zone": "projects/clipper-model-comp/zones/us-west1-b",
@@ -118,10 +130,10 @@ class GCPContainerManager(ContainerManager):
           "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/n1-standard-1",
           "metadata": {
             "items": [
-              {
-                "key": "gce-container-declaration",
-                "value": "spec:\n  containers:\n    - name: clipper-mgmt-{cluster_name}\n      image: 'gcr.io/clipper-model-comp/management_frontend:develop'\n      args:\n        - '--redis_ip={redis_ip}'\n        - '--redis_port=6379'\n      stdin: false\n      tty: false\n  restartPolicy: Always\n".format(cluster_name=self.cluster_name, redis_ip=self.redis_ip)
-              }
+                {
+                "key": "startup-script",
+                "value": startup_script
+                }
             ]
           },
           "tags": {
@@ -137,9 +149,9 @@ class GCPContainerManager(ContainerManager):
               "autoDelete": True,
               "deviceName": "clipper-mgmt-{}".format(self.cluster_name),
               "initializeParams": {
-                "sourceImage": "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
-                "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
-                "diskSizeGb": "10"
+                    "sourceImage": "projects/clipper-model-comp/global/images/clipper-core-docker",
+                    "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
+                    "diskSizeGb": "50"
               }
             }
           ],
@@ -159,7 +171,6 @@ class GCPContainerManager(ContainerManager):
           ],
           "description": "",
           "labels": {
-            "container-vm": "cos-stable-63-10032-71-0",
             "clipper-cluster": self.cluster_name
           },
           "scheduling": {
@@ -186,6 +197,17 @@ class GCPContainerManager(ContainerManager):
         self._start_instance(mgmt_config)
 
     def start_query_frontend(self):
+
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
+                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          "-p 4455:4455 -p 4456:4456 -p 1337:1337 -p 7000:7000 "
+                          "{image} --redis_ip={redis_ip} --redis_port={redis_port}").format(
+                                  image="gcr.io/clipper-model-comp/zmq_frontend:develop",
+                                  redis_ip=self.redis_internal_ip, redis_port=self.redis_port)
+
+
+
+
         query_config = {
           "name": "clipper-query-{}".format(self.cluster_name),
           "zone": "projects/clipper-model-comp/zones/us-west1-b",
@@ -193,10 +215,10 @@ class GCPContainerManager(ContainerManager):
           "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-4-56320-ext",
           "metadata": {
             "items": [
-              {
-                "key": "gce-container-declaration",
-                "value": "spec:\n  containers:\n    - name: clipper-query-{cluster_name}\n      image: 'gcr.io/clipper-model-comp/zmq_frontend:develop'\n      args:\n        - '--redis_ip={redis_ip}'\n        - '--redis_port=6379'\n      stdin: false\n      tty: false\n  restartPolicy: Always\n".format(cluster_name=self.cluster_name, redis_ip=self.redis_ip)
-              }
+                {
+                "key": "startup-script",
+                "value": startup_script
+                }
             ]
           },
           "tags": {
@@ -212,9 +234,10 @@ class GCPContainerManager(ContainerManager):
               "autoDelete": True,
               "deviceName": "clipper-query-{}".format(self.cluster_name),
               "initializeParams": {
-                "sourceImage": "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
+                # "sourceImage": "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-63-10032-71-0",
+                "sourceImage": "projects/clipper-model-comp/global/images/clipper-core-docker",
                 "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
-                "diskSizeGb": "10"
+                "diskSizeGb": "100"
               }
             }
           ],
@@ -234,7 +257,6 @@ class GCPContainerManager(ContainerManager):
           ],
           "description": "",
           "labels": {
-            "container-vm": "cos-stable-63-10032-71-0",
             "clipper-cluster": self.cluster_name
           },
           "scheduling": {
@@ -481,9 +503,9 @@ class GCPContainerManager(ContainerManager):
 
     def get_admin_addr(self):
         return "{host}:{port}".format(
-            host=self.mgmt_frontend_internal_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
+            host=self.mgmt_frontend_external_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
 
     def get_query_addr(self):
         raise NotImplementedError
         # return "{host}:{port}".format(
-        #     host=self.query_frontend_internal, port=self.clipper_query_port)
+        #     host=self.query_frontend_external_ip, port=self.clipper_query_port)

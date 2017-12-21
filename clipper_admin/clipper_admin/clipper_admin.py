@@ -167,7 +167,7 @@ class ClipperConnection(object):
         headers = {'Content-type': 'application/json'}
         num_attempts = 0
         registered = False
-        while num_attempts < 10:
+        while num_attempts < 30:
             try:
                 r = requests.post(url, headers=headers, data=req_json)
                 logger.debug(r.text)
