@@ -31,6 +31,7 @@ class HeavyNodeConfig(object):
                  input_size=-1,
                  no_diverge=False):
         self.name = name
+        self.cloud = "aws"
         self.input_type = input_type
         self.model_image = model_image
         self.allocated_cpus = allocated_cpus
@@ -69,6 +70,53 @@ def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
                               allocated_cpus=config.allocated_cpus,
                               cpus_per_replica=config.cpus_per_replica,
                               use_nvidia_docker=config.use_nvidia_docker)
+
+    clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
+
+
+
+class HeavyNodeConfigGCP(object):
+    def __init__(self,
+                 name,
+                 input_type,
+                 model_image,
+                 cpus_per_replica,
+                 num_replicas,
+                 gpu_type,
+                 batch_size,
+                 slo=5000000,
+                 input_size=-1,
+                 no_diverge=False):
+        self.name = name
+        self.cloud = "gcp"
+        self.input_type = input_type
+        self.model_image = model_image
+        self.cpus_per_replica = cpus_per_replica
+        self.slo = slo
+        self.num_replicas = num_replicas
+        self.gpu_type = gpu_type
+        self.batch_size = batch_size
+        self.input_size = input_size
+        self.gpu_type = gpu_type
+        self.no_diverge = no_diverge
+
+    def to_json(self):
+        return json.dumps(self.__dict__)
+
+def setup_heavy_node_gcp(clipper_conn, config, default_output="TIMEOUT"):
+    clipper_conn.register_application(name=config.name,
+                                      default_output=default_output,
+                                      slo_micros=config.slo,
+                                      input_type=config.input_type)
+
+    clipper_conn.deploy_model(name=config.name,
+                              version=1,
+                              image=config.model_image,
+                              input_type=config.input_type,
+                              num_replicas=config.num_replicas,
+                              batch_size=config.batch_size,
+                              gpu_type=config.gpu_type,
+                              num_cpus=config.cpus_per_replica)
 
     clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
 
