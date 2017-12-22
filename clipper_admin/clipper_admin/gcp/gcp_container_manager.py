@@ -201,6 +201,7 @@ class GCPContainerManager(ContainerManager):
         startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
                           "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
                           "-p 4455:4455 -p 4456:4456 -p 1337:1337 -p 7000:7000 "
+                          "-p 7010:7010 -p 7011:7011 "
                           "{image} --redis_ip={redis_ip} --redis_port={redis_port}").format(
                                   image="gcr.io/clipper-model-comp/zmq_frontend:develop",
                                   redis_ip=self.redis_internal_ip, redis_port=self.redis_port)
