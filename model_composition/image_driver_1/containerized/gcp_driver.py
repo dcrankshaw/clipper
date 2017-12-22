@@ -6,7 +6,7 @@ import time
 import base64
 import logging
 
-from clipper_admin import ClipperConnection, DockerContainerManager
+from clipper_admin import ClipperConnection, DockerContainerManager, GCPContainerManager
 from datetime import datetime
 from PIL import Image
 from containerized_utils.zmq_client import Client
@@ -56,11 +56,13 @@ VALID_MODEL_NAMES = [
     TF_RESNET_MODEL_APP_NAME
 ]
 
-CLIPPER_ADDRESS = "localhost"
+# CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
 CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
+
+GCP_CLUSTER_NAME = "pipeline-one-test"
 
 ########## Setup ##########
 
@@ -76,7 +78,18 @@ def setup_clipper(config):
     driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
-    return config
+
+def setup_clipper_gcp(config):
+    cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+    # cl.connect()
+    cl.stop_all()
+    cl.start_clipper()
+    time.sleep(30)
+    driver_utils.setup_heavy_node_gcp(cl, config, DEFAULT_OUTPUT)
+    time.sleep(10)
+    clipper_address = cl.cm.query_frontend_external_ip
+    logger.info("Clipper is set up on {}".format(clipper_address))
+    return clipper_address
 
 def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
     if model_name == VGG_FEATS_MODEL_APP_NAME:
@@ -244,9 +257,9 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
 
 class Predictor(object):
 
-    def __init__(self):
+    def __init__(self, clipper_address):
         self.outstanding_reqs = {}
-        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
+        self.client = Client(clipper_address, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
@@ -299,16 +312,17 @@ class ModelBenchmarker(object):
         self.queue = queue
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
 
-    def run(self, duration_seconds=120):
+    def run(self, clipper_address, duration_seconds=120):
         logger.info("Generating random inputs")
         inputs = [self.input_generator_fn() for _ in range(10000)]
+        time.sleep(30)
         logger.info("Starting predictions")
         start_time = datetime.now()
-        predictor = Predictor()
+        predictor = Predictor(clipper_address)
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            # time.sleep(0.005)
-            time.sleep(0)
+            time.sleep(0.005)
+            # time.sleep(0)
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
@@ -358,55 +372,53 @@ class ModelBenchmarker(object):
             return self._get_tf_resnet_input
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
-    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic-net', 'inception', 'lgbm', 'tf-kernel-svm', 'tf-log-reg', 'tf-resnet-feats'")
-    parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
-    parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
-    parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
-    parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
-    
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
+    # parser.add_argument('-d', '--duration', type=int, default=120, help='The maximum duration of the benchmarking process in seconds, per iteration')
+    # parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'vgg', 'kpca-svm', 'kernel-svm', 'elastic-net', 'inception', 'lgbm', 'tf-kernel-svm', 'tf-log-reg', 'tf-resnet-feats'")
+    # parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    # parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    # parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
+    # parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
+    # parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
+    # parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
+    #
+    # args = parser.parse_args()
+    #
+    # if args.model_name not in VALID_MODEL_NAMES:
+    #     raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
+    #
+    # default_batch_size_confs = [2]
+    # default_replica_num_confs = [1]
+    # default_cpus_per_replica_confs = [None]
+    #
+    # batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
+    # replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
+    # cpus_per_replica_confs = args.cpus_per_replica_nums if args.cpus_per_replica_nums else default_cpus_per_replica_confs
 
-    if args.model_name not in VALID_MODEL_NAMES:
-        raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
+    model_config = driver_utils.HeavyNodeConfigGCP(name=TF_RESNET_MODEL_APP_NAME,
+           input_type="floats",
+           model_image="gcr.io/clipper-model-comp/tf-resnet-feats:bench",
+           cpus_per_replica=2,
+           gpu_type="k80",
+           batch_size=2,
+           num_replicas=2)
 
-    default_batch_size_confs = [2]
-    default_replica_num_confs = [1]
-    default_cpus_per_replica_confs = [None]
+    clipper_address = address = setup_clipper_gcp(model_config)
+    queue = Queue()
+    benchmarker = ModelBenchmarker(model_config, queue)
 
-    batch_size_confs = args.batch_sizes if args.batch_sizes else default_batch_size_confs
-    replica_num_confs = args.num_replicas if args.num_replicas else default_replica_num_confs
-    cpus_per_replica_confs = args.cpus_per_replica_nums if args.cpus_per_replica_nums else default_cpus_per_replica_confs
+    processes = []
+    all_stats = []
+    for _ in range(1):
+        p = Process(target=benchmarker.run, args=(clipper_address, 150,))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        all_stats.append(queue.get())
+        p.join()
 
-
-    for num_replicas in replica_num_confs:
-        for cpus_per_replica in cpus_per_replica_confs:
-            for batch_size in batch_size_confs:
-                model_config = get_heavy_node_config(model_name=args.model_name, 
-                                                     batch_size=batch_size, 
-                                                     num_replicas=num_replicas,
-                                                     cpus_per_replica=cpus_per_replica,
-                                                     allocated_cpus=args.model_cpus,                               
-                                                     allocated_gpus=args.model_gpus)
-                setup_clipper(model_config)
-                queue = Queue()
-                benchmarker = ModelBenchmarker(model_config, queue)
-
-                processes = []
-                all_stats = []
-                for _ in range(args.num_clients):
-                    p = Process(target=benchmarker.run, args=(args.duration,))
-                    p.start()
-                    processes.append(p)
-                for p in processes:
-                    all_stats.append(queue.get())
-                    p.join()
-
-                cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-                cl.connect()
-                driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
+    cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+    cl.connect()
+    driver_utils.save_results([model_config], cl, all_stats, "gpu_and_batch_size_experiments")
 
 
