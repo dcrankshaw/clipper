@@ -403,7 +403,7 @@ if __name__ == "__main__":
            batch_size=2,
            num_replicas=2)
 
-    clipper_address = address = setup_clipper_gcp(model_config)
+    clipper_address = setup_clipper_gcp(model_config)
     queue = Queue()
     benchmarker = ModelBenchmarker(model_config, queue)
 
