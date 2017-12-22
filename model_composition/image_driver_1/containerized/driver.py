@@ -293,7 +293,6 @@ class Predictor(object):
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
         def continuation(output):
-            print(output)
             if output == DEFAULT_OUTPUT:
                 return
             end_time = datetime.now()
@@ -322,8 +321,8 @@ class ModelBenchmarker(object):
         predictor = Predictor(clipper_address)
         for input_item in inputs:
             predictor.predict(model_app_name=self.config.name, input_item=input_item)
-            # time.sleep(0.005)
-            time.sleep(0)
+            time.sleep(0.005)
+            # time.sleep(0)
         while True:
             curr_time = datetime.now()
             if ((curr_time - start_time).total_seconds() > duration_seconds) or (predictor.total_num_complete == 10000):
@@ -402,7 +401,7 @@ if __name__ == "__main__":
            cpus_per_replica=2,
            gpu_type="k80",
            batch_size=2,
-           num_replicas=1)
+           num_replicas=2)
 
     clipper_address = address = setup_clipper_gcp(model_config)
     queue = Queue()
@@ -411,7 +410,7 @@ if __name__ == "__main__":
     processes = []
     all_stats = []
     for _ in range(1):
-        p = Process(target=benchmarker.run, args=(clipper_address, 500,))
+        p = Process(target=benchmarker.run, args=(clipper_address, 150,))
         p.start()
         processes.append(p)
     for p in processes:

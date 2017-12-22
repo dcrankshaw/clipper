@@ -397,7 +397,7 @@ class GCPContainerManager(ContainerManager):
                         "autoDelete": True,
                         "deviceName": rep_name,
                         "initializeParams": {
-                                "sourceImage": "projects/clipper-model-comp/global/images/nvidia-docker-k80-image",
+                                "sourceImage": "projects/clipper-model-comp/global/images/clipper-k80-docker",
                                 "diskType": "projects/clipper-model-comp/zones/us-west1-b/diskTypes/pd-standard",
                                 "diskSizeGb": "50"
                             }
@@ -451,7 +451,7 @@ class GCPContainerManager(ContainerManager):
                             "acceleratorCount": 1
                             }
                         ]
-                config["disks"][0]["initializeParams"]["sourceImage"] = "projects/clipper-model-comp/global/images/nvidia-docker-{gpu_type}-image".format(gpu_type=gpu_type)
+                config["disks"][0]["initializeParams"]["sourceImage"] = "projects/clipper-model-comp/global/images/clipper-{gpu_type}-docker".format(gpu_type=gpu_type)
             else:
                 logger.error("{} is invalid gpu type. Starting replica without a GPU.".format(gpu_type))
         self._start_instance(config)
