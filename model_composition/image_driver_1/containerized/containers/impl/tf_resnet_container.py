@@ -77,14 +77,8 @@ if __name__ == "__main__":
 
     print("CLIPPER IP: {}".format(ip))
 
-    port = 7000
-    if "CLIPPER_PORT" in os.environ:
-        port = int(os.environ["CLIPPER_PORT"])
-    else:
-        print("Connecting to Clipper with default port: 7000")
-
     input_type = "floats"
     container = TfResNetContainer(model_graph_path, model_checkpoint_path)
     rpc_service = rpc.RPCService()
-    rpc_service.start(container, ip, port, model_name, model_version,
+    rpc_service.start(container, ip, model_name, model_version,
                       input_type)

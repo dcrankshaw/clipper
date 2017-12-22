@@ -1,0 +1,8 @@
+FROM model-comp/tf-rpc:latest
+
+WORKDIR /container
+
+COPY noop_gpu_container.py /container/
+
+
+CMD ["python", "/container/noop_gpu_container.py"]

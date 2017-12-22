@@ -119,7 +119,10 @@ class ModelQueue {
       : queue_(ModelPQueue{}),
         lock_latency_hist_(
             metrics::MetricsRegistry::get_metrics().create_histogram(
-                name + ":lock_latency", "microseconds", 4096)) {}
+                name + ":lock_latency", "microseconds", 4096)),
+        queue_size_hist_(
+            metrics::MetricsRegistry::get_metrics().create_histogram(
+                name + ":queue_size", "microseconds", 1000)) {}
 
   // Disallow copy and assign
   ModelQueue(const ModelQueue &) = delete;
@@ -166,6 +169,7 @@ class ModelQueue {
       batch.push_back(queue_.top().second);
       queue_.pop();
     }
+    queue_size_hist_->insert(static_cast<int64_t>(queue_.size()));
     return batch;
   }
 
@@ -180,6 +184,7 @@ class ModelQueue {
   std::mutex queue_mutex_;
   std::condition_variable queue_not_empty_condition_;
   std::shared_ptr<metrics::Histogram> lock_latency_hist_;
+  std::shared_ptr<metrics::Histogram> queue_size_hist_;
 
   // Deletes tasks with deadlines prior or equivalent to the
   // current system time. This method should only be called
@@ -248,7 +253,7 @@ class TaskExecutor {
         model_metrics_({}) {
     log_info(LOGGING_TAG_TASK_EXECUTOR, "TaskExecutor started");
     rpc_->start(
-        "*", RPC_SERVICE_PORT, [ this, task_executor_valid = active_ ](
+        "*", RPC_SERVICE_SEND_PORT, RPC_SERVICE_RECV_PORT, [ this, task_executor_valid = active_ ](
                                    VersionedModelId model, int replica_id) {
           if (*task_executor_valid) {
             on_container_ready(model, replica_id);
@@ -315,6 +320,10 @@ class TaskExecutor {
                 parse_input_type(container_info["input_type"]));
 
             TaskExecutionThreadPool::create_queue(vm, replica_id);
+            TaskExecutionThreadPool::submit_job(
+                vm, replica_id, [this, vm, replica_id]() {
+                  on_container_ready(vm, replica_id);
+                });
             TaskExecutionThreadPool::submit_job(
                 vm, replica_id, [this, vm, replica_id]() {
                   on_container_ready(vm, replica_id);
@@ -424,6 +433,8 @@ class TaskExecutor {
           "container!");
     }
     std::shared_ptr<ModelQueue> current_model_queue = model_queue_entry->second;
+
+
     // NOTE: It is safe to unlock here because we copy the shared_ptr to
     // the ModelQueue object so even if that entry in the map gets deleted,
     // the ModelQueue object won't be destroyed until our copy of the pointer
@@ -432,6 +443,8 @@ class TaskExecutor {
 
     std::vector<PredictTask> batch = current_model_queue->get_batch([container](
         Deadline deadline) { return container->get_batch_size(deadline); });
+
+    // Create a histogram "queue size hist"
 
     if (batch.size() > 0) {
       // move the lock up here, so that nothing can pull from the
