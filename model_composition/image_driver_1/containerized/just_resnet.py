@@ -52,7 +52,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-8")
+        query_cpu_str="0-2,16-18")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -371,13 +371,15 @@ if __name__ == "__main__":
 
     # for resnet_batch_size in [2, 10]:
     for resnet_reps in [6,]:
-        total_cpus = range(9,29)
+        # total_cpus = list(reversed(range(4,15) + range(18,29)))
+        total_cpus = list(reversed(range(3,16)))
 
         def get_cpus(num_cpus):
             return [total_cpus.pop() for _ in range(num_cpus)]
 
-        total_gpus = range(8)
-        shuffle(total_gpus)
+        total_gpus = list(reversed(range(8)))
+        # shuffle(total_gpus)
+        # total_gpus = [7]
 
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
@@ -403,7 +405,12 @@ if __name__ == "__main__":
             setup_resnet(batch_size=resnet_batch_size,
                         num_replicas=resnet_reps,
                         cpus_per_replica=resnet_cpus_per_replica,
-                        allocated_cpus=get_cpus(resnet_cpus_per_replica * resnet_reps),
+                        # allocated_cpus=[17,18,19,20,21,22,23,24,13,14,15,16,25,26,27,28], # CONTENTION
+                        # allocated_cpus=[5,21, 6,22, 7,23, 8,24, 9,25, 10,26, 11,27, 12,28], # NO CONTENTION BUT HYPERTHREADS ON SAME CORE
+                        # allocated_cpus=range(5,14) + range(21,30), # NO CONTENTION AND HYPERTHREADS ON DIFFERENT CORES
+                        # allocated_cpus=[5,6], # NO CONTENTION
+                        # allocated_gpus=[4])
+                        allocated_cpus=get_cpus(resnet_reps*resnet_cpus_per_replica),
                         allocated_gpus=get_gpus(resnet_reps))
         ]
 

@@ -8,6 +8,7 @@ from datetime import datetime
 import socket
 import sys
 from collections import deque
+import json
 
 from threading import Thread
 from Queue import Queue
@@ -135,6 +136,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     loop_times = []
     queue_get_times = []
     handle_times = []
+    handle_start_times = []
 
     last_loop_start = datetime.now()
 
@@ -149,6 +151,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
         t2 = datetime.now()
         queue_get_times.append((t2 - t1).microseconds)
 
+        handle_start_times.append(time.time()*1000)
         outputs = predict_fn(prediction_request.inputs)
         t3 = datetime.now()
         handle_times.append((t3 - t2).microseconds)
@@ -192,6 +195,9 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             loop_times = []
             queue_get_times = []
             handle_times = []
+
+        # if len(handle_start_times) % 200 == 0:
+        #     print(json.dumps(handle_start_times))
         sys.stdout.flush()
         sys.stderr.flush()
 
