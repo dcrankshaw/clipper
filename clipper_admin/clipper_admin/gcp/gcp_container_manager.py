@@ -10,6 +10,7 @@ from ..container_manager import (
     create_model_container_label, parse_model_container_label,
     ContainerManager, CLIPPER_DOCKER_LABEL, CLIPPER_MODEL_CONTAINER_LABEL,
     CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL,
+    CLIPPER_INTERNAL_QUERY_PORT,
     CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL, CLIPPER_INTERNAL_RPC_PORT,
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
@@ -373,12 +374,13 @@ class GCPContainerManager(ContainerManager):
                                   image=image)
 
         logger.info("STARTUP SCRIPT:\n\n {script}".format(script=startup_script))
+        mem = min(5120*4, 5120*num_cpus)
 
         config = {
                 "name": rep_name,
                 "zone": "projects/clipper-model-comp/zones/us-west1-b",
                 "minCpuPlatform": "Automatic",
-                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-{num_cpus}-10240".format(num_cpus=num_cpus),
+                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-{num_cpus}-{mem}".format(num_cpus=num_cpus, mem=mem),
                 "metadata": {
                     "items": [
                         {
@@ -507,6 +509,6 @@ class GCPContainerManager(ContainerManager):
             host=self.mgmt_frontend_external_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
 
     def get_query_addr(self):
-        raise NotImplementedError
-        # return "{host}:{port}".format(
-        #     host=self.query_frontend_external_ip, port=self.clipper_query_port)
+        # raise NotImplementedError
+        return "{host}:{port}".format(
+            host=self.query_frontend_external_ip, port=CLIPPER_INTERNAL_QUERY_PORT)

@@ -5,12 +5,14 @@ import numpy as np
 import time
 import base64
 import logging
+import json
 
 from clipper_admin import ClipperConnection, DockerContainerManager, GCPContainerManager
 from datetime import datetime
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
+from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN
 from multiprocessing import Process, Queue
 
 logging.basicConfig(
@@ -201,7 +203,8 @@ class DriverBenchmarker(object):
         logger.info("Generating random inputs")
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
         base_inputs = [self.input_generator_fn() for _ in range(10000)]
-        self.inputs = [i for _ in range(40) for i in base_inputs]
+        self.inputs = base_inputs
+        # self.inputs = [i for _ in range(5) for i in base_inputs]
         self.latency_upper_bound = latency_upper_bound
 
     def run(self):
@@ -235,16 +238,15 @@ class DriverBenchmarker(object):
             self.delay += 0.0001
 
     def find_steady_state(self):
-        clipper_address = setup_clipper_gcp(self.configs)
-        time.sleep(7)
+        clipper_address = setup_clipper_gcp(self.config)
+        time.sleep(30)
         predictor = Predictor(clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
         last_checked_length = 6
         while not done:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
+            predictor.predict(self.config.name, self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
@@ -304,7 +306,7 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    for gpu_type in [None, "k80", "p100"]:
+    for gpu_type in ["k80", "p100"]:
         for num_cpus in [1, 2]:
             for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
                 config = setup_inception(batch_size, 1, num_cpus, gpu_type)
@@ -318,10 +320,10 @@ if __name__ == "__main__":
                 clipper_address, stats = queue.get()
                 all_stats.append(stats)
 
-                cl = ClipperConnection(GCPContainerManager(cluster_name))
+                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
                 cl.connect()
 
                 fname = "results"
                 driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
-    
+
     sys.exit(0)
