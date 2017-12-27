@@ -94,6 +94,7 @@ class Client:
                 else:
                     self._handle_new_connection(socket)
                     connected = True
+        socket.disconnect(clipper_recv_address)
 
     def _run_send(self):
         global active
@@ -110,6 +111,7 @@ class Client:
                 time.sleep(.001)
             else:
                 self._send_requests(socket)
+        socket.disconnect(clipper_send_address)
 
     def _handle_new_connection(self, socket):
         # Receive delimiter between routing identity and content
@@ -141,7 +143,7 @@ class Client:
         if self.request_queue.empty():
             time.sleep(.001)
 
-        while not self.request_queue.empty():
+        while not self.request_queue.empty() and active:
             request_id, app_name, input_item = self.request_queue.get()
             input_type = type(input_item)
             if input_type == np.ndarray:

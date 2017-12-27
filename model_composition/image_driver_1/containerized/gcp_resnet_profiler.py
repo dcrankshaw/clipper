@@ -32,7 +32,7 @@ CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
 
-GCP_CLUSTER_NAME = "single-model-profiles"
+GCP_CLUSTER_NAME = "single-model-profiles-resnet"
 
 
 """
@@ -157,7 +157,7 @@ class Predictor(object):
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
-        self.stats["all_lats"].append(lats)
+        self.stats["all_lats"].append(self.latencies)
         self.stats["mean_lats"].append(mean)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
@@ -185,7 +185,7 @@ class Predictor(object):
             self.total_num_complete += 1
             self.batch_num_complete += 1
 
-            trial_length = max(300, 10 * self.batch_size)
+            trial_length = max(100, 10 * self.batch_size)
             if self.batch_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
@@ -202,7 +202,7 @@ class DriverBenchmarker(object):
         self.client_num = client_num
         logger.info("Generating random inputs")
         self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
-        base_inputs = [self.input_generator_fn() for _ in range(10000)]
+        base_inputs = [self.input_generator_fn() for _ in range(1000)]
         self.inputs = base_inputs
         # self.inputs = [i for _ in range(5) for i in base_inputs]
         self.latency_upper_bound = latency_upper_bound
@@ -217,11 +217,13 @@ class DriverBenchmarker(object):
     def initialize_request_rate(self):
         # initialize delay to be very small
         self.delay = 0.001
-        clipper_address = setup_clipper_gcp(self.config)
+        self.clipper_address = setup_clipper_gcp(self.config)
+        self.cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+        self.cl.connect()
         time.sleep(30)
-        predictor = Predictor(clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
-        while len(predictor.stats["thrus"]) < 20:
+        while len(predictor.stats["thrus"]) < 8:
             predictor.predict(self.config.name, self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
@@ -230,21 +232,27 @@ class DriverBenchmarker(object):
         max_thruput = np.mean(predictor.stats["thrus"][1:])
         self.delay = 1.0 / max_thruput
         logger.info("Initializing delay to {}".format(self.delay))
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
 
     def increase_delay(self):
         if self.delay < 0.005:
-            self.delay += 0.00005
+            self.delay += 0.0005
+        elif self.delay > 0.04:
+            self.delay += 0.002
         else:
-            self.delay += 0.0001
+            self.delay += 0.001
 
     def find_steady_state(self):
-        clipper_address = setup_clipper_gcp(self.config)
+        self.cl.cm.reset()
         time.sleep(30)
-        predictor = Predictor(clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        logger.info("Clipper is reset")
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
         done = False
         # start checking for steady state after 7 trials
-        last_checked_length = 6
+        last_checked_length = 12
         while not done:
             predictor.predict(self.config.name, self.inputs[idx])
             time.sleep(self.delay)
@@ -264,9 +272,9 @@ class DriverBenchmarker(object):
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
-                    self.queue.put((clipper_address, predictor.stats))
+                    self.queue.put((self.clipper_address, predictor.stats))
                     return
-                elif len(predictor.stats) > 100:
+                elif len(predictor.stats) > 60:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
@@ -307,23 +315,24 @@ if __name__ == "__main__":
     queue = Queue()
 
     for gpu_type in ["k80", "p100"]:
-        for num_cpus in [1, 2]:
-            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
-                config = setup_inception(batch_size, 1, num_cpus, gpu_type)
-                client_num = 0
-                benchmarker = DriverBenchmarker(config, queue, client_num, 5.0)
+        # for num_cpus in [1, 2]:
+        num_cpus = 2
+        for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
+            config = setup_resnet(batch_size, 1, num_cpus, gpu_type)
+            client_num = 0
+            benchmarker = DriverBenchmarker(config, queue, client_num, 0.3*batch_size)
 
-                p = Process(target=benchmarker.run)
-                p.start()
+            p = Process(target=benchmarker.run)
+            p.start()
 
-                all_stats = []
-                clipper_address, stats = queue.get()
-                all_stats.append(stats)
+            all_stats = []
+            clipper_address, stats = queue.get()
+            all_stats.append(stats)
 
-                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-                cl.connect()
+            cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+            cl.connect()
 
-                fname = "results"
-                driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
+            fname = "results"
+            driver_utils.save_results([config,], cl, all_stats, "resnet_smp_gcp", prefix=fname)
 
     sys.exit(0)

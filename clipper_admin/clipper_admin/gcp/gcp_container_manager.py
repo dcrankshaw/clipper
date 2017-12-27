@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 # import docker
+import paramiko
 import googleapiclient.discovery
 import logging
 import os
@@ -305,6 +306,7 @@ class GCPContainerManager(ContainerManager):
         self.start_redis()
         self.start_mgmt_frontend()
         self.start_query_frontend()
+        time.sleep(80)
         self.connect()
 
     def connect(self):
@@ -487,6 +489,58 @@ class GCPContainerManager(ContainerManager):
 
     def get_logs(self, logging_dir):
         raise NotImplementedError
+
+    def reset(self):
+        username = "crankshaw"
+        key_path = "/home/crankshaw/.ssh/gcp_all_access"
+
+        # First stop the query frontend
+        qf_client = paramiko.SSHClient()
+        qf_client.load_system_host_keys()
+        qf_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+        qf_client.connect(self.query_frontend_internal_ip, username=username, key_filename=key_path)
+        sin, sout, serr = qf_client.exec_command("sudo docker ps -q")
+        containers = [l.strip() for l in sout]
+        if not len(containers) == 1:
+            raise ClipperException("Error resetting query frontend")
+        qf_container_id = containers[0]
+        sin, sout, serr = qf_client.exec_command("sudo docker stop {}".format(qf_container_id))
+
+        # Now stop all model replicas
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-cluster eq {}".format(self.cluster_name)).execute()
+        reps_to_start = []
+        if "items" in replicas:
+            for rep in replicas["items"]:
+                if "clipper-model" in rep["labels"]:
+                    # ip = inst["networkInterfaces"][0]["networkIP"]
+                    model_client = paramiko.SSHClient()
+                    model_client.load_system_host_keys()
+                    model_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+                    model_client.connect(rep["name"], username=username, key_filename=key_path)
+                    sin, sout, serr = model_client.exec_command("sudo nvidia-docker ps -q")
+                    containers = [l.strip() for l in sout]
+                    if not len(containers) == 1:
+                        raise ClipperException("Error resetting model replica {}".format(rep["name"]))
+                    model_container_id = containers[0]
+                    sin, sout, serr = model_client.exec_command("sudo nvidia-docker stop {}".format(model_container_id))
+                    reps_to_start.append((model_client, model_container_id))
+
+
+        # Sleep here to let any client connections expire
+        time.sleep(10)
+
+        # Now restart the query frontend
+        sin, sout, serr = qf_client.exec_command("sudo docker start {}".format(qf_container_id))
+        time.sleep(10)
+
+        # Now restart the model replicas
+        for model_client, model_container_id in reps_to_start:
+            sin, sout, serr = model_client.exec_command("sudo nvidia-docker start {}".format(model_container_id))
+
+        time.sleep(10)
+
+
 
     def stop_models(self, models):
         raise NotImplementedError

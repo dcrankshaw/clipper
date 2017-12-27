@@ -142,7 +142,7 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
                         " plot the latency CDF")
     else:
         for c in client_metrics:
-            all_lats_strs = [json.dumps(l) for l in c["all_lats"]]
+            all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
             c["all_lats"] = all_lats_strs
 
     results_obj = {
@@ -170,7 +170,7 @@ def check_convergence(stats, configs, latency_upper_bound=None):
         and we should quit and increase the delay.
 
     """
-    window_size = min(15, len(stats["p99_lats"]) - 1)
+    window_size = min(15, len(stats["p99_lats"]) - 4)
     p99_lats = stats["p99_lats"][-1*window_size:]
 
     mean_batch_sizes = {}
@@ -188,7 +188,7 @@ def check_convergence(stats, configs, latency_upper_bound=None):
             return INCREASING
         else:
             return DECREASING
-    elif lr.pvalue > 0.1:
+    elif lr.pvalue > 0.2:
         # Slope is 0, now check to see
         # if mean batch_sizes are less
         # than
