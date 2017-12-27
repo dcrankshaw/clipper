@@ -300,6 +300,15 @@ class TaskExecutor {
       }
     });
 
+    std::vector<VersionedModelId> models = redis::get_all_models(redis_connection_);
+    for (auto model_id: models) {
+      auto model_info = redis::get_model(redis_connection_, model_id);
+      // VersionedModelId model_id = VersionedModelId(
+      //     model_info["model_name"], model_info["model_version"]);
+      int batch_size = std::stoi(model_info["batch_size"]);
+      active_containers_->register_batch_size(model_id, batch_size);
+    }
+
     redis::send_cmd_no_reply<std::string>(
         redis_connection_, {"CONFIG", "SET", "notify-keyspace-events", "AKE"});
     redis::subscribe_to_container_changes(

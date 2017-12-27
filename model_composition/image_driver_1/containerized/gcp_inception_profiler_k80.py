@@ -22,7 +22,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-INCEPTION_FEATS_MODEL_APP_NAME = "inception"
+INCEPTION_FEATS_MODEL_APP_NAME = "inception-k80"
 TF_KERNEL_SVM_MODEL_APP_NAME = "tf-kernel-svm"
 TF_LOG_REG_MODEL_APP_NAME = "tf-log-reg"
 TF_RESNET_MODEL_APP_NAME = "tf-resnet-feats"
