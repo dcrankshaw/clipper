@@ -11,7 +11,7 @@ CHECKPOINT_RELATIVE_PATH = "tf_resnet_152_feats.ckpt"
 
 class TfResNetModel(ModelBase):
 
-    def __init__(self, model_data_path, gpu_mem_frac=.95):
+    def __init__(self, model_data_path, gpu_num, gpu_mem_frac=.95):
         ModelBase.__init__(self)
 
         graph_path = os.path.join(model_data_path, GRAPH_RELATIVE_PATH)
@@ -21,9 +21,9 @@ class TfResNetModel(ModelBase):
         assert os.path.exists(checkpoint_path)
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_mem_frac)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True, device_count={'GPU': 1, 'CPU': 2}))
 
-        self._load_model(graph_path, checkpoint_path)
+        self._load_model(graph_path, checkpoint_path, gpu_num)
 
     def predict(self, inputs):
         """
@@ -43,8 +43,8 @@ class TfResNetModel(ModelBase):
         features = self.sess.run(self.t_features, feed_dict=feed_dict)
         return features
 
-    def _load_model(self, model_graph_path, model_ckpt_path):
-        with tf.device("/gpu:0"):
+    def _load_model(self, model_graph_path, model_ckpt_path, gpu_num):
+        with tf.device("/gpu:{}".format(gpu_num)):
             saver = tf.train.import_meta_graph(model_graph_path, clear_devices=True)
             saver.restore(self.sess, model_ckpt_path)
             self.t_images = tf.get_default_graph().get_tensor_by_name('images:0')
