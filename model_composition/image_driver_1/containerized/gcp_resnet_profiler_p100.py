@@ -32,7 +32,7 @@ CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
 
-GCP_CLUSTER_NAME = "single-model-profiles-resnet"
+GCP_CLUSTER_NAME = "single-model-profiles-resnet-p100"
 
 
 """
@@ -314,13 +314,12 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    for gpu_type in ["k80", "p100"]:
-        # for num_cpus in [1, 2]:
-        num_cpus = 2
-        for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
+    gpu_type = "p100"
+    for num_cpus in [2, 1]:
+        for batch_size in [40, 48, 64, 96, 128]:
             config = setup_resnet(batch_size, 1, num_cpus, gpu_type)
             client_num = 0
-            benchmarker = DriverBenchmarker(config, queue, client_num, 0.3*batch_size)
+            benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
 
             p = Process(target=benchmarker.run)
             p.start()
@@ -332,7 +331,26 @@ if __name__ == "__main__":
             cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
             cl.connect()
 
-            fname = "results"
+            fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+            driver_utils.save_results([config,], cl, all_stats, "resnet_smp_gcp", prefix=fname)
+
+    for num_cpus in [3, 4]:
+        for batch_size in [1, 2, 4, 8, 16, 24, 32, 40, 48, 64, 96, 128]:
+            config = setup_resnet(batch_size, 1, num_cpus, gpu_type)
+            client_num = 0
+            benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
+
+            p = Process(target=benchmarker.run)
+            p.start()
+
+            all_stats = []
+            clipper_address, stats = queue.get()
+            all_stats.append(stats)
+
+            cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+            cl.connect()
+
+            fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
             driver_utils.save_results([config,], cl, all_stats, "resnet_smp_gcp", prefix=fname)
 
     sys.exit(0)

@@ -250,7 +250,7 @@ class DriverBenchmarker(object):
         idx = 0
         done = False
         # start checking for steady state after 7 trials
-        last_checked_length = 12
+        last_checked_length = 8
         while not done:
             predictor.predict(self.config.name, self.inputs[idx])
             time.sleep(self.delay)
@@ -258,7 +258,7 @@ class DriverBenchmarker(object):
             idx = idx % len(self.inputs)
 
             if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 4
+                last_checked_length = len(predictor.stats["thrus"]) + 2
                 convergence_state = driver_utils.check_convergence(predictor.stats, [self.config,], self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
@@ -272,7 +272,7 @@ class DriverBenchmarker(object):
                     done = True
                     self.queue.put((self.clipper_address, predictor.stats))
                     return
-                elif len(predictor.stats) > 60:
+                elif len(predictor.stats) > 40:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
@@ -314,24 +314,23 @@ if __name__ == "__main__":
 
     # for gpu_type in ["k80", "p100"]:
     gpu_type = "k80"
-        # for num_cpus in [1, 2]:
-    num_cpus = 2
     for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
-        config = setup_inception(batch_size, 1, num_cpus, gpu_type)
-        client_num = 0
-        benchmarker = DriverBenchmarker(config, queue, client_num, 0.1*batch_size)
+        for num_cpus in [1, 2]:
+            config = setup_inception(batch_size, 1, num_cpus, gpu_type)
+            client_num = 0
+            benchmarker = DriverBenchmarker(config, queue, client_num, 0.1*batch_size)
 
-        p = Process(target=benchmarker.run)
-        p.start()
+            p = Process(target=benchmarker.run)
+            p.start()
 
-        all_stats = []
-        clipper_address, stats = queue.get()
-        all_stats.append(stats)
+            all_stats = []
+            clipper_address, stats = queue.get()
+            all_stats.append(stats)
 
-        cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-        cl.connect()
+            cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+            cl.connect()
 
-        fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-        driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
+            fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+            driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
 
     sys.exit(0)

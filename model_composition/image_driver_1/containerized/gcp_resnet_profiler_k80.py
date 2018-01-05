@@ -22,7 +22,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-INCEPTION_FEATS_MODEL_APP_NAME = "inception-k80"
+INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 TF_KERNEL_SVM_MODEL_APP_NAME = "tf-kernel-svm"
 TF_LOG_REG_MODEL_APP_NAME = "tf-log-reg"
 TF_RESNET_MODEL_APP_NAME = "tf-resnet-feats"
@@ -32,7 +32,7 @@ CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
 
-GCP_CLUSTER_NAME = "single-model-profiles-inception-k80"
+GCP_CLUSTER_NAME = "single-model-profiles-resnet-k80"
 
 
 """
@@ -185,7 +185,7 @@ class Predictor(object):
             self.total_num_complete += 1
             self.batch_num_complete += 1
 
-            trial_length = max(300, 10 * self.batch_size)
+            trial_length = max(100, 10 * self.batch_size)
             if self.batch_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
@@ -239,6 +239,8 @@ class DriverBenchmarker(object):
     def increase_delay(self):
         if self.delay < 0.005:
             self.delay += 0.0005
+        elif self.delay > 0.04:
+            self.delay += 0.002
         else:
             self.delay += 0.001
 
@@ -250,7 +252,7 @@ class DriverBenchmarker(object):
         idx = 0
         done = False
         # start checking for steady state after 7 trials
-        last_checked_length = 8
+        last_checked_length = 12
         while not done:
             predictor.predict(self.config.name, self.inputs[idx])
             time.sleep(self.delay)
@@ -258,7 +260,7 @@ class DriverBenchmarker(object):
             idx = idx % len(self.inputs)
 
             if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 2
+                last_checked_length = len(predictor.stats["thrus"]) + 4
                 convergence_state = driver_utils.check_convergence(predictor.stats, [self.config,], self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
@@ -272,7 +274,7 @@ class DriverBenchmarker(object):
                     done = True
                     self.queue.put((self.clipper_address, predictor.stats))
                     return
-                elif len(predictor.stats) > 40:
+                elif len(predictor.stats) > 60:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
@@ -312,25 +314,26 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    # for gpu_type in ["k80", "p100"]:
-    gpu_type = "p100"
-    for num_cpus in [2, 1, 3, 4]:
-        for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]:
-            config = setup_inception(batch_size, 1, num_cpus, gpu_type)
-            client_num = 0
-            benchmarker = DriverBenchmarker(config, queue, client_num, 0.1*batch_size)
+    for gpu_type in ["k80",]:
+        for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
+            for num_cpus in [1, 2]:
+                if batch_size == 1 and num_cpus == 1:
+                    continue
+                config = setup_resnet(batch_size, 1, num_cpus, gpu_type)
+                client_num = 0
+                benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
 
-            p = Process(target=benchmarker.run)
-            p.start()
+                p = Process(target=benchmarker.run)
+                p.start()
 
-            all_stats = []
-            clipper_address, stats = queue.get()
-            all_stats.append(stats)
+                all_stats = []
+                clipper_address, stats = queue.get()
+                all_stats.append(stats)
 
-            cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-            cl.connect()
+                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+                cl.connect()
 
-            fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-            driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
+                fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+                driver_utils.save_results([config,], cl, all_stats, "resnet_smp_gcp", prefix=fname)
 
     sys.exit(0)
