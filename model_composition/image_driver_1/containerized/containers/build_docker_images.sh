@@ -35,4 +35,6 @@ gcloud docker -- push $prefix/tf-log-reg:$tag
 # time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
 time docker build -t $prefix/inception-feats:$tag -f InceptionFeaturizationDockerfile ./
 gcloud docker -- push $prefix/inception-feats:$tag
+time docker build -t $prefix/noop:$tag -f NoopDockerfile ./
+gcloud docker -- push $prefix/noop:$tag
 # time docker build -t model-comp/lgbm -f LgbmDockerfile ./
