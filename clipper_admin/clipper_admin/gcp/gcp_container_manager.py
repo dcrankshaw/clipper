@@ -491,6 +491,7 @@ class GCPContainerManager(ContainerManager):
         raise NotImplementedError
 
     def reset(self):
+        logger.info("Resetting Clipper")
         username = "crankshaw"
         key_path = "/home/crankshaw/.ssh/gcp_all_access"
 
@@ -504,7 +505,9 @@ class GCPContainerManager(ContainerManager):
         if not len(containers) == 1:
             raise ClipperException("Error resetting query frontend")
         qf_container_id = containers[0]
+        logger.info("Query frontend container ID")
         sin, sout, serr = qf_client.exec_command("sudo docker stop {}".format(qf_container_id))
+        logger.info("Query frontend stopped")
 
         # Now stop all model replicas
         replicas = self.compute.instances().list(project=self.project, zone=self.zone,
@@ -525,19 +528,37 @@ class GCPContainerManager(ContainerManager):
                     model_container_id = containers[0]
                     sin, sout, serr = model_client.exec_command("sudo nvidia-docker stop {}".format(model_container_id))
                     reps_to_start.append((model_client, model_container_id))
+                    logger.info("{} container stopped".format(rep["name"]))
 
 
         # Sleep here to let any client connections expire
         time.sleep(10)
 
-        # Now restart the query frontend
-        sin, sout, serr = qf_client.exec_command("sudo docker start {}".format(qf_container_id))
-        time.sleep(10)
+        restarted = False
+        while not restarted:
+            # Now restart the query frontend
+            sin, sout, serr = qf_client.exec_command("sudo docker start {}".format(qf_container_id))
+            logger.info("Starting query frontend. stdout: {sout}, stderr: {serr}".format(sout=sout.readlines(), serr=serr.readlines()))
+            time.sleep(10)
+            sin, sout, serr = qf_client.exec_command("sudo docker ps -q")
+            running_containers = [l.strip() for l in sout]
+            if len(running_containers) == 1:
+                restarted = True
+            else:
+                sin, sout, serr = qf_client.exec_command("sudo docker ps -a")
+                logger.info("Problem starting query frontend. Trying again.\nstdout: {sout}\nstderr: {serr}".format(
+                    sout=sout.readlines(), serr=serr.readlines()))
+
+
+
+
 
         # Now restart the model replicas
         for model_client, model_container_id in reps_to_start:
             sin, sout, serr = model_client.exec_command("sudo nvidia-docker start {}".format(model_container_id))
+            logger.info("Model should be running. stdout: {sout}, stderr: {serr}".format(sout=sout.readlines(), serr=serr.readlines()))
 
+        logger.info("Models should be running")
         time.sleep(10)
 
 
@@ -565,4 +586,4 @@ class GCPContainerManager(ContainerManager):
     def get_query_addr(self):
         # raise NotImplementedError
         return "{host}:{port}".format(
-            host=self.query_frontend_external_ip, port=CLIPPER_INTERNAL_QUERY_PORT)
+            host=self.query_frontend_internal_ip, port=CLIPPER_INTERNAL_QUERY_PORT)
