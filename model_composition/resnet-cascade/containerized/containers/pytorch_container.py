@@ -69,7 +69,7 @@ class TorchContainer(rpc.ModelContainerBase):
         pred_classes = self._predict_raw(input_arrs)
         outputs = [str(l) for l in pred_classes]
         end = datetime.now()
-        logger.info("BATCH TOOK %f seconds" % (end - start).total_seconds())
+        # logger.info("BATCH TOOK %f seconds" % (end - start).total_seconds())
         return outputs
 
     def predict_floats(self, inputs):
@@ -84,9 +84,9 @@ class TorchContainer(rpc.ModelContainerBase):
             input_arrs.append(i)
         pred_classes = self._predict_raw(input_arrs)
         outputs = [str(l) for l in pred_classes]
-        logger.debug("Outputs: {}".format(outputs))
+        # logger.debug("Outputs: {}".format(outputs))
         end = datetime.now()
-        logger.info("BATCH TOOK %f seconds" % (end - start).total_seconds())
+        # logger.info("BATCH TOOK %f seconds" % (end - start).total_seconds())
         return outputs
 
     def _predict_raw(self, input_arrs):
@@ -125,12 +125,6 @@ if __name__ == "__main__":
     else:
         print("Connecting to Clipper on localhost")
 
-    port = 7000
-    if "CLIPPER_PORT" in os.environ:
-        port = int(os.environ["CLIPPER_PORT"])
-    else:
-        print("Connecting to Clipper with default port: 7000")
-
     input_type = "bytes"
     if "CLIPPER_INPUT_TYPE" in os.environ:
         input_type = os.environ["CLIPPER_INPUT_TYPE"]
@@ -140,4 +134,4 @@ if __name__ == "__main__":
         model_arch = f.read().strip()
     model = TorchContainer(model_arch)
     rpc_service = rpc.RPCService()
-    rpc_service.start(model, ip, port, model_name, model_version, input_type)
+    rpc_service.start(model, ip, model_name, model_version, input_type)

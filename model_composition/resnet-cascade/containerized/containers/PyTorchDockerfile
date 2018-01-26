@@ -1,6 +1,6 @@
 FROM model-comp/cuda-rpc
 
-RUN conda install torchvision -c soumith
+RUN conda install torchvision -c pytorch
 
 COPY pytorch_models/ /root/.torch/
 

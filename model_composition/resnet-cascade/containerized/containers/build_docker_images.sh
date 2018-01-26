@@ -10,6 +10,9 @@ unset CDPATH
 # the script.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+prefix="gcr.io/clipper-model-comp"
+tag="bench"
+
 # Build RPC base images for python/anaconda and deep learning
 # models
 cd $DIR/../../../container_utils/
@@ -17,8 +20,11 @@ time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
 # Build model-specific images
-time docker build -t model-comp/pytorch -f PyTorchDockerfile ./
-time docker build -t model-comp/pytorch-alex-sleep -f PyTorchSleepDockerfile ./
-time docker build -t model-comp/pytorch-alexnet -f AlexnetPyTorchDockerfile ./
-time docker build -t model-comp/pytorch-res50 -f Res50PyTorchDockerfile ./
-time docker build -t model-comp/pytorch-res152 -f Res152PyTorchDockerfile ./
+time docker build -t $prefix/pytorch:$tag -f PyTorchDockerfile ./
+gcloud docker -- push $prefix/pytorch:$tag
+time docker build -t $prefix/pytorch-alexnet:$tag -f AlexnetPyTorchDockerfile ./
+gcloud docker -- push $prefix/pytorch-alexnet:$tag
+time docker build -t $prefix/pytorch-res50:$tag -f Res50PyTorchDockerfile ./
+gcloud docker -- push $prefix/pytorch-res50:$tag
+time docker build -t $prefix/pytorch-res152:$tag -f Res152PyTorchDockerfile ./
+gcloud docker -- push $prefix/pytorch-res152:$tag
