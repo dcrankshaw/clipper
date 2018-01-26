@@ -11,7 +11,6 @@ class NoopContainer(rpc.ModelContainerBase):
         self.prediction = prediction
 
     def _predict(self, inputs):
-        time.sleep(.1)
         return [np.array(np.random.rand(2048), dtype=np.float32) for i in inputs]
         # return [self.prediction] * len(inputs)
 

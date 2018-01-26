@@ -356,8 +356,11 @@ class GCPContainerManager(ContainerManager):
 
 
         rep_name = "{name}-{version}-{random}".format(name=name, version=version, random=np.random.randint(0, 100000))
+        docker_cmd = "docker"
+        if gpu_type is not None:
+            docker_cmd = "nvidia-docker"
 
-        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\nnvidia-docker run -d "
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\n{docker_cmd} run -d "
                           "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
                           "--log-opt env=CLIPPER_MODEL_NAME "
                           "--log-opt env=CLIPPER_MODEL_VERSION "
@@ -368,6 +371,7 @@ class GCPContainerManager(ContainerManager):
                           "-e CLIPPER_INPUT_TYPE={input_type} "
                           "-l rep_name={rep_name} "
                           "{image}").format(
+                                  docker_cmd=docker_cmd,
                                   name=name,
                                   version=version,
                                   ip=self.query_frontend_internal_ip,
