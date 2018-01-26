@@ -50,9 +50,12 @@ def setup_inception(batch_size,
                     cpus_per_replica,
                     gpu_type):
 
+    image = "gcr.io/clipper-model-comp/inception-feats:bench"
+    if gpu_type == None:
+        image = "{}-nogpu".format(image)
     return driver_utils.HeavyNodeConfigGCP(name=INCEPTION_FEATS_MODEL_APP_NAME,
                                            input_type="floats",
-                                           model_image="gcr.io/clipper-model-comp/inception-feats:bench",
+                                           model_image=image,
                                            cpus_per_replica=cpus_per_replica,
                                            gpu_type=gpu_type,
                                            batch_size=batch_size,
@@ -90,9 +93,12 @@ def setup_resnet(batch_size,
                  cpus_per_replica,
                  gpu_type):
 
+    image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
+    if gpu_type == None:
+        image = "{}-nogpu".format(image)
     return driver_utils.HeavyNodeConfigGCP(name=TF_RESNET_MODEL_APP_NAME,
                                         input_type="floats",
-                                        model_image="gcr.io/clipper-model-comp/tf-resnet-feats:bench",
+                                        model_image=image,
                                         cpus_per_replica=cpus_per_replica,
                                         gpu_type=gpu_type,
                                         batch_size=batch_size,
@@ -363,14 +369,14 @@ if __name__ == "__main__":
     #         fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
     #         driver_utils.save_results([config,], cl, all_stats, "inception_smp_gcp", prefix=fname)
 
-    gpu_type = "k80"
-    for num_cpus in [2, 1]:
-        for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32]:
-            if num_cpus == 2 and batch_size < 16:
-                continue
+    gpu_type = None
+    for num_cpus in [2, 1, 4]:
+        for batch_size in [1, 2, 4, 8, 16, 32]:
+            # if num_cpus == 2 and batch_size < 16:
+            #     continue
             config = setup_inception(batch_size, 1, num_cpus, gpu_type)
             client_num = 0
-            benchmarker = DriverBenchmarker(config, queue, client_num, 0.3*batch_size)
+            benchmarker = DriverBenchmarker(config, queue, client_num, 1.0*batch_size)
 
             p = Process(target=benchmarker.run)
             p.start()
