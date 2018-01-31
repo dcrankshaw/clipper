@@ -982,6 +982,32 @@ class ClipperConnection(object):
             logger.error(msg)
             raise ClipperException(msg)
 
+    def drain_queues(self):
+        """Fetches performance metrics from the running Clipper cluster.
+
+        Returns
+        -------
+        str
+            The JSON string containing the current set of metrics
+            for this instance. On error, the string will be an error message
+            (not JSON formatted).
+
+        Raises
+        ------
+        :py:exc:`clipper.UnconnectedException`
+        :py:exc:`clipper.ClipperException`
+        """
+        if not self.connected:
+            raise UnconnectedException()
+        url = "http://{host}/drain_queues".format(host=self.cm.get_query_addr())
+        r = requests.get(url)
+        logger.debug(r.text)
+        if r.status_code != requests.codes.ok:
+            msg = "Received error status code: {code} and message: {msg}".format(
+                code=r.status_code, msg=r.text)
+            logger.error(msg)
+            raise ClipperException(msg)
+
     def set_model_version(self, name, version, num_replicas=None):
         """Changes the current model version to "model_version".
 

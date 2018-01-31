@@ -142,6 +142,7 @@ class Predictor(object):
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
             self.stats["mean_batch_sizes"] = []
+            self.stats["mean_queue_sizes"] = []
 
     def init_stats(self):
         self.latencies = []
@@ -164,6 +165,7 @@ class Predictor(object):
             batch_sizes = get_batch_sizes(metrics)
             queue_sizes = get_queue_sizes(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
+            self.stats["mean_queue_sizes"].append(queue_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
                          "batch_sizes: {batches}, queue_sizes: {queues}").format(p99=p99, mean=mean, thru=thru,
@@ -228,6 +230,31 @@ class DriverBenchmarker(object):
         time.sleep(30)
         predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
+
+        # First warm up the model.
+        # NOTE: The length of time the model needs to warm up for
+        # seems to be both framework and hardware dependent. 27 seems to work
+        # well for PyTorch resnet
+        while len(predictor.stats["thrus"]) < 27:
+            predictor.predict(self.config.name, self.inputs[idx])
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+
+        # Now let the queue drain
+        logger.info("Draining queue")
+
+        self.cl.drain_queues()
+        time.sleep(10)
+        # while predictor.stats["mean_queue_sizes"][-1] > 0:
+        #     sleep_time_secs = 5
+        #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
+        #         q_len=predictor.stats["mean_queue_sizes"][-1],
+        #         sleep=sleep_time_secs))
+        #     time.sleep(sleep_time_secs)
+
+        # Now initialize request rate
         while len(predictor.stats["thrus"]) < 10:
             predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
@@ -254,7 +281,8 @@ class DriverBenchmarker(object):
             self.delay += 0.001
 
     def find_steady_state(self):
-        self.cl.cm.reset()
+        # self.cl.cm.reset()
+        self.cl.drain_queues()
         time.sleep(30)
         logger.info("Clipper is reset")
         predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
