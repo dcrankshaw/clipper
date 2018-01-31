@@ -146,6 +146,35 @@ int RPCService::send_message(std::vector<message_t> msg,
   return id;
 }
 
+int RPCService::send_model_message(std::string model_name,
+                                   std::vector<zmq::message_t> msg,
+                                   const int zmq_connection_id) {
+  // Duplicated code in order to avoid potential race conditions
+  if (!active_) {
+    log_error(LOGGING_TAG_RPC,
+              "Cannot send message to inactive RPCService instance",
+              "Dropping Message");
+    return -1;
+  }
+  int id = message_id_;
+  message_id_ += 1;
+  long current_time_micros =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::system_clock::now().time_since_epoch())
+          .count();
+  RPCRequest request(zmq_connection_id, id, std::move(msg),
+                     current_time_micros);
+  auto model_metrics_search = model_processing_latencies_.find(model_name);
+  if (model_metrics_search == model_processing_latencies_.end()) {
+    auto model_metric = metrics::MetricsRegistry::get_metrics().create_data_list<long>(model_name, "milliseconds");
+    model_processing_latencies_.emplace(model_name, model_metric);
+  }
+
+  msg_id_models_map_.emplace(id, model_name);
+  request_queue_->enqueue(std::move(request));
+  return id;
+}
+
 vector<RPCResponse> RPCService::try_get_responses(const int max_num_responses) {
   std::vector<RPCResponse> vec(response_queue_->size_approx());
   size_t num_dequeued =
@@ -214,6 +243,10 @@ void RPCService::send_messages(socket_t &socket,
       }
       cur_msg_num += 1;
     }
+
+    int msg_id = std::get<1>(request);
+    auto outbound_timestamp = std::chrono::system_clock::now();
+    msg_id_timestamp_map_.emplace(msg_id, std::move(outbound_timestamp));
   }
 }
 
@@ -260,10 +293,25 @@ void RPCService::receive_message(socket_t &socket) {
       connections_containers_map_.find(zmq_connection_id);
   if (container_info_entry == connections_containers_map_.end()) {
     std::stringstream ss;
-    ss <<  "Failed to find container with ID " << zmq_connection_id;
+    ss << "Failed to find container with ID " << zmq_connection_id;
     ss << " that was previously registered via RPC.";
     throw std::runtime_error(ss.str());
   }
+
+  int id = static_cast<int *>(msg_id.data())[0];
+
+  auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
+  std::string model_name = msg_id_models_map_.find(id)->second;
+  auto model_latencies_list = model_processing_latencies_.find(model_name)->second;
+
+  auto inbound_timestamp = std::chrono::system_clock::now();
+  long model_processing_latency =
+      std::chrono::duration_cast<std::chrono::milliseconds>(inbound_timestamp - outbound_timestamp).count();
+
+  model_latencies_list->insert(model_processing_latency);
+  msg_id_timestamp_map_.erase(id);
+  msg_id_models_map_.erase(id);
+
   std::pair<VersionedModelId, int> container_info =
       container_info_entry->second;
 
