@@ -202,10 +202,11 @@ def check_convergence_via_queue(stats, configs, latency_upper_bound=None):
     for model_name in desired_batch_sizes.keys():
         mean_of_means_batch_size = np.mean(batch_sizes[model_name])
         if mean_of_means_batch_size > desired_batch_sizes[model_name]*0.85:
-            logger.info("{name} is using large batches. Desired {desired}, actual: {actual}".format(
-                name=model_name,
-                actual=mean_of_means_batch_size,
-                desired=desired_batch_sizes[model_name]))
+            logger.info(("{name} is using full-size batches. Desired {desired}, "
+                         "actual: {actual}").format(
+                             name=model_name,
+                             actual=mean_of_means_batch_size,
+                             desired=float(desired_batch_sizes[model_name])))
             found_full_batches = True
 
     if not found_full_batches:
@@ -218,12 +219,12 @@ def check_convergence_via_queue(stats, configs, latency_upper_bound=None):
         mean_queue_size = np.mean(qs)
         std_queue_size = np.std(qs)
         # Check if queue behavior has stabilized
-        if (mean_queue_size < 1.5*desired_batch_sizes[model_name] and
+        if (mean_queue_size < 1.8*desired_batch_sizes[model_name] and
                 std_queue_size < 0.5*desired_batch_sizes[model_name]):
             continue
         else:
-            lr = linregress(x=range(len(queue_sizes)), y=queue_sizes)
-            logger.info("{mname} regression results:\n{lr}".format(name=model_name, lr=lr))
+            lr = linregress(x=range(len(qs)), y=qs)
+            logger.info("{mname} regression results:\n{lr}".format(mname=model_name, lr=lr))
             # If pvalue less than 0.001, the line definitely has a slope
             if lr.pvalue < 0.01:
                 if lr.slope > 0:

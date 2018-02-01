@@ -362,6 +362,8 @@ if __name__ == "__main__":
             for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
                 if gpu_type == "k80" and batch_size > 32:
                     continue
+                if gpu_type == "p100" and num_cpus == 2 and batch_size < 8:
+                    continue
                 config = setup_res50(batch_size, 1, num_cpus, gpu_type)
                 client_num = 0
                 benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
