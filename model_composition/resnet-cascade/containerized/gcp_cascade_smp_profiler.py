@@ -12,7 +12,9 @@ from datetime import datetime
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
-from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN
+from containerized_utils.driver_utils import (INCREASING, DECREASING,
+                                              CONVERGED_HIGH, CONVERGED,
+                                              UNKNOWN, CONVERGED_LOW)
 from multiprocessing import Process, Queue
 
 logging.basicConfig(
@@ -246,7 +248,11 @@ class DriverBenchmarker(object):
         logger.info("Draining queue")
 
         self.cl.drain_queues()
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
         time.sleep(10)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         # while predictor.stats["mean_queue_sizes"][-1] > 0:
         #     sleep_time_secs = 5
         #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
@@ -272,19 +278,22 @@ class DriverBenchmarker(object):
         logger.info("ZMQ client stopped")
         del predictor
 
-    def increase_delay(self):
+    def increase_delay(self, multiple=1.0):
         if self.delay < 0.01:
-            self.delay += 0.00005
+            self.delay += 0.00005*multiple
         elif self.delay < 0.02:
-            self.delay += 0.0002
+            self.delay += 0.0002*multiple
         else:
-            self.delay += 0.001
+            self.delay += 0.001*multiple
+
+    def decrease_delay(self):
+        self.increase_delay(multiple=-0.5)
 
     def find_steady_state(self):
         # self.cl.cm.reset()
         self.cl.drain_queues()
-        time.sleep(30)
-        logger.info("Clipper is reset")
+        time.sleep(10)
+        logger.info("Queue is drained")
         predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         self.active = False
         while not self.active:
@@ -301,7 +310,7 @@ class DriverBenchmarker(object):
         idx = 0
         done = False
         # start checking for steady state after 10 trials
-        last_checked_length = 12
+        last_checked_length = 10
         while not done:
             predictor.predict(self.config.name, self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
@@ -311,7 +320,8 @@ class DriverBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 1
-                convergence_state = driver_utils.check_convergence(predictor.stats, [self.config,], self.latency_upper_bound)
+                convergence_state = driver_utils.check_convergence_via_queue(
+                    predictor.stats, [self.config,], self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
@@ -333,6 +343,12 @@ class DriverBenchmarker(object):
                     return self.find_steady_state()
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
+                elif convergence_state == CONVERGED_LOW:
+                    self.decrease_delay()
+                    logger.info("Converged with too low batch sizes. Decreasing delay to {}".format(self.delay))
+                    done = True
+                    del predictor
+                    return self.find_steady_state()
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
@@ -341,29 +357,6 @@ class DriverBenchmarker(object):
 if __name__ == "__main__":
 
     queue = Queue()
-
-    # for gpu_type in ["p100", "k80"]:
-    #     for num_cpus in [2, 1, 4]:
-    #         for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
-    #             if gpu_type == "k80" and batch_size > 32:
-    #                 continue
-    #             config = setup_alexnet(batch_size, 1, num_cpus, gpu_type)
-    #             client_num = 0
-    #             benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
-    #
-    #             p = Process(target=benchmarker.run)
-    #             p.start()
-    #
-    #             all_stats = []
-    #             clipper_address, stats = queue.get()
-    #             all_stats.append(stats)
-    #
-    #             cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-    #             cl.connect()
-    #
-    #             fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-    #             driver_utils.save_results([config,], cl, all_stats, "pytorch_alexnet_smp_gcp", prefix=fname)
-
     for gpu_type in ["p100", "k80"]:
         for num_cpus in [2, 1, 4]:
             for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
@@ -384,7 +377,7 @@ if __name__ == "__main__":
                 cl.connect()
 
                 fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-                driver_utils.save_results([config,], cl, all_stats, "pytorch_res50_smp_gcp", prefix=fname)
+                driver_utils.save_results([config,], cl, all_stats, "pytorch_res50_smp_gcp_queue_convergence", prefix=fname)
 
     for gpu_type in ["p100", "k80"]:
         for num_cpus in [2, 1, 4]:
@@ -406,6 +399,28 @@ if __name__ == "__main__":
                 cl.connect()
 
                 fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-                driver_utils.save_results([config,], cl, all_stats, "pytorch_res152_smp_gcp", prefix=fname)
+                driver_utils.save_results([config,], cl, all_stats, "pytorch_res152_smp_gcp_queue_convergence", prefix=fname)
+
+    for gpu_type in ["p100", "k80"]:
+        for num_cpus in [2, 1, 4]:
+            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
+                if gpu_type == "k80" and batch_size > 32:
+                    continue
+                config = setup_alexnet(batch_size, 1, num_cpus, gpu_type)
+                client_num = 0
+                benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
+
+                p = Process(target=benchmarker.run)
+                p.start()
+
+                all_stats = []
+                clipper_address, stats = queue.get()
+                all_stats.append(stats)
+
+                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+                cl.connect()
+
+                fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+                driver_utils.save_results([config,], cl, all_stats, "pytorch_alexnet_smp_gcp_queue_convergence", prefix=fname)
 
     sys.exit(0)
