@@ -279,6 +279,10 @@ class ServerImpl {
     return metrics_report;
   }
 
+  void drain_queues() {
+    task_executor_.drain_queues();
+  }
+
  private:
   std::shared_ptr<FrontendRPCService> rpc_service_;
   TaskExecutor task_executor_;

@@ -15,25 +15,15 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR/..
 
 tag=$(<VERSION.txt)
+gcpprefix="gcr.io/clipper-model-comp"
 
 # Build the Clipper Docker images
 time docker build -t clipper/clipper-base:$tag -f ClipperBaseDockerfile ./
 time docker build --build-arg CODE_VERSION=$tag -t clipper/zmq_frontend:$tag -f ZmqFrontendDockerfile ./
+docker tag clipper/zmq_frontend:$tag $gcpprefix/zmq_frontend:$tag
+gcloud docker -- push $gcpprefix/zmq_frontend:$tag
 exit
 time docker build --build-arg CODE_VERSION=$tag -t clipper/management_frontend:$tag -f ManagementFrontendDockerfile ./
-cd -
-
-
-# Build the Python model containers
-cd $DIR/..
-
-# first build base image
-docker build -t clipper/py-rpc:$tag -f ./RPCDockerfile ./
-time docker build --build-arg CODE_VERSION=$tag -t clipper/noop-container:$tag -f ./NoopDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/sum-container:$tag -f ./SumDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/python-container:$tag -f ./PythonContainerDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/pyspark-container:$tag -f ./PySparkContainerDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/sklearn_cifar_container:$tag -f ./SklearnCifarDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/tf_cifar_container:$tag -f ./TensorFlowCifarDockerfile ./
-# time docker build --build-arg CODE_VERSION=$tag -t clipper/r_python_container:$tag -f ./RPythonDockerfile ./
+docker tag clipper/management_frontend:$tag $gcpprefix/management_frontend:$tag
+gcloud docker -- push $gcpprefix/management_frontend:$tag
 cd -

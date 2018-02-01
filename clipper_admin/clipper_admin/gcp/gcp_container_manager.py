@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 # import docker
+import paramiko
 import googleapiclient.discovery
 import logging
 import os
@@ -10,6 +11,7 @@ from ..container_manager import (
     create_model_container_label, parse_model_container_label,
     ContainerManager, CLIPPER_DOCKER_LABEL, CLIPPER_MODEL_CONTAINER_LABEL,
     CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL,
+    CLIPPER_INTERNAL_QUERY_PORT,
     CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL, CLIPPER_INTERNAL_RPC_PORT,
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
@@ -199,8 +201,9 @@ class GCPContainerManager(ContainerManager):
     def start_query_frontend(self):
 
         startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
-                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          # "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
                           "-p 4455:4455 -p 4456:4456 -p 1337:1337 -p 7000:7000 "
+                          "-p 7010:7010 -p 7011:7011 "
                           "{image} --redis_ip={redis_ip} --redis_port={redis_port}").format(
                                   image="gcr.io/clipper-model-comp/zmq_frontend:develop",
                                   redis_ip=self.redis_internal_ip, redis_port=self.redis_port)
@@ -303,6 +306,7 @@ class GCPContainerManager(ContainerManager):
         self.start_redis()
         self.start_mgmt_frontend()
         self.start_query_frontend()
+        time.sleep(80)
         self.connect()
 
     def connect(self):
@@ -352,8 +356,11 @@ class GCPContainerManager(ContainerManager):
 
 
         rep_name = "{name}-{version}-{random}".format(name=name, version=version, random=np.random.randint(0, 100000))
+        docker_cmd = "docker"
+        if gpu_type is not None:
+            docker_cmd = "nvidia-docker"
 
-        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\nnvidia-docker run -d "
+        startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\n{docker_cmd} run -d "
                           "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
                           "--log-opt env=CLIPPER_MODEL_NAME "
                           "--log-opt env=CLIPPER_MODEL_VERSION "
@@ -364,6 +371,7 @@ class GCPContainerManager(ContainerManager):
                           "-e CLIPPER_INPUT_TYPE={input_type} "
                           "-l rep_name={rep_name} "
                           "{image}").format(
+                                  docker_cmd=docker_cmd,
                                   name=name,
                                   version=version,
                                   ip=self.query_frontend_internal_ip,
@@ -372,12 +380,13 @@ class GCPContainerManager(ContainerManager):
                                   image=image)
 
         logger.info("STARTUP SCRIPT:\n\n {script}".format(script=startup_script))
+        mem = min(5120*4, 5120*num_cpus)
 
         config = {
                 "name": rep_name,
                 "zone": "projects/clipper-model-comp/zones/us-west1-b",
                 "minCpuPlatform": "Automatic",
-                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-{num_cpus}-10240".format(num_cpus=num_cpus),
+                "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-{num_cpus}-{mem}".format(num_cpus=num_cpus, mem=mem),
                 "metadata": {
                     "items": [
                         {
@@ -485,6 +494,79 @@ class GCPContainerManager(ContainerManager):
     def get_logs(self, logging_dir):
         raise NotImplementedError
 
+    def reset(self):
+        logger.info("Resetting Clipper")
+        username = "crankshaw"
+        key_path = "/home/crankshaw/.ssh/gcp_all_access"
+
+        # First stop the query frontend
+        qf_client = paramiko.SSHClient()
+        qf_client.load_system_host_keys()
+        qf_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+        qf_client.connect(self.query_frontend_internal_ip, username=username, key_filename=key_path)
+        sin, sout, serr = qf_client.exec_command("sudo docker ps -q")
+        containers = [l.strip() for l in sout]
+        if not len(containers) == 1:
+            raise ClipperException("Error resetting query frontend")
+        qf_container_id = containers[0]
+        logger.info("Query frontend container ID")
+        sin, sout, serr = qf_client.exec_command("sudo docker stop {}".format(qf_container_id))
+        logger.info("Query frontend stopped")
+
+        # Now stop all model replicas
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-cluster eq {}".format(self.cluster_name)).execute()
+        reps_to_start = []
+        if "items" in replicas:
+            for rep in replicas["items"]:
+                if "clipper-model" in rep["labels"]:
+                    # ip = inst["networkInterfaces"][0]["networkIP"]
+                    model_client = paramiko.SSHClient()
+                    model_client.load_system_host_keys()
+                    model_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+                    model_client.connect(rep["name"], username=username, key_filename=key_path)
+                    sin, sout, serr = model_client.exec_command("sudo nvidia-docker ps -q")
+                    containers = [l.strip() for l in sout]
+                    if not len(containers) == 1:
+                        raise ClipperException("Error resetting model replica {}".format(rep["name"]))
+                    model_container_id = containers[0]
+                    sin, sout, serr = model_client.exec_command("sudo nvidia-docker stop {}".format(model_container_id))
+                    reps_to_start.append((model_client, model_container_id))
+                    logger.info("{} container stopped".format(rep["name"]))
+
+
+        # Sleep here to let any client connections expire
+        time.sleep(10)
+
+        restarted = False
+        while not restarted:
+            # Now restart the query frontend
+            sin, sout, serr = qf_client.exec_command("sudo docker start {}".format(qf_container_id))
+            logger.info("Starting query frontend. stdout: {sout}, stderr: {serr}".format(sout=sout.readlines(), serr=serr.readlines()))
+            time.sleep(10)
+            sin, sout, serr = qf_client.exec_command("sudo docker ps -q")
+            running_containers = [l.strip() for l in sout]
+            if len(running_containers) == 1:
+                restarted = True
+            else:
+                sin, sout, serr = qf_client.exec_command("sudo docker ps -a")
+                logger.info("Problem starting query frontend. Trying again.\nstdout: {sout}\nstderr: {serr}".format(
+                    sout=sout.readlines(), serr=serr.readlines()))
+
+
+
+
+
+        # Now restart the model replicas
+        for model_client, model_container_id in reps_to_start:
+            sin, sout, serr = model_client.exec_command("sudo nvidia-docker start {}".format(model_container_id))
+            logger.info("Model should be running. stdout: {sout}, stderr: {serr}".format(sout=sout.readlines(), serr=serr.readlines()))
+
+        logger.info("Models should be running")
+        time.sleep(10)
+
+
+
     def stop_models(self, models):
         raise NotImplementedError
 
@@ -506,6 +588,6 @@ class GCPContainerManager(ContainerManager):
             host=self.mgmt_frontend_external_ip, port=CLIPPER_INTERNAL_MANAGEMENT_PORT)
 
     def get_query_addr(self):
-        raise NotImplementedError
-        # return "{host}:{port}".format(
-        #     host=self.query_frontend_external_ip, port=self.clipper_query_port)
+        # raise NotImplementedError
+        return "{host}:{port}".format(
+            host=self.query_frontend_internal_ip, port=CLIPPER_INTERNAL_QUERY_PORT)

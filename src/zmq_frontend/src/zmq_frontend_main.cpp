@@ -9,6 +9,7 @@
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 const std::string GET_METRICS = "^/metrics$";
+const std::string DRAIN_QUEUES = "^/drain_queues$";
 
 void respond_http(std::string content, std::string message,
                   std::shared_ptr<HttpServer::Response> response) {
@@ -55,5 +56,14 @@ int main(int argc, char* argv[]) {
         std::cout << metrics_report << std::endl;
         respond_http(metrics_report, "200 OK", response);
       });
+
+  metrics_server.add_endpoint(
+      DRAIN_QUEUES, "GET", [&zmq_server](std::shared_ptr<HttpServer::Response> response,
+                             std::shared_ptr<HttpServer::Request> /*request*/) {
+        zmq_server.drain_queues();
+        std::cout << "Drained queues" << std::endl;
+        respond_http("DONE", "200 OK", response);
+      });
+
   metrics_server.start();
 }

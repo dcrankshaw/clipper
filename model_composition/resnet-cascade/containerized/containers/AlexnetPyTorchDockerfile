@@ -1,4 +1,4 @@
-FROM model-comp/pytorch
+FROM gcr.io/clipper-model-comp/pytorch:bench
 
 RUN echo "alexnet" > /model/model.txt
 
