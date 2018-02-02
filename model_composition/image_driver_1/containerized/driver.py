@@ -408,7 +408,7 @@ class ModelBenchmarker(object):
         logger.info("ZMQ client stopped")
         del predictor
         time.sleep(10)
-        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         # while predictor.stats["mean_queue_sizes"][-1] > 0:
         #     sleep_time_secs = 5
         #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
@@ -450,7 +450,7 @@ class ModelBenchmarker(object):
         self.cl.drain_queues()
         time.sleep(10)
         logger.info("Queue is drained")
-        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         self.active = False
         while not self.active:
             logger.info("Trying to connect to Clipper")
