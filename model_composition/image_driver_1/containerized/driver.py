@@ -386,7 +386,7 @@ class ModelBenchmarker(object):
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
         time.sleep(30)
-        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
 
         # First warm up the model.
