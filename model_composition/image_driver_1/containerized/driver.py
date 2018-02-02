@@ -12,7 +12,7 @@ from datetime import datetime
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
-from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN, SLOPE_LIKELY
+from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN
 from multiprocessing import Process, Queue
 
 
@@ -381,8 +381,8 @@ class ModelBenchmarker(object):
         # initialize delay to be very small
         self.delay = 0.001
         self.queries_per_sleep = 1
-        self.clipper_address = setup_clipper_gcp(self.config)
-        self.cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+        self.clipper_address = setup_clipper(self.config)
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
         time.sleep(30)
         predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
