@@ -375,80 +375,138 @@ class ModelBenchmarker(object):
         self.find_steady_state()
         return
 
-    # start with an overly aggressive request rate
+         # start with an overly aggressive request rate
     # then back off
     def initialize_request_rate(self):
         # initialize delay to be very small
         self.delay = 0.001
-        setup_clipper(self.config)
-        time.sleep(5)
-        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
+        self.queries_per_sleep = 1
+        self.clipper_address = setup_clipper_gcp(self.config)
+        self.cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+        self.cl.connect()
+        time.sleep(30)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
-        while len(predictor.stats["thrus"]) < 8:
-            predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
-            time.sleep(self.delay)
+
+        # First warm up the model.
+        # NOTE: The length of time the model needs to warm up for
+        # seems to be both framework and hardware dependent. 27 seems to work
+        # well for PyTorch resnet
+        while len(predictor.stats["thrus"]) < 27:
+            predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
             idx = idx % len(self.inputs)
 
-        max_thruput = np.mean(predictor.stats["thrus"][1:-1])
-        self.delay = 1.0 / (max_thruput * 1.05)
-        logger.info("Initializing delay to {}".format(self.delay))
+        # Now let the queue drain
+        logger.info("Draining queue")
 
-    def increase_delay(self):
-        if self.delay < 0.005:
-            self.delay += 0.0001
+        self.cl.drain_queues()
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
+        time.sleep(10)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        # while predictor.stats["mean_queue_sizes"][-1] > 0:
+        #     sleep_time_secs = 5
+        #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
+        #         q_len=predictor.stats["mean_queue_sizes"][-1],
+        #         sleep=sleep_time_secs))
+        #     time.sleep(sleep_time_secs)
+
+        # Now initialize request rate
+        while len(predictor.stats["thrus"]) < 10:
+            predictor.predict(self.config.name, self.inputs[idx])
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+
+        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        self.delay = 1.0 / max_thruput
+        if self.delay < 0.01:
+            self.queries_per_sleep = 2
+            self.delay = self.delay*2.0 - 0.001
+        logger.info("Initializing delay to {}".format(self.delay))
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
+
+    def increase_delay(self, multiple=1.0):
+        if self.delay < 0.01:
+            self.delay += 0.00005*multiple
+        elif self.delay < 0.02:
+            self.delay += 0.0002*multiple
         else:
-            self.delay += 0.00025
+            self.delay += 0.001*multiple
+
+    def decrease_delay(self):
+        self.increase_delay(multiple=-0.5)
 
     def find_steady_state(self):
-        setup_clipper(self.config)
-        time.sleep(7)
-        predictor = Predictor(clipper_metrics=True, batch_size=self.config.batch_size)
+        # self.cl.cm.reset()
+        self.cl.drain_queues()
+        time.sleep(10)
+        logger.info("Queue is drained")
+        predictor = Predictor(self.clipper_address, clipper_metrics=True, batch_size=self.max_batch_size)
+        self.active = False
+        while not self.active:
+            logger.info("Trying to connect to Clipper")
+            def callback(output):
+                if output == DEFAULT_OUTPUT:
+                    return
+                else:
+                    logger.info("Succesful query issued")
+                    self.active = True
+            predictor.client.send_request(self.config.name, self.inputs[0]).then(callback)
+            time.sleep(1)
+
         idx = 0
         done = False
-        # start checking for steady state after 7 trials
-        last_checked_length = 20
-        checked_early_divergence = False
+        # start checking for steady state after 10 trials
+        last_checked_length = 10
         while not done:
-            predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
-            time.sleep(self.delay)
+            predictor.predict(self.config.name, self.inputs[idx])
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
 
             if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state, slope = driver_utils.check_convergence(predictor.stats, [self.config], self.latency_upper_bound)
+                last_checked_length = len(predictor.stats["thrus"]) + 1
+                convergence_state = driver_utils.check_convergence_via_queue(
+                    predictor.stats, [self.config,], self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    del predictor
                     return self.find_steady_state()
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
-                    self.queue.put(predictor.stats)
+                    self.queue.put((self.clipper_address, predictor.stats))
                     return
-                elif len(predictor.stats) > 100:
+                elif len(predictor.stats) > 40:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    del predictor
                     return self.find_steady_state()
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
-                elif convergence_state != SLOPE_LIKELY:
+                elif convergence_state == CONVERGED_LOW:
+                    self.decrease_delay()
+                    logger.info("Converged with too low batch sizes. Decreasing delay to {}".format(self.delay))
+                    done = True
+                    del predictor
+                    return self.find_steady_state()
+                else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
-            elif (not checked_early_divergence) and len(predictor.stats["thrus"]) == 6:
-                checked_early_divergence = True
-                convergence_state, slope = driver_utils.check_convergence(predictor.stats, [self.config], self.latency_upper_bound)
-                if (convergence_state == INCREASING or convergence_state == SLOPE_LIKELY) and slope > .1:
-                    self.increase_delay()
-                    logger.info("Increasing delay to {}".format(self.delay))
-                    done = True
-                    return self.find_steady_state()
-
 
     def _get_vgg_feats_input(self):
         input_img = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
