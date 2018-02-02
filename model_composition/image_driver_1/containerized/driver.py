@@ -456,9 +456,6 @@ class ModelBenchmarker(object):
         else:
             self.delay += 0.001*multiple
 
-    def decrease_delay(self):
-        self.increase_delay(multiple=-0.5)
-
     def find_steady_state(self):
         # self.cl.cm.reset()
         self.cl.drain_queues()
@@ -514,11 +511,11 @@ class ModelBenchmarker(object):
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
                 elif convergence_state == CONVERGED_LOW:
-                    self.decrease_delay()
-                    logger.info("Converged with too low batch sizes. Decreasing delay to {}".format(self.delay))
+                    logger.info("Converged LOW with delay of {}".format(self.delay))
+                    logger.info("Consider re-running with smaller request delay augmentations")
                     done = True
-                    del predictor
-                    return self.find_steady_state()
+                    self.queue.put(predictor.stats)
+                    return
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
