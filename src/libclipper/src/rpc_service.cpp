@@ -298,8 +298,6 @@ void RPCService::receive_message(socket_t &socket) {
     throw std::runtime_error(ss.str());
   }
 
-  int id = static_cast<int *>(msg_id.data())[0];
-
   auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
   std::string model_name = msg_id_models_map_.find(id)->second;
   auto model_latencies_list = model_processing_latencies_.find(model_name)->second;
