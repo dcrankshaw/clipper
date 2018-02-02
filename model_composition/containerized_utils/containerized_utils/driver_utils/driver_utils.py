@@ -137,12 +137,12 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
         os.makedirs(results_dir)
         logger.info("Created experiments directory: %s" % results_dir)
 
-    if "all_lats" not in client_metrics[0][1]:
+    if "all_lats" not in client_metrics[0]:
         raise Exception("No latencies list found under key \"all_lats\"."
                         " Please update your driver to include all latencies so we can"
                         " plot the latency CDF")
     else:
-        for c in client_metrics[0][1:]:
+        for c in client_metrics[0]:
             all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
             c["all_lats"] = all_lats_strs
 

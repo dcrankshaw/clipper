@@ -503,7 +503,7 @@ class ModelBenchmarker(object):
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
-                    self.queue.put((self.clipper_address, predictor.stats))
+                    self.queue.put(predictor.stats)
                     return
                 elif len(predictor.stats) > 40:
                     self.increase_delay()
