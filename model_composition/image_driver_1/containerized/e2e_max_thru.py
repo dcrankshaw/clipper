@@ -51,7 +51,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-8")
+        query_cpu_str="0,16,1,17,2,18,3,19")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -255,7 +255,7 @@ class Predictor(object):
             .then(log_reg_continuation)
 
 class DriverBenchmarker(object):
-    def __init__(self, configs, queue, client_num, latency_upper_bound):
+    def __init__(self, configs, queue, client_num, latency_upper_bound, request_delay=None):
         self.configs = configs
         self.max_batch_size = np.max([config.batch_size for config in configs])
         self.queue = queue
@@ -265,9 +265,13 @@ class DriverBenchmarker(object):
         base_inputs = [(self._get_resnet_input(), self._get_inception_input()) for _ in range(1000)]
         self.inputs = [i for _ in range(40) for i in base_inputs]
         self.latency_upper_bound = latency_upper_bound
+        self.delay = request_delay
 
     def run(self):
-        self.initialize_request_rate()
+        if not self.delay:
+            self.initialize_request_rate()
+        else:
+            self.delay = float(self.delay)
         self.find_steady_state()
         return
 
@@ -293,11 +297,11 @@ class DriverBenchmarker(object):
 
     def increase_delay(self):
         if self.delay < 0.005:
-            self.delay += 0.001
+            self.delay += 0.0005
         elif self.delay < 0.01:
-            self.delay += 0.002
+            self.delay += 0.001
         else:
-            self.delay += 0.004
+            self.delay += 0.002
 
 
     def find_steady_state(self):
@@ -307,7 +311,7 @@ class DriverBenchmarker(object):
         idx = 0
         done = False
         # start checking for steady state after 7 trials
-        last_checked_length = 6
+        last_checked_length = 10
         while not done:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
@@ -361,7 +365,7 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--num_trials', type=int, default=30, help='The number of trials to complete for the benchmarking process')
     parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
     parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
-    parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
+    parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The initial delay, in seconds, between requests")
     parser.add_argument('-l', '--trial_length', type=int, default=10, help="The length of each trial, in number of requests")
     parser.add_argument('-n', '--num_clients', type=int, default=1, help='number of clients')
 
@@ -372,16 +376,16 @@ if __name__ == "__main__":
     ## THIS IS FOR MAX THRU
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
     max_thru_reps = [(1, 1, 1, 1),
-                    (1, 1, 2, 1),
-                    (2, 1, 2, 1),
-                    (2, 1, 3, 1),
-                    (3, 1, 3, 1),
-                    (3, 1, 4, 1),
-                    (3, 1, 5, 1)]
+                     (1, 1, 2, 1),
+                     (2, 1, 2, 1),
+                     (2, 1, 3, 1),
+                     (3, 1, 3, 1),
+                     (3, 1, 4, 1),
+                     (3, 1, 5, 1)]
 
 
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
-    max_thru_batches = (48, 2, 64, 16)
+    max_thru_batches = (64, 2, 64, 14)
 
     max_thru_latency_upper_bound = 7.0
 
@@ -429,7 +433,8 @@ if __name__ == "__main__":
     ksvm_batch_idx = 3
 
     for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in max_thru_reps:
-        total_cpus = range(9,29)
+        # Note: These are PHYSICAL CPU numbers
+        total_cpus = range(4,14)
 
         def get_cpus(num_cpus):
             return [total_cpus.pop() for _ in range(num_cpus)]
@@ -438,6 +443,8 @@ if __name__ == "__main__":
 
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
+
+        # Note: cpus_per_replica refers to PHYSICAL CPUs per replica
 
         configs = [
             setup_inception(batch_size=max_thru_batches[inception_batch_idx],
@@ -464,7 +471,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(configs, queue, client_num, max_thru_latency_upper_bound)
+        benchmarker = DriverBenchmarker(configs, queue, client_num, max_thru_latency_upper_bound, args.request_delay)
 
         p = Process(target=benchmarker.run)
         p.start()

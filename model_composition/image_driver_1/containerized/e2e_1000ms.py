@@ -51,7 +51,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-8")
+        query_cpu_str="0,16,1,17,2,18,3,19")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -293,11 +293,11 @@ class DriverBenchmarker(object):
 
     def increase_delay(self):
         if self.delay < 0.005:
-            self.delay += 0.001
+            self.delay += 0.0005
         elif self.delay < 0.01:
-            self.delay += 0.002
+            self.delay += 0.001
         else:
-            self.delay += 0.004
+            self.delay += 0.002
 
 
     def find_steady_state(self):
@@ -380,9 +380,9 @@ if __name__ == "__main__":
 
 
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
-    batches = (16, 1, 16, 15)
+    batches = (10, 1, 12, 13)
 
-    latency_upper_bound = 3.0
+    latency_upper_bound = 1.0
 
     # ## THIS IS FOR 500MS
     # ## FORMAT IS (INCEPTION, LOG_REG, RESNET, KSVM)
@@ -428,7 +428,8 @@ if __name__ == "__main__":
     ksvm_batch_idx = 3
 
     for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in reps:
-        total_cpus = range(9,29)
+        # Note: These are PHYSICAL CPU numbers
+        total_cpus = range(4,14)
 
         def get_cpus(num_cpus):
             return [total_cpus.pop() for _ in range(num_cpus)]
@@ -437,6 +438,8 @@ if __name__ == "__main__":
 
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
+
+        # Note: cpus_per_replica refers to PHYSICAL CPUs per replica
 
         configs = [
             setup_inception(batch_size=batches[inception_batch_idx],
