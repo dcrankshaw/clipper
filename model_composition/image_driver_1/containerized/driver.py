@@ -361,6 +361,7 @@ class Predictor(object):
 
 class ModelBenchmarker(object):
     def __init__(self, config, queue, latency_upper_bound, max_batch_size):
+        self.max_batch_size = max_batch_size
         self.latency_upper_bound = latency_upper_bound
         self.config = config
         self.queue = queue
