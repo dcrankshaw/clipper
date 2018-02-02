@@ -101,5 +101,4 @@ if __name__ == "__main__":
     input_type = "floats"
     container = VggFeaturizationContainer(model_graph_path, gpu_mem_frac)
     rpc_service = rpc.RPCService()
-    rpc_service.start(container, ip, port, model_name, model_version,
-                      input_type)
+    rpc_service.start(container, ip, model_name, model_version, input_type)
