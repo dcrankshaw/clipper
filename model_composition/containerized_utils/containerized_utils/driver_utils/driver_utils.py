@@ -142,7 +142,7 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
                         " Please update your driver to include all latencies so we can"
                         " plot the latency CDF")
     else:
-        for c in client_metrics[0]:
+        for c in client_metrics:
             all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
             c["all_lats"] = all_lats_strs
 
