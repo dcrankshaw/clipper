@@ -280,6 +280,10 @@ class ServerImpl {
   }
 
   void drain_queues() {
+    // Clear metrics as well
+    clipper::metrics::MetricsRegistry& registry =
+        clipper::metrics::MetricsRegistry::get_metrics();
+    registry.report_metrics(true);
     task_executor_.drain_queues();
   }
 
