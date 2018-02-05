@@ -441,20 +441,24 @@ class TaskExecutor {
   static constexpr int INITIAL_MODEL_QUEUES_MAP_SIZE = 100;
 
   bool create_model_queue_if_necessary(const VersionedModelId &model_id) {
-    // Adds a new <model_id, task_queue> entry to the queues map, if one
-    // does not already exist
-    boost::unique_lock<boost::shared_mutex> l(model_queues_mutex_);
-    auto queue_added = model_queues_.emplace(std::make_pair(
-        model_id, std::make_shared<ModelQueue>(model_id.serialize())));
-    bool queue_created = queue_added.second;
-    if (queue_created) {
-      boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
-      model_metrics_.insert(std::make_pair(model_id, ModelMetrics(model_id)));
-      // model_metrics_.emplace(std::piecewise_construct,
-      //                        std::forward_as_tuple(model_id),
-      //                        std::forward_as_tuple(model_id));
+    try {
+      // Adds a new <model_id, task_queue> entry to the queues map, if one
+      // does not already exist
+      boost::unique_lock<boost::shared_mutex> l(model_queues_mutex_);
+      auto queue_added = model_queues_.emplace(std::make_pair(
+          model_id, std::make_shared<ModelQueue>(model_id.serialize())));
+      bool queue_created = queue_added.second;
+      if (queue_created) {
+        boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
+        model_metrics_.insert(std::make_pair(model_id, ModelMetrics(model_id)));
+        // model_metrics_.emplace(std::piecewise_construct,
+        //                        std::forward_as_tuple(model_id),
+        //                        std::forward_as_tuple(model_id));
+      }
+      return queue_created;
+    } catch(std::exception& e) {
+      log_error(LOGGING_TAG_TASK_EXECUTOR, e.what());
     }
-    return queue_created;
   }
 
   void on_container_ready(VersionedModelId model_id, int replica_id) {
