@@ -219,8 +219,8 @@ def check_convergence_via_queue(stats, configs, latency_upper_bound=None):
         mean_queue_size = np.mean(qs)
         std_queue_size = np.std(qs)
         # Check if queue behavior has stabilized
-        if (mean_queue_size < 1.8*desired_batch_sizes[model_name] and
-                std_queue_size < 0.5*desired_batch_sizes[model_name]):
+        if (mean_queue_size < 3.0*desired_batch_sizes[model_name] and
+                std_queue_size < 1.5*desired_batch_sizes[model_name]):
             continue
         else:
             lr = linregress(x=range(len(qs)), y=qs)

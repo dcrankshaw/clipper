@@ -280,7 +280,7 @@ class DriverBenchmarker(object):
 
     def increase_delay(self, multiple=1.0):
         if self.delay < 0.01:
-            self.delay += 0.00005*multiple
+            self.delay += 0.0001*multiple
         elif self.delay < 0.02:
             self.delay += 0.0002*multiple
         else:
@@ -344,6 +344,11 @@ class DriverBenchmarker(object):
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
                 elif convergence_state == CONVERGED_LOW:
+                    logger.info("Converged with too low batch sizes.")
+                    done = True
+                    self.queue.put((self.clipper_address, predictor.stats))
+                    return
+
                     self.decrease_delay()
                     logger.info("Converged with too low batch sizes. Decreasing delay to {}".format(self.delay))
                     done = True
@@ -357,55 +362,61 @@ class DriverBenchmarker(object):
 if __name__ == "__main__":
 
     queue = Queue()
+    # for gpu_type in ["p100", "k80"]:
+    #     for num_cpus in [2, 1, 4]:
+    #         for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64]:
+    #             if gpu_type == "k80" and batch_size > 32:
+    #                 continue
+    #             if gpu_type == "p100" and num_cpus == 2:
+    #                 continue
+    #             if gpu_type == "p100" and num_cpus == 1 and batch_size < 24:
+    #                 continue
+    #             config = setup_res50(batch_size, 1, num_cpus, gpu_type)
+    #             client_num = 0
+    #             benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
+    #
+    #             p = Process(target=benchmarker.run)
+    #             p.start()
+    #
+    #             all_stats = []
+    #             clipper_address, stats = queue.get()
+    #             all_stats.append(stats)
+    #
+    #             cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+    #             cl.connect()
+    #
+    #             fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+    #             driver_utils.save_results([config,], cl, all_stats, "pytorch_res50_smp_gcp_queue_convergence", prefix=fname)
+
+    # for gpu_type in ["p100", "k80"]:
+    #     for num_cpus in [2, 1]:
+    #         for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64]:
+    #             if gpu_type == "k80" and batch_size > 32:
+    #                 continue
+    #             if gpu_type == "p100" and num_cpus == 2:
+    #                 continue
+    #             if gpu_type == "p100" and num_cpus == 1 and batch_size < 2:
+    #                 continue
+    #             config = setup_res152(batch_size, 1, num_cpus, gpu_type)
+    #             client_num = 0
+    #             benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
+    #
+    #             p = Process(target=benchmarker.run)
+    #             p.start()
+    #
+    #             all_stats = []
+    #             clipper_address, stats = queue.get()
+    #             all_stats.append(stats)
+    #
+    #             cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+    #             cl.connect()
+    #
+    #             fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
+    #             driver_utils.save_results([config,], cl, all_stats, "pytorch_res152_smp_gcp_queue_convergence", prefix=fname)
+
     for gpu_type in ["p100", "k80"]:
-        for num_cpus in [2, 1, 4]:
-            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
-                if gpu_type == "k80" and batch_size > 32:
-                    continue
-                if gpu_type == "p100" and num_cpus == 2 and batch_size < 8:
-                    continue
-                config = setup_res50(batch_size, 1, num_cpus, gpu_type)
-                client_num = 0
-                benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
-
-                p = Process(target=benchmarker.run)
-                p.start()
-
-                all_stats = []
-                clipper_address, stats = queue.get()
-                all_stats.append(stats)
-
-                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-                cl.connect()
-
-                fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-                driver_utils.save_results([config,], cl, all_stats, "pytorch_res50_smp_gcp_queue_convergence", prefix=fname)
-
-    for gpu_type in ["p100", "k80"]:
-        for num_cpus in [2, 1, 4]:
-            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
-                if gpu_type == "k80" and batch_size > 32:
-                    continue
-                config = setup_res152(batch_size, 1, num_cpus, gpu_type)
-                client_num = 0
-                benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
-
-                p = Process(target=benchmarker.run)
-                p.start()
-
-                all_stats = []
-                clipper_address, stats = queue.get()
-                all_stats.append(stats)
-
-                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-                cl.connect()
-
-                fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-                driver_utils.save_results([config,], cl, all_stats, "pytorch_res152_smp_gcp_queue_convergence", prefix=fname)
-
-    for gpu_type in ["p100", "k80"]:
-        for num_cpus in [2, 1, 4]:
-            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96]:
+        for num_cpus in [2, 1]:
+            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64]:
                 if gpu_type == "k80" and batch_size > 32:
                     continue
                 config = setup_alexnet(batch_size, 1, num_cpus, gpu_type)
