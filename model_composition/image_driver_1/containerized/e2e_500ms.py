@@ -145,6 +145,17 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_queue_sizes(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_queue_sizes = {}
+    for h in hists:
+        if "queue_size" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[0]
+            mean = h[name]["mean"]
+            mean_queue_sizes[model] = round(float(mean), 2)
+    return mean_queue_sizes
+
 class Predictor(object):
 
     def __init__(self, clipper_metrics, batch_size):
@@ -210,10 +221,10 @@ class Predictor(object):
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
             self.total_num_complete += 1
-            self.batch_num_complete += 1
+            self.trial_num_complete += 1
 
             trial_length = max(300, 10 * self.batch_size)
-            if self.batch_num_complete % trial_length == 0:
+            if self.trial_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -282,7 +293,7 @@ class DriverBenchmarker(object):
         # initialize delay to be very small
         self.delay = 0.001
         self.queries_per_sleep = 1
-        self.clipper_address = setup_clipper(self.config)
+        self.clipper_address = setup_clipper(self.configs)
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
         time.sleep(30)
@@ -294,7 +305,8 @@ class DriverBenchmarker(object):
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet
         while len(predictor.stats["thrus"]) < 27:
-            predictor.predict(self.config.name, self.inputs[idx])
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
             idx += 1
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
@@ -318,7 +330,8 @@ class DriverBenchmarker(object):
 
         # Now initialize request rate
         while len(predictor.stats["thrus"]) < 10:
-            predictor.predict(self.config.name, self.inputs[idx])
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
             idx += 1
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
@@ -365,7 +378,8 @@ class DriverBenchmarker(object):
         # start checking for steady state after 10 trials
         last_checked_length = 10
         while not done:
-            predictor.predict(self.config.name, self.inputs[idx])
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
             idx += 1
