@@ -337,7 +337,10 @@ class GCPContainerManager(ContainerManager):
 
     def _get_replicas(self, name, version):
         replicas = self.compute.instances().list(project=self.project, zone=self.zone,
-                filter="labels.clipper-model eq {name}-{version}".format(name=name, version=version)).execute()
+                filter="labels.clipper-model eq {name}-{version}-{cluster}".format(
+                    name=name,
+                    version=version,
+                    cluster=self.cluster_name)).execute()
         if "items" in replicas:
             return replicas["items"]
         else:
@@ -355,7 +358,9 @@ class GCPContainerManager(ContainerManager):
         """
 
 
-        rep_name = "{name}-{version}-{random}".format(name=name, version=version, random=np.random.randint(0, 100000))
+        rep_name = "{name}-{version}-{cluster}-{random}".format(
+            name=name, version=version, cluster=self.cluster_name,
+            random=np.random.randint(0, 100000))
         docker_cmd = "docker"
         if gpu_type is not None:
             docker_cmd = "nvidia-docker"
@@ -429,7 +434,7 @@ class GCPContainerManager(ContainerManager):
                 "description": "",
                 "labels": {
                     "clipper-cluster": self.cluster_name,
-                    "clipper-model": "{name}-{version}".format(name=name, version=version)
+                    "clipper-model": "{name}-{version}-{cluster}".format(name=name, version=version, cluster=self.cluster_name)
                     },
                 "scheduling": {
                         "preemptible": False,
