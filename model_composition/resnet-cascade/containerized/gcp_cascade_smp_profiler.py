@@ -414,9 +414,9 @@ if __name__ == "__main__":
     #             fname = "results-{gpu}-{num_cpus}-{batch}".format(gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
     #             driver_utils.save_results([config,], cl, all_stats, "pytorch_res152_smp_gcp_queue_convergence", prefix=fname)
 
-    for gpu_type in ["p100", "k80"]:
-        for num_cpus in [2, 1]:
-            for batch_size in [1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64]:
+    for num_cpus in [2, 1]:
+        for gpu_type in ["p100", "k80"]:
+            for batch_size in [2, 4, 8, 12, 16, 20, 24, 32, 48, 64]:
                 if gpu_type == "k80" and batch_size > 32:
                     continue
                 config = setup_alexnet(batch_size, 1, num_cpus, gpu_type)
