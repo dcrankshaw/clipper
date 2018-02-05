@@ -390,7 +390,7 @@ class ModelBenchmarker(object):
         self.find_steady_state()
         return
 
-         # start with an overly aggressive request rate
+    # start with an overly aggressive request rate
     # then back off
     def initialize_request_rate(self):
         # initialize delay to be very small
