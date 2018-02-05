@@ -361,17 +361,7 @@ class DriverBenchmarker(object):
         time.sleep(10)
         logger.info("Queue is drained")
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        self.active = False
-        while not self.active:
-            logger.info("Trying to connect to Clipper")
-            def callback(output):
-                if output == DEFAULT_OUTPUT:
-                    return
-                else:
-                    logger.info("Succesful query issued")
-                    self.active = True
-            predictor.client.send_request(self.config.name, self.inputs[0]).then(callback)
-            time.sleep(1)
+        time.sleep(10)
 
         idx = 0
         done = False
@@ -444,14 +434,14 @@ if __name__ == "__main__":
     queue = Queue()
 
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
-    reps = [(1, 1, 1, 1),
-            (1, 1, 2, 1),
-            (2, 1, 2, 1),
-            (2, 1, 3, 1),
-            (2, 1, 4, 1),
-            (2, 1, 4, 2),
-            (3, 1, 4, 2),
-            (3, 1, 5, 2)]
+    reps = [(1, 1, 1, 1)]
+            # (1, 1, 2, 1),
+            # (2, 1, 2, 1),
+            # (2, 1, 3, 1),
+            # (2, 1, 4, 1),
+            # (2, 1, 4, 2),
+            # (3, 1, 4, 2),
+            # (3, 1, 5, 2)]
 
 
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
