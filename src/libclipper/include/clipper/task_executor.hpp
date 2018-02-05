@@ -35,7 +35,7 @@ class ModelMetrics {
             "model:" + model.serialize() + ":prediction_latency",
             "microseconds", 4096)),
         latency_list_(metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
-            "model:" + model.serialize() + ":prediction_latencies_list"
+            "model:" + model.serialize() + ":prediction_latencies_list", "microseconds"
         )),
         throughput_(metrics::MetricsRegistry::get_metrics().create_meter(
             "model:" + model.serialize() + ":prediction_throughput")),
