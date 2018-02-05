@@ -64,7 +64,7 @@ class DataList : public Metric {
   DataList &operator=(DataList &&other) = delete;
 
   void insert(T item) {
-    std::lock_guard<std::mutex>(mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
     items_.push_back(item);
   }
 
@@ -77,7 +77,7 @@ class DataList : public Metric {
   }
 
   const boost::property_tree::ptree report_tree() override {
-    std::lock_guard<std::mutex>(mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
     boost::property_tree::ptree report_tree;
     boost::property_tree::ptree data_array;
     for(auto &item : items_) {
@@ -98,7 +98,7 @@ class DataList : public Metric {
   }
 
   void clear() override {
-    std::lock_guard<std::mutex>(mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
     items_.clear();
   }
 
