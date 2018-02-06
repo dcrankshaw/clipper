@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu
+FROM tensorflow/tensorflow:1.6.0-rc0-gpu
 
 RUN mkdir -p /model \
     && apt-get update \
