@@ -13,8 +13,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Build RPC base images for python/anaconda and deep learning
 # models
 cd $DIR/../../../container_utils/
-#time docker build -t model-comp/py-rpc -f RpcDockerfile ./
-#time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
+time docker build -t model-comp/py-rpc -f RpcDockerfile ./
+time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
 time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
