@@ -378,7 +378,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 1
                 convergence_state = driver_utils.check_convergence_via_queue(
-                    predictor.stats, [self.config,], self.latency_upper_bound)
+                    predictor.stats, self.configs, self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
