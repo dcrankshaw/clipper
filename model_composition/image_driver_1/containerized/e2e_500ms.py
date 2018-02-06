@@ -303,8 +303,9 @@ class DriverBenchmarker(object):
         # First warm up the model.
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
-        # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 27:
+        # well for PyTorch resnet, but we don't need as many warmup
+        # iterations for the JIT-free models in this pipeline
+        while len(predictor.stats["thrus"]) < 8:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
             idx += 1

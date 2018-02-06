@@ -303,8 +303,9 @@ class DriverBenchmarker(object):
         # First warm up the model.
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
-        # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 27:
+        # well for PyTorch resnet, but we don't need as many warmup
+        # iterations for the JIT-free models in this pipeline
+        while len(predictor.stats["thrus"]) < 8:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
             idx += 1
@@ -361,17 +362,7 @@ class DriverBenchmarker(object):
         time.sleep(10)
         logger.info("Queue is drained")
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        self.active = False
-        while not self.active:
-            logger.info("Trying to connect to Clipper")
-            def callback(output):
-                if output == DEFAULT_OUTPUT:
-                    return
-                else:
-                    logger.info("Succesful query issued")
-                    self.active = True
-            predictor.client.send_request(self.config.name, self.inputs[0]).then(callback)
-            time.sleep(1)
+        time.sleep(10)
 
         idx = 0
         done = False
@@ -388,7 +379,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 1
                 convergence_state = driver_utils.check_convergence_via_queue(
-                    predictor.stats, [self.config,], self.latency_upper_bound)
+                    predictor.stats, self.configs, self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
