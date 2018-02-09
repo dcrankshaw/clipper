@@ -291,55 +291,39 @@ class DriverBenchmarker(object):
         self.ID1_inputs = generate_ID1_inputs(40000)
         self.latency_upper_bound = latency_upper_bound
         self.predictor = None
+        self.iteration = 0
 
     def generate_ID1_inputs(size):
         resnet_input = (np.random.rand(size, 224, 224, 3) * 255).astype(np.float32).reshape(size, -1)
         inception_input = (np.random.rand(size, 299, 299, 3) * 255).astype(np.float32).reshape(size, -1)
         return zip(resnet_input, inception_input)
 
-    # new process
-    def run(self):
-        self.clipper_address = setup_clipper(self.configs)
-        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-        self.cl.connect()
-        time.sleep(30)
-        logger.info("Waited 30 seconds to connect to clipper")
-        self.delay = 0.001
-        self.queries_per_sleep = 1
-        warm_up_system()
-        drain_and_reset_system()
-        if self.input_delay != None:
-            logger.info("Input delay is "+str(self.input_delay))
-            self.delay = self.input_delay
-            if self.delay < 0.01:
-                self.queries_per_sleep = 2
-            else:
-                self.queries_per_sleep = 1
-        else:
-            logger.info("Initializing request rate...")
-            # initialize delay to be very small
-            self.initialize_request_rate()
-            self.find_steady_state()
-            logger.info("Found steady state...")
-            drain_and_reset_system()
-        
-        final_stats = self.run_more_predictions()
-        self.queue.put(final_stats)
-        return
+    #### Mini-interface for using the Predictor in a decoupled way, just call these methods when needed ####
+    def init_predictor(self):
+        if self.predictor != None:
+            raise Exception("Tried to intialize predictor twice")
+        self.predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
 
-    def init_request_rate():
+    def run_predictor(self):
+        resnet_input, inception_input = self.inputs[idx]
+        self.predictor.predict(resnet_input, inception_input)
+        self.iteration+=1
+        if self.iteration % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+        self.iteration = self.iteration % len(self.inputs)
 
-
-    def drain_and_reset_system():
+    def reset_predictor(self):
         logger.log("Draining and resetting system...")
         self.cl.drain_queues()
         self.predictor.client.stop()
         del self.predictor
         self.predictor = None
+        time.sleep(10)
+    ########################################################################################################
 
-    def warm_up_system():
+    def warm_up_system(self):
         logger.info("Warming up system...")
-        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
+        init_predictor()
         idx = 0
         # First warm up the model.
         # NOTE: The length of time the model needs to warm up for
@@ -347,76 +331,32 @@ class DriverBenchmarker(object):
         # well for PyTorch resnet, but we don't need as many warmup
         # iterations for the JIT-free models in this pipeline
         while len(predictor.stats["thrus"]) < 8:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
-        # Now let the queue drain
-        logger.info("Draining queue from warmup...")
-        self.cl.drain_queues()
-        predictor.client.stop()
-        logger.info("ZMQ client stopped...")
-        del predictor
-        time.sleep(10)
+            run_predictor()
+        reset_predictor()
 
-    def run_more_predictions(self):
-        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        idx = 0
-        while len(predictor.stats["thrus"]) < 1:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
-            predictor.predict(resnet_input, inception_input)
-        predictor.client.stop()
-        del predictor
-        for i in xrange(2100):
-            if ((i+1) % 100) == 0:
-                logger.info("Iteration "+str(i)+"...")
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
-        time.sleep(10)
-        return predictor.stats
+    # reduces the number of sleep calls, slightly batches results in two's though
+    def scale_delay():
+        if self.delay < 0.01:
+            self.queries_per_sleep = 2
+            self.delay = self.delay*2.0 - 0.001
 
     # start with an overly aggressive request rate
     # then back off
     def initialize_request_rate(self):
-        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        # while predictor.stats["mean_queue_sizes"][-1] > 0:
-        #     sleep_time_secs = 5
-        #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
-        #         q_len=predictor.stats["mean_queue_sizes"][-1],
-        #         sleep=sleep_time_secs))
-        #     time.sleep(sleep_time_secs)
-
-        # Now initialize request rate
+        init_predictor()
         while len(predictor.stats["thrus"]) < 10:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
-
+            run_predictor()
+        # Now initialize request rate
         max_thruput = np.mean(predictor.stats["thrus"][1:])
         self.delay = 1.0 / max_thruput
-        if self.delay < 0.01:
-            self.queries_per_sleep = 2
-            self.delay = self.delay*2.0 - 0.001
-        logger.info("Initializing delay to {}".format(self.delay))
-        predictor.client.stop()
-        logger.info("ZMQ client stopped")
-        del predictor
+        reset_predictor()
 
-    def increase_delay(self, multiple=1.0):
+    def find_steady_state(self):
+
+        init_predictor()
+        time.sleep(10) # just to be extra sure I guess
+
+        def increase_delay(self, multiple=1.0):
         if self.delay < 0.01:
             self.delay += 0.00005*multiple
         elif self.delay < 0.02:
@@ -424,26 +364,12 @@ class DriverBenchmarker(object):
         else:
             self.delay += 0.001*multiple
 
-    def find_steady_state(self):
-        # self.cl.cm.reset()
-        self.cl.drain_queues()
-        time.sleep(10)
-        logger.info("Queue is drained")
-        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        time.sleep(10)
-
         idx = 0
         done = False
         # start checking for steady state after 10 trials
         last_checked_length = 10
         while not done:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx += 1
-            idx = idx % len(self.inputs)
-
+            run_predictor()
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 1
                 convergence_state = driver_utils.check_convergence_via_queue(
@@ -483,3 +409,56 @@ class DriverBenchmarker(object):
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
+
+    def run_more_predictions(self):
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
+        idx = 0
+        while len(predictor.stats["thrus"]) < 1:
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+            predictor.predict(resnet_input, inception_input)
+        predictor.client.stop()
+        del predictor
+        for i in xrange(2100):
+            if ((i+1) % 100) == 0:
+                logger.info("Iteration "+str(i)+"...")
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+        time.sleep(10)
+        return predictor.stats
+
+    # new process
+    def run(self):
+        # initialize delay to be very small
+        self.delay = 0.001
+        self.queries_per_sleep = 1
+        self.clipper_address = setup_clipper(self.configs)
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        self.cl.connect()
+        time.sleep(30)
+        logger.info("Waited 30 seconds to connect to clipper")
+        self.warm_up_system()
+        if self.input_delay != None:
+            self.delay = self.input_delay
+            scale_delay()
+        else:
+            logger.info("Initializing request rate (AKA delay)...")
+            self.initialize_request_rate()
+            self.scale_delay()
+            logger.info("Initializing delay and queries_per_sleep to {delay} and {queries}".format(delay=self.delay,
+                                                                           queries=self.queries_per_sleep))
+            self.find_steady_state()
+            logger.info("Found steady state...")
+        logger.info("Final delay used: {delay}, queries_per_sleep: {queries}".format(delay=self.delay,
+                                                                           queries=self.queries_per_sleep))
+        final_stats = self.run_more_predictions()
+        self.queue.put(final_stats)
+        return
