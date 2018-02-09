@@ -63,6 +63,7 @@ class Client:
             self.send_thread.join()
 
     def send_request(self, app_name, input_item):
+        # right here
         self.request_lock.acquire()
         future = Future()
         self.outstanding_requests[self.request_id] = future
@@ -154,6 +155,7 @@ class Client:
                     corresponding to python data type: {}".format(input_type))
                 continue
 
+            # right here
             socket.send("", zmq.SNDMORE)
             socket.send(struct.pack("<I", self.client_id), zmq.SNDMORE)
             socket.send(struct.pack("<I", request_id), zmq.SNDMORE)
