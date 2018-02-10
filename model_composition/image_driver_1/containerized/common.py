@@ -210,10 +210,6 @@ class Predictor(object):
                                                                            mean=mean,
                                                                            thru=thru))
 
-    def flush_stats():
-
-    def run_predict(self, input):
-
 
     def ID1_predict(self, resnet_input, inception_input):
         begin_time = datetime.now()
@@ -288,14 +284,22 @@ class DriverBenchmarker(object):
         self.max_batch_size = np.max([config.batch_size for config in configs])
         self.queue = queue
         logger.info("Generating random inputs")
-        self.ID1_inputs = generate_ID1_inputs(40000)
+        self.ID1_inputs = self.generate_ID1_inputs(1)
         self.latency_upper_bound = latency_upper_bound
         self.predictor = None
         self.iteration = 0
+        self.total_iterations = 0
 
-    def generate_ID1_inputs(size):
-        resnet_input = (np.random.rand(size, 224, 224, 3) * 255).astype(np.float32).reshape(size, -1)
-        inception_input = (np.random.rand(size, 299, 299, 3) * 255).astype(np.float32).reshape(size, -1)
+    def generate_ID1_inputs(self, size):
+        def circular_repeat(base,num):
+            base_size = base.shape[0]
+            quotient = num // base_size
+            remainder = num % base_size
+            return np.concatenate([np.tile(base, (quotient,1)), base[:remainder]], axis=0)
+        resnet_base = (np.random.rand(1000, 224, 224, 3) * 255).astype(np.float32).reshape(1000, -1)
+        resnet_input = circular_repeat(resnet_base, size)
+        inception_base = (np.random.rand(1000, 299, 299, 3) * 255).astype(np.float32).reshape(1000, -1)
+        inception_input = circular_repeat(inception_base, size)
         return zip(resnet_input, inception_input)
 
     #### Mini-interface for using the Predictor in a decoupled way, just call these methods when needed ####
@@ -305,37 +309,42 @@ class DriverBenchmarker(object):
         self.predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
 
     def run_predictor(self):
-        resnet_input, inception_input = self.inputs[idx]
-        self.predictor.predict(resnet_input, inception_input)
+        resnet_input, inception_input = self.ID1_inputs[self.iteration]
+        self.predictor.ID1_predict(resnet_input, inception_input)
         self.iteration+=1
+        self.total_iterations+=1
         if self.iteration % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
-        self.iteration = self.iteration % len(self.inputs)
+        self.iteration = self.iteration % len(self.ID1_inputs)
+        if self.total_iterations%1000 == 0:
+            logger.info("Sent for a total of {} predictions".format(self.total_iterations))
 
-    def reset_predictor(self):
-        logger.log("Draining and resetting system...")
+    def reset_predictor(self, wait = True):
+        logger.info("Draining and resetting system...")
         self.cl.drain_queues()
         self.predictor.client.stop()
         del self.predictor
         self.predictor = None
-        time.sleep(10)
+        if wait:
+            time.sleep(10)
     ########################################################################################################
 
     def warm_up_system(self):
         logger.info("Warming up system...")
-        init_predictor()
+        self.init_predictor()
         idx = 0
         # First warm up the model.
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet, but we don't need as many warmup
         # iterations for the JIT-free models in this pipeline
-        while len(predictor.stats["thrus"]) < 8:
-            run_predictor()
-        reset_predictor()
+
+        while len(self.predictor.stats["thrus"]) < 8:
+            self.run_predictor()
+        self.reset_predictor()
 
     # reduces the number of sleep calls, slightly batches results in two's though
-    def scale_delay():
+    def scale_delay(self):
         if self.delay < 0.01:
             self.queries_per_sleep = 2
             self.delay = self.delay*2.0 - 0.001
@@ -343,58 +352,55 @@ class DriverBenchmarker(object):
     # start with an overly aggressive request rate
     # then back off
     def initialize_request_rate(self):
-        init_predictor()
-        while len(predictor.stats["thrus"]) < 10:
-            run_predictor()
+        self.init_predictor()
+        while len(self.predictor.stats["thrus"]) < 10:
+            self.run_predictor()
         # Now initialize request rate
-        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        max_thruput = np.mean(self.predictor.stats["thrus"][1:])
         self.delay = 1.0 / max_thruput
-        reset_predictor()
+        self.reset_predictor()
 
     def find_steady_state(self):
 
-        init_predictor()
+        self.init_predictor()
         time.sleep(10) # just to be extra sure I guess
 
         def increase_delay(self, multiple=1.0):
-        if self.delay < 0.01:
-            self.delay += 0.00005*multiple
-        elif self.delay < 0.02:
-            self.delay += 0.0002*multiple
-        else:
-            self.delay += 0.001*multiple
+            if self.delay < 0.01:
+                self.delay += 0.00005*multiple
+            elif self.delay < 0.02:
+                self.delay += 0.0002*multiple
+            else:
+                self.delay += 0.001*multiple
 
         idx = 0
         done = False
         # start checking for steady state after 10 trials
         last_checked_length = 10
         while not done:
-            run_predictor()
-            if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 1
+            self.run_predictor()
+            if len(self.predictor.stats["thrus"]) > last_checked_length:
+                last_checked_length = len(self.predictor.stats["thrus"]) + 1
                 convergence_state = driver_utils.check_convergence_via_queue(
-                    predictor.stats, self.configs, self.latency_upper_bound)
+                    self.predictor.stats, self.configs, self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
-                    predictor.client.stop()
-                    del predictor
+                    self.reset_predictor(wait=False)
                     return self.find_steady_state()
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
-                    predictor.client.stop()
-                    del predictor
+                    self.reset_predictor()
                     return
-                elif len(predictor.stats) > 40:
+                elif len(self.predictor.stats) > 40:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
-                    predictor.client.stop()
-                    del predictor
+                    self.reset_predictor(wait=False)
                     return self.find_steady_state()
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
@@ -403,37 +409,20 @@ class DriverBenchmarker(object):
                     logger.info("Consider re-running with smaller request delay augmentations")
                     raise Exception("LOW_CONVERGE, Consider re-running with smaller request delay augmentations")
                     done = True
-                    predictor.client.stop()
-                    del predictor
+                    self.reset_predictor(wait=False)
                     return
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
 
     def run_more_predictions(self):
-        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
-        idx = 0
-        while len(predictor.stats["thrus"]) < 1:
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
-            predictor.predict(resnet_input, inception_input)
-        predictor.client.stop()
-        del predictor
-        for i in xrange(2100):
+        self.init_predictor()
+        for i in xrange(10000):
             if ((i+1) % 100) == 0:
                 logger.info("Iteration "+str(i)+"...")
-            resnet_input, inception_input = self.inputs[idx]
-            predictor.predict(resnet_input, inception_input)
-            idx += 1
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
-            idx = idx % len(self.inputs)
+            self.run_predictor()
         time.sleep(10)
-        return predictor.stats
+        return self.predictor.stats
 
     # new process
     def run(self):
@@ -443,12 +432,15 @@ class DriverBenchmarker(object):
         self.clipper_address = setup_clipper(self.configs)
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
-        time.sleep(30)
+        # The observed amount of time needed to wait until the TF graphs are loaded on the GPU
+        # This is time where progress isn't happening anyway, and we want to avoid making excessive prediction calls to clipper
+        # and flood the frontend queue before the models are set up.
+        time.sleep(230)
         logger.info("Waited 30 seconds to connect to clipper")
         self.warm_up_system()
         if self.input_delay != None:
             self.delay = self.input_delay
-            scale_delay()
+            self.scale_delay()
         else:
             logger.info("Initializing request rate (AKA delay)...")
             self.initialize_request_rate()
