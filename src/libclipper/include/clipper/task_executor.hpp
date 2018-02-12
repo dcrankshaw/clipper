@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <tuple>
 
 #include <boost/optional.hpp>
 
@@ -133,6 +134,9 @@ class ModelQueue {
         queue_arrivals_list_(
             metrics::MetricsRegistry::get_metrics()
                 .create_data_list<long long>(name + ":queue_arrivals", "timestamp")),
+        queue_size_timed_list_(
+            metrics::MetricsRegistry::get_metrics()
+                .create_data_list<std::pair<long long, size_t>>(name + ":queue_sizes_timed", "(timestamp, queue size)")),
         system_start_(std::chrono::system_clock::now()) {}
 
   // Disallow copy and assign
@@ -166,8 +170,8 @@ class ModelQueue {
     auto time_since_start = curr_time - system_start_;
     long long curr_time_micros = std::chrono::duration_cast<std::chrono::microseconds>(time_since_start).count();
     queue_arrivals_list_->insert(curr_time_micros);
-
     queue_size_list_->insert(queue_.size());
+    queue_size_timed_list_->insert(std::make_pair(curr_time_micros,queue_.size()));
     queue_not_empty_condition_.notify_one();
   }
 
@@ -189,6 +193,10 @@ class ModelQueue {
     }
     queue_size_hist_->insert(static_cast<int64_t>(queue_.size()));
     queue_size_list_->insert(queue_.size());
+    auto curr_time = std::chrono::system_clock::now();
+    auto time_since_start = curr_time - system_start_;
+    long long curr_time_micros = std::chrono::duration_cast<std::chrono::microseconds>(time_since_start).count();
+    queue_size_timed_list_->insert(std::make_pair(curr_time_micros,queue_.size()));
     return batch;
   }
 
@@ -211,6 +219,7 @@ class ModelQueue {
   std::shared_ptr<metrics::Histogram> queue_size_hist_;
   std::shared_ptr<metrics::DataList<size_t>> queue_size_list_;
   std::shared_ptr<metrics::DataList<long long>> queue_arrivals_list_;
+  std::shared_ptr<metrics::DataList<std::pair<long long, size_t>>> queue_size_timed_list_;
   std::chrono::time_point<std::chrono::system_clock> system_start_;
 
   // Deletes tasks with deadlines prior or equivalent to the
