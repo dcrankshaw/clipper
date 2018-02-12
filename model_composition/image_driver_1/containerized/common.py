@@ -284,7 +284,7 @@ class DriverBenchmarker(object):
         self.max_batch_size = np.max([config.batch_size for config in configs])
         self.queue = queue
         logger.info("Generating random inputs")
-        self.ID1_inputs = self.generate_ID1_inputs(1)
+        self.ID1_inputs = self.generate_ID1_inputs(1000)
         self.latency_upper_bound = latency_upper_bound
         self.predictor = None
         self.iteration = 0
@@ -417,7 +417,7 @@ class DriverBenchmarker(object):
 
     def run_more_predictions(self):
         self.init_predictor()
-        for i in xrange(10000):
+        for i in xrange(20000):
             if ((i+1) % 100) == 0:
                 logger.info("Iteration "+str(i)+"...")
             self.run_predictor()
