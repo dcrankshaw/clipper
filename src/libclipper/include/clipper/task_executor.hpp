@@ -133,7 +133,7 @@ class ModelQueue {
                 .create_data_list<size_t>(name + ":queue_sizes", "queue size")),
         queue_arrivals_list_(
             metrics::MetricsRegistry::get_metrics()
-                .create_data_list<long long>(name + ":queue_arrivals", "timestamp")),
+                .create_data_list<long long>(name + ":queue_arrivals", "timestamp")) {}
 
   // Disallow copy and assign
   ModelQueue(const ModelQueue &) = delete;
@@ -166,7 +166,6 @@ class ModelQueue {
     queue_arrivals_list_->insert(curr_system_time);
 
     queue_size_list_->insert(queue_.size());
-    queue_size_timed_list_->insert(std::make_pair(curr_time_micros,queue_.size()));
     queue_not_empty_condition_.notify_one();
   }
 
@@ -188,10 +187,6 @@ class ModelQueue {
     }
     queue_size_hist_->insert(static_cast<int64_t>(queue_.size()));
     queue_size_list_->insert(queue_.size());
-    auto curr_time = std::chrono::system_clock::now();
-    auto time_since_start = curr_time - system_start_;
-    long long curr_time_micros = std::chrono::duration_cast<std::chrono::microseconds>(time_since_start).count();
-    queue_size_timed_list_->insert(std::make_pair(curr_time_micros,queue_.size()));
     return batch;
   }
 
