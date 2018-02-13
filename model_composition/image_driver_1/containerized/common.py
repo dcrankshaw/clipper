@@ -210,6 +210,25 @@ class Predictor(object):
                                                                            mean=mean,
                                                                            thru=thru))
 
+    def update_perf_stats(begin_time):
+        end_time = datetime.now()
+        latency = (end_time - begin_time).total_seconds()
+        self.latencies.append(latency)
+        self.trial_num_complete += 1
+
+        trial_length = max(300, 10 * self.batch_size)
+        if self.trial_num_complete % trial_length == 0:
+            self.print_stats()
+            self.init_stats()
+
+    def single_model_predict(self, model_app_name, input_item):
+        begin_time = datetime.now()
+        def continuation(output):
+            if output == DEFAULT_OUTPUT:
+                return
+            update_perf_stats(begin_time)
+
+        return self.client.send_request(model_app_name, input_item).then(continuation)
 
     def ID1_predict(self, resnet_input, inception_input):
         begin_time = datetime.now()
@@ -229,7 +248,7 @@ class Predictor(object):
                 if TF_LOG_REG_MODEL_APP_NAME not in classifications:
                     classifications[TF_KERNEL_SVM_MODEL_APP_NAME] = svm_classification
                 else:
-                    update_perf_stats()
+                    update_perf_stats(begin_time)
                 classifications_lock.release()
 
         def inception_feats_continuation(inception_features):
@@ -246,19 +265,8 @@ class Predictor(object):
                 if TF_KERNEL_SVM_MODEL_APP_NAME not in classifications:
                     classifications[TF_LOG_REG_MODEL_APP_NAME] = log_reg_vals
                 else:
-                    update_perf_stats()
+                    update_perf_stats(begin_time)
                 classifications_lock.release()
-
-        def update_perf_stats():
-            end_time = datetime.now()
-            latency = (end_time - begin_time).total_seconds()
-            self.latencies.append(latency)
-            self.trial_num_complete += 1
-
-            trial_length = max(300, 10 * self.batch_size)
-            if self.trial_num_complete % trial_length == 0:
-                self.print_stats()
-                self.init_stats()
 
         def try_catch(fun):
             def try_fun(x):
@@ -417,7 +425,7 @@ class DriverBenchmarker(object):
 
     def run_more_predictions(self):
         self.init_predictor()
-        for i in xrange(20000):
+        for i in xrange(40000):
             if ((i+1) % 100) == 0:
                 logger.info("Iteration "+str(i)+"...")
             self.run_predictor()
