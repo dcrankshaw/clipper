@@ -210,7 +210,7 @@ class Predictor(object):
                                                                            mean=mean,
                                                                            thru=thru))
 
-    def update_perf_stats(begin_time):
+    def update_perf_stats(self, begin_time):
         end_time = datetime.now()
         latency = (end_time - begin_time).total_seconds()
         self.latencies.append(latency)
@@ -226,7 +226,7 @@ class Predictor(object):
         def continuation(output):
             if output == DEFAULT_OUTPUT:
                 return
-            update_perf_stats(begin_time)
+            self.update_perf_stats(begin_time)
 
         return self.client.send_request(model_app_name, input_item).then(continuation)
 
@@ -248,7 +248,7 @@ class Predictor(object):
                 if TF_LOG_REG_MODEL_APP_NAME not in classifications:
                     classifications[TF_KERNEL_SVM_MODEL_APP_NAME] = svm_classification
                 else:
-                    update_perf_stats(begin_time)
+                    self.update_perf_stats(begin_time)
                 classifications_lock.release()
 
         def inception_feats_continuation(inception_features):
@@ -273,7 +273,8 @@ class Predictor(object):
                 try:
                     return fun(x)
                 except Exception, e:
-                    logger.error("Something bad happened!")
+                    import traceback
+                    logging.exception("Something bad happened!")
             return try_fun
 
         self.client.send_request(TF_RESNET_MODEL_APP_NAME, resnet_input) \
