@@ -30,6 +30,7 @@ INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 TF_KERNEL_SVM_MODEL_APP_NAME = "tf-kernel-svm"
 TF_LOG_REG_MODEL_APP_NAME = "tf-log-reg"
 TF_RESNET_MODEL_APP_NAME = "tf-resnet-feats"
+ID1_APP_NAME = "ID1"
 
 INCEPTION_FEATS_IMAGE_NAME = "model-comp/inception-feats"
 TF_KERNEL_SVM_IMAGE_NAME = "model-comp/tf-kernel-svm"
@@ -158,8 +159,10 @@ def get_queue_sizes(metrics_json):
 
 class Predictor(object):
 
-    def __init__(self, clipper_metrics, batch_size):
+    def __init__(self, app_name, clipper_metrics, batch_size):
         # The client through which the predictions are sent
+        self.app_name = app_name
+        self.predict = self.chosen_prediction_function(app_name)
         self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
@@ -221,16 +224,29 @@ class Predictor(object):
             self.print_stats()
             self.init_stats()
 
-    def single_model_predict(self, model_app_name, input_item):
+    def chosen_prediction_function(model_app_name):
+        if model_app_name in [VGG_FEATS_MODEL_APP_NAME,VGG_KPCA_SVM_MODEL_APP_NAME,
+                                VGG_KERNEL_SVM_MODEL_APP_NAME, VGG_ELASTIC_NET_MODEL_APP_NAME, 
+                                INCEPTION_FEATS_MODEL_APP_NAME, LGBM_MODEL_APP_NAME, 
+                                TF_KERNEL_SVM_MODEL_APP_NAME, TF_LOG_REG_MODEL_APP_NAME, 
+                                TF_RESNET_MODEL_APP_NAME, PYTORCH_RESNET_MODEL_APP_NAME]:
+            return lamda arg: self.single_model_predict
+        elif model_app_name == ID1_APP_NAME:
+            return self.ID1_predict
+        else:
+            raise Exception("Given model app name was not found")
+
+    def single_model_predict(self, input_item):
         begin_time = datetime.now()
         def continuation(output):
             if output == DEFAULT_OUTPUT:
                 return
             self.update_perf_stats(begin_time)
 
-        return self.client.send_request(model_app_name, input_item).then(continuation)
+        return self.client.send_request(self.app_name, input_item).then(continuation)
 
-    def ID1_predict(self, resnet_input, inception_input):
+    def ID1_predict(self, pipeline_input):
+        resnet_input, inception_input = pipeline_input
         begin_time = datetime.now()
         classifications_lock = Lock()
         classifications = {}
@@ -265,7 +281,7 @@ class Predictor(object):
                 if TF_KERNEL_SVM_MODEL_APP_NAME not in classifications:
                     classifications[TF_LOG_REG_MODEL_APP_NAME] = log_reg_vals
                 else:
-                    update_perf_stats(begin_time)
+                    self.update_perf_stats(begin_time)
                 classifications_lock.release()
 
         def try_catch(fun):
@@ -286,45 +302,86 @@ class Predictor(object):
             .then(try_catch(log_reg_continuation))
 
 class DriverBenchmarker(object):
-    def __init__(self, configs, queue, latency_upper_bound, input_delay=None):
+    def __init__(self, app_name, configs, queue, latency_upper_bound, input_delay=None):
         # provided delay to being with. If None attempts to converge to find a value.
         self.input_delay = input_delay
         self.configs = configs
         self.max_batch_size = np.max([config.batch_size for config in configs])
         self.queue = queue
         logger.info("Generating random inputs")
-        self.ID1_inputs = self.generate_ID1_inputs(1000)
+        self.app_name = app_name
+        self.inputs = self.generate_inputs(self._get_inputs_for_model(app_name), 1000, 1000)
         self.latency_upper_bound = latency_upper_bound
         self.predictor = None
         self.iteration = 0
         self.total_iterations = 0
 
-    def generate_ID1_inputs(self, size):
-        def circular_repeat(base,num):
-            base_size = base.shape[0]
-            quotient = num // base_size
-            remainder = num % base_size
-            return np.concatenate([np.tile(base, (quotient,1)), base[:remainder]], axis=0)
-        resnet_base = (np.random.rand(1000, 224, 224, 3) * 255).astype(np.float32).reshape(1000, -1)
-        resnet_input = circular_repeat(resnet_base, size)
-        inception_base = (np.random.rand(1000, 299, 299, 3) * 255).astype(np.float32).reshape(1000, -1)
-        inception_input = circular_repeat(inception_base, size)
-        return zip(resnet_input, inception_input)
+    def _get_vgg_feats_input(self):
+        return np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32).flatten()
+
+    def _get_vgg_classifier_input(self):
+        return np.array(np.random.rand(4096), dtype=np.float32)
+
+    def _get_inception_input(self):
+        return np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32).flatten()
+
+    def _get_lgbm_input(self):
+        return np.array(np.random.rand(2048), dtype=np.float32)
+
+    def _get_tf_kernel_svm_input(self):
+        return np.array(np.random.rand(2048), dtype=np.float32)
+
+    def _get_tf_log_reg_input(self):
+        return np.array(np.random.rand(2048), dtype=np.float32)
+
+    def _get_tf_resnet_input(self):
+        return np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32).flatten()
+
+    def _get_ID1_input(self):
+        return [self._get_tf_resnet_input(), self._get_inception_input()]
+
+    def _get_inputs_for_model(self, model_app_name):
+        if model_app_name == VGG_FEATS_MODEL_APP_NAME:
+            return _get_vgg_feats_input
+        elif model_app_name in [VGG_KPCA_SVM_MODEL_APP_NAME, VGG_KERNEL_SVM_MODEL_APP_NAME, VGG_ELASTIC_NET_MODEL_APP_NAME]:
+            return self._get_vgg_classifier_input
+        elif model_app_name == INCEPTION_FEATS_MODEL_APP_NAME:
+            return self._get_inception_input
+        elif model_app_name == LGBM_MODEL_APP_NAME:
+            return self._get_lgbm_input
+        elif model_app_name == TF_KERNEL_SVM_MODEL_APP_NAME:
+            return self._get_tf_kernel_svm_input
+        elif model_app_name == TF_LOG_REG_MODEL_APP_NAME:
+            return self._get_tf_log_reg_input
+        elif model_app_name == TF_RESNET_MODEL_APP_NAME:
+            return self._get_tf_resnet_input
+        elif model_app_name == PYTORCH_RESNET_MODEL_APP_NAME:
+            return self._get_tf_resnet_input
+        elif model_app_name == ID1_APP_NAME:
+            return self._get_ID1_input
+        else:
+            raise Exception("Given model app name was not found")
+
+    def generate_inputs(seed_fun, base, size):
+        input_base = np.asarray([self.seed_fun() for _ in range(base)])
+        base_size = input_base.shape[0]
+        quotient = num // base_size
+        remainder = num % base_size
+        return np.concatenate([np.tile(input_base, (quotient,1)), input_base[:remainder]], axis=0)
 
     #### Mini-interface for using the Predictor in a decoupled way, just call these methods when needed ####
     def init_predictor(self):
         if self.predictor != None:
             raise Exception("Tried to intialize predictor twice")
-        self.predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
+        self.predictor = Predictor(self.app_name, clipper_metrics=True, batch_size=self.max_batch_size)
 
     def run_predictor(self):
-        resnet_input, inception_input = self.ID1_inputs[self.iteration]
-        self.predictor.ID1_predict(resnet_input, inception_input)
+        self.predictor.predict(self.inputs[self.iteration])
         self.iteration+=1
         self.total_iterations+=1
         if self.iteration % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
-        self.iteration = self.iteration % len(self.ID1_inputs)
+        self.iteration = self.iteration % len(self.inputs)
         if self.total_iterations%1000 == 0:
             logger.info("Sent for a total of {} predictions".format(self.total_iterations))
 
@@ -426,7 +483,7 @@ class DriverBenchmarker(object):
 
     def run_more_predictions(self):
         self.init_predictor()
-        for i in xrange(40000):
+        for i in xrange(20000):
             if ((i+1) % 100) == 0:
                 logger.info("Iteration "+str(i)+"...")
             self.run_predictor()
