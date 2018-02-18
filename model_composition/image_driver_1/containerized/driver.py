@@ -288,7 +288,7 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
     parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
     parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
-    parser.add_argument('-d', '--input_delay', type=int, default=None, help="Give a prespecified input delay instead of running convergence")
+    parser.add_argument('-d', '--input_delay', type=float, default=None, help="Give a prespecified input delay instead of running convergence")
 
     args = parser.parse_args()
 
@@ -317,12 +317,13 @@ if __name__ == "__main__":
                 latency_upper_bound = 1.2
 
                 queue = Queue()
-                benchmarker = ModelBenchmarker(args.model_name, [model_config], queue, latency_upper_bound, input_delay=input_delay)
+                benchmarker = DriverBenchmarker(args.model_name, [model_config], queue, latency_upper_bound, input_delay=args.input_delay)
 
                 processes = []
                 all_stats = []
+                assert args.num_clients == 1
                 for client_num in range(args.num_clients):
-                    p = Process(target=benchmarker.run, args=(client_num,))
+                    p = Process(target=benchmarker.run)
                     p.start()
                     processes.append(p)
                 for p in processes:

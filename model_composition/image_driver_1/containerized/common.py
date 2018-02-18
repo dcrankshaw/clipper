@@ -26,6 +26,13 @@ logger = logging.getLogger(__name__)
 
 # Models and applications for each heavy node
 # will share the same name
+VGG_FEATS_MODEL_APP_NAME = "vgg"
+VGG_KPCA_SVM_MODEL_APP_NAME = "kpca-svm"
+VGG_KERNEL_SVM_MODEL_APP_NAME = "kernel-svm"
+VGG_ELASTIC_NET_MODEL_APP_NAME = "elastic-net"
+LGBM_MODEL_APP_NAME = "lgbm"
+PYTORCH_RESNET_MODEL_APP_NAME = "pytorch-resnet-feats"
+
 INCEPTION_FEATS_MODEL_APP_NAME = "inception"
 TF_KERNEL_SVM_MODEL_APP_NAME = "tf-kernel-svm"
 TF_LOG_REG_MODEL_APP_NAME = "tf-log-reg"
@@ -224,13 +231,13 @@ class Predictor(object):
             self.print_stats()
             self.init_stats()
 
-    def chosen_prediction_function(model_app_name):
+    def chosen_prediction_function(self, model_app_name):
         if model_app_name in [VGG_FEATS_MODEL_APP_NAME,VGG_KPCA_SVM_MODEL_APP_NAME,
                                 VGG_KERNEL_SVM_MODEL_APP_NAME, VGG_ELASTIC_NET_MODEL_APP_NAME, 
                                 INCEPTION_FEATS_MODEL_APP_NAME, LGBM_MODEL_APP_NAME, 
                                 TF_KERNEL_SVM_MODEL_APP_NAME, TF_LOG_REG_MODEL_APP_NAME, 
                                 TF_RESNET_MODEL_APP_NAME, PYTORCH_RESNET_MODEL_APP_NAME]:
-            return lamda arg: self.single_model_predict
+            return self.single_model_predict
         elif model_app_name == ID1_APP_NAME:
             return self.ID1_predict
         else:
@@ -362,11 +369,11 @@ class DriverBenchmarker(object):
         else:
             raise Exception("Given model app name was not found")
 
-    def generate_inputs(seed_fun, base, size):
-        input_base = np.asarray([self.seed_fun() for _ in range(base)])
+    def generate_inputs(self, seed_fun, base, size):
+        input_base = np.asarray([seed_fun() for _ in range(base)])
         base_size = input_base.shape[0]
-        quotient = num // base_size
-        remainder = num % base_size
+        quotient = size // base_size
+        remainder = size % base_size
         return np.concatenate([np.tile(input_base, (quotient,1)), input_base[:remainder]], axis=0)
 
     #### Mini-interface for using the Predictor in a decoupled way, just call these methods when needed ####
@@ -431,7 +438,7 @@ class DriverBenchmarker(object):
         self.init_predictor()
         time.sleep(10) # just to be extra sure I guess
 
-        def increase_delay(self, multiple=1.0):
+        def increase_delay(multiple=1.0):
             if self.delay < 0.01:
                 self.delay += 0.00005*multiple
             elif self.delay < 0.02:
@@ -452,7 +459,7 @@ class DriverBenchmarker(object):
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
-                    self.increase_delay()
+                    increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
                     self.reset_predictor(wait=False)
@@ -463,7 +470,7 @@ class DriverBenchmarker(object):
                     self.reset_predictor()
                     return
                 elif len(self.predictor.stats) > 40:
-                    self.increase_delay()
+                    increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
                     self.reset_predictor(wait=False)
