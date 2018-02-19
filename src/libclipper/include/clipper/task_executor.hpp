@@ -446,15 +446,19 @@ class TaskExecutor {
       // Adds a new <model_id, task_queue> entry to the queues map, if one
       // does not already exist
       boost::unique_lock<boost::shared_mutex> l(model_queues_mutex_);
-      auto queue_added = model_queues_.emplace(std::make_pair(
-          model_id, std::make_shared<ModelQueue>(model_id.serialize())));
-      bool queue_created = queue_added.second;
-      if (queue_created) {
-        boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
-        model_metrics_.insert(std::make_pair(model_id, ModelMetrics(model_id)));
-        // model_metrics_.emplace(std::piecewise_construct,
-        //                        std::forward_as_tuple(model_id),
-        //                        std::forward_as_tuple(model_id));
+      bool queue_created = false;
+      auto model_queue_entry = model_queues_.find(model_id);
+      if (model_queue_entry == model_queues_.end()) {
+        auto queue_added = model_queues_.emplace(std::make_pair(
+            model_id, std::make_shared<ModelQueue>(model_id.serialize())));
+        queue_created = queue_added.second;
+        if (!queue_created) {
+          throw std::runtime_error(
+              "TaskExecutor failed to create queue!");
+        } else {
+          boost::unique_lock<boost::shared_mutex> l(model_metrics_mutex_);
+          model_metrics_.insert(std::make_pair(model_id, ModelMetrics(model_id)));
+        }
       }
       return queue_created;
     } catch(std::exception& e) {

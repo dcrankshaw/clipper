@@ -158,7 +158,7 @@ def save_results(configs, clipper_conn, client_metrics, results_dir, prefix="res
         logger.info("Saved results to {}".format(results_file))
 
 
-def check_convergence_via_queue(stats, configs, latency_upper_bound=None):
+def check_convergence_via_queue(stats, configs):
     """
     Returns
     -------
@@ -214,13 +214,12 @@ def check_convergence_via_queue(stats, configs, latency_upper_bound=None):
         return CONVERGED_LOW
 
     # Now check that none of the queues are overloaded
-
     for model_name, qs in queue_sizes.iteritems():
         mean_queue_size = np.mean(qs)
         std_queue_size = np.std(qs)
         # Check if queue behavior has stabilized
-        if (mean_queue_size < 1.8*desired_batch_sizes[model_name] and
-                std_queue_size < 0.5*desired_batch_sizes[model_name]):
+        if (mean_queue_size < 3.0*desired_batch_sizes[model_name] and
+                std_queue_size < 1.5*desired_batch_sizes[model_name]):
             continue
         else:
             lr = linregress(x=range(len(qs)), y=qs)

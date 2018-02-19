@@ -33,7 +33,7 @@ CLIPPER_RECV_PORT = 4455
 
 DEFAULT_OUTPUT = "TIMEOUT"
 
-GCP_CLUSTER_NAME = "single-model-profiles-cascade"
+GCP_CLUSTER_NAME = "e2e-cascade"
 
 
 """
@@ -95,12 +95,13 @@ def setup_res152(batch_size,
                                            no_diverge=True)
 
 
-def setup_clipper_gcp(config):
+def setup_clipper_gcp(configs):
     cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
     cl.stop_all()
     cl.start_clipper()
     time.sleep(30)
-    driver_utils.setup_heavy_node_gcp(cl, config, DEFAULT_OUTPUT)
+    for c in configs:
+        driver_utils.setup_heavy_node_gcp(cl, c, DEFAULT_OUTPUT)
     time.sleep(10)
     clipper_address = cl.cm.query_frontend_internal_ip
     logger.info("Clipper is set up on {}".format(clipper_address))
@@ -133,7 +134,7 @@ def get_queue_sizes(metrics_json):
 
 class Predictor(object):
 
-    def __init__(self, clipper_address, clipper_metrics, batch_size):
+    def __init__(self, clipper_address, clipper_metrics):
         self.outstanding_reqs = {}
         self.client = Client(clipper_address, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
@@ -142,11 +143,12 @@ class Predictor(object):
             "thrus": [],
             "p99_lats": [],
             "all_lats": [],
-            "mean_lats": []}
+            "mean_lats": [],
+            "node_thrus": {"alex": [], "res50": [], "res152": []},
+        }
         self.total_num_complete = 0
         self.cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
         self.cl.connect()
-        self.batch_size = batch_size
         self.get_clipper_metrics = clipper_metrics
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
@@ -158,6 +160,7 @@ class Predictor(object):
         self.batch_num_complete = 0
         self.cur_req_id = 0
         self.start_time = datetime.now()
+        self.node_counts = {"alex": 0, "res50": 0, "res152": 0}
 
     def print_stats(self):
         lats = np.array(self.latencies)
@@ -165,6 +168,11 @@ class Predictor(object):
         mean = np.mean(lats)
         end_time = datetime.now()
         thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
+        cur_batch_node_thrus = {}
+        for n in self.node_counts:
+            node_thru = float(self.node_counts[n]) / (end_time - self.start_time).total_seconds()
+            self.stats["node_thrus"][n].append(node_thru)
+            cur_batch_node_thrus[n] = node_thru
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
         self.stats["all_lats"].append(self.latencies)
@@ -176,54 +184,87 @@ class Predictor(object):
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["mean_queue_sizes"].append(queue_sizes)
             self.stats["all_metrics"].append(metrics)
-            logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}, queue_sizes: {queues}").format(
-                             p99=p99,
-                             mean=mean,
-                             thru=thru,
+            logger.info(("p99: {p99}, mean: {mean}, e2e thruput: {thru}, "
+                         "batch sizes: {batches}, queue sizes: {queues}, "
+                         "node thrus: {node_thrus}").format(
+                             p99=p99, mean=mean, thru=thru,
                              batches=json.dumps(
                                  batch_sizes, sort_keys=True),
                              queues=json.dumps(
-                                 queue_sizes, sort_keys=True)))
+                                 queue_sizes, sort_keys=True),
+                             node_thrus=json.dumps(
+                                 cur_batch_node_thrus, sort_keys=True)))
         else:
             logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
                                                                            mean=mean,
                                                                            thru=thru))
 
-    def predict(self, model_app_name, input_item):
+    def predict(self, input_item):
         begin_time = datetime.now()
 
-        def on_complete(output):
-            if output == DEFAULT_OUTPUT:
-                return
+        def complete():
             end_time = datetime.now()
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-
-            trial_length = max(400, 25 * self.batch_size)
-            if self.batch_num_complete % trial_length == 0:
+            if self.batch_num_complete % 700 == 0:
                 self.print_stats()
                 self.init_stats()
 
-        return self.client.send_request(model_app_name, input_item).then(on_complete)
+        def res152_cont(output):
+            try:
+                if output == DEFAULT_OUTPUT:
+                    return
+                else:
+                    self.node_counts["res152"] += 1
+                    complete()
+            except Exception as e:
+                print(e)
+
+        def res50_cont(output):
+            try:
+                if output == DEFAULT_OUTPUT:
+                    return
+                else:
+                    self.node_counts["res50"] += 1
+                    idk = np.random.random() > 0.4633
+                    # idk = True
+                    if idk:
+                        self.client.send_request(RES152, input_item).then(res152_cont)
+                    else:
+                        complete()
+            except Exception as e:
+                print(e)
+
+        def alex_cont(output):
+            try:
+                if output == DEFAULT_OUTPUT:
+                    return
+                else:
+                    self.node_counts["alex"] += 1
+                    idk = np.random.random() > 0.192
+                    # idk = True
+                    if idk:
+                        self.client.send_request(RES50, input_item).then(res50_cont)
+                    else:
+                        complete()
+            except Exception as e:
+                print(e)
+
+        return self.client.send_request(ALEXNET, input_item).then(alex_cont)
 
 
 class DriverBenchmarker(object):
-    def __init__(self, config, queue, client_num, latency_upper_bound):
-        self.config = config
-        self.max_batch_size = config.batch_size
+    def __init__(self, configs, queue, client_num, convergence_metric, latency_upper_bound=None):
+        self.configs = configs
+        self.convergence_metric = convergence_metric
+        self.latency_upper_bound = latency_upper_bound
         self.queue = queue
         assert client_num == 0
         self.client_num = client_num
         logger.info("Generating random inputs")
         self.inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
-        # self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name)
-        # base_inputs = [self.input_generator_fn() for _ in range(1000)]
-        # self.inputs = base_inputs
-        # self.inputs = [i for _ in range(5) for i in base_inputs]
-        self.latency_upper_bound = latency_upper_bound
 
     def run(self):
         self.initialize_request_rate()
@@ -236,51 +277,44 @@ class DriverBenchmarker(object):
         # initialize delay to be very small
         self.delay = 0.001
         self.queries_per_sleep = 1
-        self.clipper_address = setup_clipper_gcp(self.config)
+        self.clipper_address = setup_clipper_gcp(self.configs)
         self.cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
         self.cl.connect()
         time.sleep(30)
-        predictor = Predictor(self.clipper_address, clipper_metrics=True,
-                              batch_size=self.max_batch_size)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True)
         idx = 0
 
-        # First warm up the model.
+        # First warm up the models.
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 50:
-            predictor.predict(self.config.name, self.inputs[idx])
+        while len(predictor.stats["thrus"]) < 30:
+            predictor.predict(self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
             idx = idx % len(self.inputs)
 
         # Now let the queue drain
-        logger.info("Draining queue")
+        logger.info("Draining queues")
 
         self.cl.drain_queues()
         predictor.client.stop()
         logger.info("ZMQ client stopped")
         del predictor
         time.sleep(10)
-        predictor = Predictor(self.clipper_address, clipper_metrics=True,
-                              batch_size=self.max_batch_size)
-        # while predictor.stats["mean_queue_sizes"][-1] > 0:
-        #     sleep_time_secs = 5
-        #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
-        #         q_len=predictor.stats["mean_queue_sizes"][-1],
-        #         sleep=sleep_time_secs))
-        #     time.sleep(sleep_time_secs)
+        self.cl.drain_queues()
+        predictor = Predictor(self.clipper_address, clipper_metrics=True)
 
         # Now initialize request rate
-        while len(predictor.stats["thrus"]) < 15:
-            predictor.predict(self.config.name, self.inputs[idx])
+        while len(predictor.stats["thrus"]) < 12:
+            predictor.predict(self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
             idx = idx % len(self.inputs)
 
-        max_thruput = np.mean(predictor.stats["thrus"][1:])
+        max_thruput = np.mean(predictor.stats["thrus"][2:])
         self.delay = 1.0 / max_thruput
         # if self.delay < 0.01:
         #     self.queries_per_sleep = 2
@@ -305,9 +339,9 @@ class DriverBenchmarker(object):
         # self.cl.cm.reset()
         self.cl.drain_queues()
         time.sleep(10)
+        self.cl.drain_queues()
         logger.info("Queue is drained")
-        predictor = Predictor(self.clipper_address, clipper_metrics=True,
-                              batch_size=self.max_batch_size)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True)
         self.active = False
         while not self.active:
             logger.info("Trying to connect to Clipper")
@@ -318,15 +352,15 @@ class DriverBenchmarker(object):
                 else:
                     logger.info("Succesful query issued")
                     self.active = True
-            predictor.client.send_request(self.config.name, self.inputs[0]).then(callback)
+            predictor.client.send_request(RES152, self.inputs[0]).then(callback)
             time.sleep(1)
 
         idx = 0
         done = False
         # start checking for steady state after 10 trials
-        last_checked_length = 12
+        last_checked_length = 10
         while not done:
-            predictor.predict(self.config.name, self.inputs[idx])
+            predictor.predict(self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
             idx += 1
@@ -334,15 +368,26 @@ class DriverBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 1
-                convergence_state = driver_utils.check_convergence_via_queue(
-                    predictor.stats, [self.config, ])
+                if self.convergence_metric == "queue":
+                    convergence_state = driver_utils.check_convergence_via_queue(predictor.stats,
+                                                                                 self.configs)
+                elif self.convergence_metric == "latency":
+                    convergence_state = driver_utils.check_convergence(predictor.stats,
+                                                                       self.configs,
+                                                                       self.latency_upper_bound)
+                else:
+                    logger.error("{} is invalid convergence metric".format(self.convergence_metric))
+                    assert False
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    predictor.client.stop()
                     del predictor
+                    self.cl.drain_queues()
+                    time.sleep(10)
                     return self.find_steady_state()
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
@@ -353,7 +398,10 @@ class DriverBenchmarker(object):
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    predictor.client.stop()
                     del predictor
+                    self.cl.drain_queues()
+                    time.sleep(10)
                     return self.find_steady_state()
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
@@ -362,46 +410,55 @@ class DriverBenchmarker(object):
                     done = True
                     self.queue.put((self.clipper_address, predictor.stats))
                     return
-
-                    self.decrease_delay()
-                    logger.info(("Converged with too low batch sizes. "
-                                "Decreasing delay to {}").format(self.delay))
-                    done = True
-                    del predictor
-                    return self.find_steady_state()
+                    # self.decrease_delay()
+                    # logger.info(("Converged with too low batch sizes. "
+                    #              "Decreasing delay to {}").format(self.delay))
+                    # done = True
+                    # del predictor
+                    # self.cl.drain_queues()
+                    # time.sleep(10)
+                    # return self.find_steady_state()
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
 
 
 if __name__ == "__main__":
+    # cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
+    # cl.connect()
+    # cl.stop_all()
+    # sys.exit(0)
 
     queue = Queue()
+    alex_batch = 8
+    res50_batch = 4
+    res152_batch = 2
 
-    res50_trials = [
-        ("k80", 2, 8),
-        ("k80", 2, 12),
-        ("k80", 2, 24),
-        ("k80", 1, 32),
-        ("p100", 1, 1),
-        ("p100", 1, 2),
-        ("p100", 1, 12),
-        ("p100", 1, 16),
-        ("p100", 2, 1),
-        ("p100", 2, 8),
-        ("p100", 2, 16),
-        ("p100", 2, 24),
-    ]
+    latency_upper_bound = None
+    convergence_metric = "latency"
 
-    global GCP_CLUSTER_NAME
-    GCP_CLUSTER_NAME = "single-model-profiles-cascade-res50"
-    for gpu_type, num_cpus, batch_size in res50_trials:
-        config = setup_res50(batch_size, 1, num_cpus, gpu_type)
+    reps = [
+        # (1,1,1),
+        # (1,1,2),
+        (2, 2, 2),
+            ]
+
+    for alex_reps, res50_reps, res152_reps in reps:
+        configs = [
+            setup_alexnet(alex_batch, alex_reps, 1, "k80"),
+            setup_res50(res50_batch, res50_reps, 1, "p100"),
+            setup_res152(res152_batch, res152_reps, 1, "p100")
+        ]
         client_num = 0
-        benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
+        benchmarker = DriverBenchmarker(configs,
+                                        queue,
+                                        client_num,
+                                        convergence_metric,
+                                        latency_upper_bound)
 
         p = Process(target=benchmarker.run)
         p.start()
+        # benchmarker.run()
 
         all_stats = []
         clipper_address, stats = queue.get()
@@ -410,80 +467,13 @@ if __name__ == "__main__":
         cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
         cl.connect()
 
-        fname = "results-{gpu}-{num_cpus}-{batch}".format(
-            gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-        driver_utils.save_results([config, ],
+        fname = "alex_{}-r50_{}-r152_{}_{}-convergence".format(
+            alex_reps, res50_reps, res152_reps, convergence_metric)
+        driver_utils.save_results(configs,
                                   cl,
                                   all_stats,
-                                  "pytorch_res50_smp_gcp_queue_convergence_RERUNs",
+                                  "cascade_e2e-DEBUG",
                                   prefix=fname)
         cl.stop_all()
-
-    res152_trials = [
-        ("k80", 1, 1),
-        ("k80", 2, 1),
-        ("p100", 2, 1),
-        ("p100", 2, 2),
-        ("p100", 2, 12),
-        ("p100", 2, 16),
-        ("p100", 2, 24),
-        ("p100", 4, 1),
-        ("p100", 4, 2),
-        ("p100", 4, 4),
-        ("p100", 4, 8),
-        ("p100", 4, 12),
-        ("p100", 4, 16),
-        ("p100", 4, 24),
-        ("p100", 4, 32),
-    ]
-
-    GCP_CLUSTER_NAME = "single-model-profiles-cascade-res152"
-    for gpu_type, num_cpus, batch_size in res152_trials:
-        config = setup_res152(batch_size, 1, num_cpus, gpu_type)
-        client_num = 0
-        benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
-
-        p = Process(target=benchmarker.run)
-        p.start()
-
-        all_stats = []
-        clipper_address, stats = queue.get()
-        all_stats.append(stats)
-
-        cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-        cl.connect()
-
-        fname = "results-{gpu}-{num_cpus}-{batch}".format(
-            gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-        driver_utils.save_results([config, ], cl, all_stats,
-                                  "pytorch_res152_smp_gcp_queue_convergence_RERUNS", prefix=fname)
-        cl.stop_all()
-
-    GCP_CLUSTER_NAME = "single-model-profiles-cascade-alex"
-    for gpu_type in ["k80", "p100"]:
-        for num_cpus in [1, 2]:
-            for batch_size in [1, 2, 4, 8, 16, 20, 24, 32, 48]:
-                config = setup_alexnet(batch_size, 1, num_cpus, gpu_type)
-                client_num = 0
-                benchmarker = DriverBenchmarker(config, queue, client_num, 0.2*batch_size)
-
-                p = Process(target=benchmarker.run)
-                p.start()
-
-                all_stats = []
-                clipper_address, stats = queue.get()
-                all_stats.append(stats)
-
-                cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-                cl.connect()
-
-                fname = "results-{gpu}-{num_cpus}-{batch}".format(
-                    gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
-                driver_utils.save_results([config, ],
-                                          cl,
-                                          all_stats,
-                                          "pytorch_alexnet_smp_gcp_queue_convergence_RERUNS",
-                                          prefix=fname)
-                cl.stop_all()
 
     sys.exit(0)
