@@ -139,67 +139,74 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     handle_start_times = []
 
     last_loop_start = datetime.now()
+    loop_dur_file = "/logs/loop_duration.log"
+    handle_dur_file = "/logs/handle_duration.log"
+    with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+        while True:
+            cur_loop_start = datetime.now()
+            loop_duration = (cur_loop_start - last_loop_start).microseconds
+            loop_times.append(loop_duration)
+            ld.write("{}\n".format(loop_duration))
+            last_loop_start = cur_loop_start
 
-    while True:
-        cur_loop_start = datetime.now()
-        loop_duration = (cur_loop_start - last_loop_start).microseconds
-        loop_times.append(loop_duration)
-        last_loop_start = cur_loop_start
+            t1 = datetime.now()
+            prediction_request = request_queue.get(block=True)
+            t2 = datetime.now()
+            queue_get_times.append((t2 - t1).microseconds)
 
-        t1 = datetime.now()
-        prediction_request = request_queue.get(block=True)
-        t2 = datetime.now()
-        queue_get_times.append((t2 - t1).microseconds)
+            handle_start_times.append(time.time()*1000)
+            outputs = predict_fn(prediction_request.inputs)
+            t3 = datetime.now()
+            handle_times.append((t3 - t2).microseconds)
+            hd.write("{}\n".format((t3 - t2).microseconds))
+            # Type check the outputs:
+            if not type(outputs) == list:
+                raise PredictionError("Model did not return a list")
+            if len(outputs) != len(prediction_request.inputs):
+                raise PredictionError(
+                    "Expected model to return %d outputs, found %d outputs" %
+                    (len(prediction_request.inputs), len(outputs)))
 
-        handle_start_times.append(time.time()*1000)
-        outputs = predict_fn(prediction_request.inputs)
-        t3 = datetime.now()
-        handle_times.append((t3 - t2).microseconds)
-        # Type check the outputs:
-        if not type(outputs) == list:
-            raise PredictionError("Model did not return a list")
-        if len(outputs) != len(prediction_request.inputs):
-            raise PredictionError(
-                "Expected model to return %d outputs, found %d outputs" %
-                (len(prediction_request.inputs), len(outputs)))
+            outputs_type = type(outputs[0])
+            if outputs_type == np.ndarray:
+                outputs_type = outputs[0].dtype
+            if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
+                raise PredictionError(
+                    "Model outputs list contains outputs of invalid type: {}!".
+                    format(outputs_type))
 
-        outputs_type = type(outputs[0])
-        if outputs_type == np.ndarray:
-            outputs_type = outputs[0].dtype
-        if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
-            raise PredictionError(
-                "Model outputs list contains outputs of invalid type: {}!".
-                format(outputs_type))
+            if outputs_type == str:
+                for i in range(0, len(outputs)):
+                    outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
+            else:
+                for i in range(0, len(outputs)):
+                    outputs[i] = outputs[i].tobytes()
 
-        if outputs_type == str:
-            for i in range(0, len(outputs)):
-                outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
-        else:
-            for i in range(0, len(outputs)):
-                outputs[i] = outputs[i].tobytes()
+            total_length_elements = sum(len(o) for o in outputs)
 
-        total_length_elements = sum(len(o) for o in outputs)
+            response = PredictionResponse(prediction_request.msg_id,
+                                          len(outputs), total_length_elements,
+                                          outputs_type)
+            for output in outputs:
+                response.add_output(output)
 
-        response = PredictionResponse(prediction_request.msg_id,
-                                        len(outputs), total_length_elements,
-                                        outputs_type)
-        for output in outputs:
-            response.add_output(output)
+            response_queue.put(response)
 
-        response_queue.put(response)
+            if len(loop_times) > 1000:
+                print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
+                print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
+                print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
+                ld.flush()
+                hd.flush()
 
-        if len(loop_times) > 100:
-            print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
-            print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
-            print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
-            loop_times = []
-            queue_get_times = []
-            handle_times = []
+                loop_times = []
+                queue_get_times = []
+                handle_times = []
 
-        # if len(handle_start_times) % 200 == 0:
-        #     print(json.dumps(handle_start_times))
-        sys.stdout.flush()
-        sys.stderr.flush()
+            # if len(handle_start_times) % 200 == 0:
+            #     print(json.dumps(handle_start_times))
+            sys.stdout.flush()
+            sys.stderr.flush()
 
 
 

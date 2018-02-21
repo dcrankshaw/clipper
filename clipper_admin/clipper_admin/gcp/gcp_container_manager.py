@@ -346,6 +346,16 @@ class GCPContainerManager(ContainerManager):
         else:
             return []
 
+    def get_container_ips(self):
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-model eq .*-{cluster}".format(
+                    cluster=self.cluster_name)).execute()
+        ips = []
+        if "items" in replicas:
+            for r in replicas["items"]:
+                ips.append(r["networkInterfaces"][0]["networkIP"])
+        return ips
+
     def get_num_replicas(self, name, version):
         return len(self._get_replicas(name, version))
 
@@ -374,6 +384,7 @@ class GCPContainerManager(ContainerManager):
                           "-e CLIPPER_MODEL_VERSION={version} "
                           "-e CLIPPER_IP={ip} "
                           "-e CLIPPER_INPUT_TYPE={input_type} "
+                          "-v /tmp:/logs "
                           "-l rep_name={rep_name} "
                           "{image}").format(
                                   docker_cmd=docker_cmd,

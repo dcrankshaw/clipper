@@ -122,7 +122,8 @@ def setup_heavy_node_gcp(clipper_conn, config, default_output="TIMEOUT"):
     clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
 
 
-def save_results(configs, client_metrics, init_metrics, results_dir, prefix="results"):
+def save_results(configs, client_metrics, init_metrics, results_dir, prefix="results",
+                 loop_durs=None, handle_durs=None):
     """
     Parameters
     ----------
@@ -151,6 +152,11 @@ def save_results(configs, client_metrics, init_metrics, results_dir, prefix="res
         "client_metrics": client_metrics,
         "init_client_metrics": init_metrics,
     }
+    if loop_durs is not None and handle_durs is not None:
+        results_obj["container_metrics"] = {
+            "loop_durs": loop_durs,
+            "handle_durs": loop_durs,
+        }
     results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
         prefix=prefix, ts=datetime.datetime.now()))
     with open(results_file, "w") as f:

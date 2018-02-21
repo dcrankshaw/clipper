@@ -6,6 +6,7 @@ import time
 # import base64
 import logging
 import json
+import paramiko
 
 from clipper_admin import ClipperConnection, GCPContainerManager
 from datetime import datetime
@@ -404,7 +405,7 @@ if __name__ == "__main__":
 
     res50_trials = [
         # ("k80", 2, 1),
-        ("k80", 2, 8),
+        # ("k80", 2, 8),
         # ("k80", 2, 12),
         # ("k80", 2, 24),
         # ("k80", 1, 32),
@@ -414,8 +415,8 @@ if __name__ == "__main__":
         # ("p100", 1, 16),
         # ("p100", 2, 1),
         ("p100", 2, 8),
-        ("p100", 2, 16),
-        ("p100", 2, 24),
+        # ("p100", 2, 16),
+        # ("p100", 2, 24),
     ]
 
     global GCP_CLUSTER_NAME
@@ -435,14 +436,36 @@ if __name__ == "__main__":
 
         cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
         cl.connect()
+        container_ips = cl.cm.get_container_ips()
+        assert len(container_ips) == 1
+        username = "crankshaw"
+        key_path = "/home/crankshaw/.ssh/gcp_all_access"
+        container_ip = container_ips[0]
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.WarningPolicy())
+        client.connect(container_ip, username=username, key_filename=key_path)
+        sftp = client.open_sftp()
+        sftp.get("/tmp/loop_duration.log", "loop_duration.log")
+        sftp.get("/tmp/handle_duration.log", "handle_duration.log")
+        loop_durs = []
+        with open("loop_duration.log", "r") as f:
+            for line in f:
+                loop_durs.append(float(line.strip()))
+        handle_durs = []
+        with open("handle_duration.log", "r") as f:
+            for line in f:
+                handle_durs.append(float(line.strip()))
 
-        fname = "results-{gpu}-{num_cpus}-{batch}".format(
+        fname = "results-{gpu}-{num_cpus}-{batch}-with-container-logs".format(
             gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
         driver_utils.save_results([config, ],
                                   all_stats,
                                   [init_stats, ],
                                   "pytorch_res50_smp_gcp_init_stats_and_steady_stats_no_convergence_check",
-                                  prefix=fname)
+                                  prefix=fname,
+                                  loop_durs=loop_durs,
+                                  handle_durs=handle_durs)
         cl.stop_all()
 
     # res152_trials = [
