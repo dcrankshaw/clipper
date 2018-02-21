@@ -10,7 +10,7 @@ unset CDPATH
 # the script.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-prefix="gcr.io/clipper-model-comp"
+gcpprefix="gcr.io/clipper-model-comp"
 tag="bench"
 
 # Build RPC base images for python/anaconda and deep learning
