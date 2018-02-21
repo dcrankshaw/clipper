@@ -10,6 +10,9 @@ unset CDPATH
 # the script.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+prefix="gcr.io/clipper-model-comp"
+tag="bench"
+
 # Build RPC base images for python/anaconda and deep learning
 # models
 cd $DIR/../../../container_utils/
@@ -19,13 +22,18 @@ time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
 # Build model-specific images
-time docker build -t model-comp/pytorch-resnet-feats -f PyTorchResNetDockerfile ./
 time docker build -t model-comp/tf-kernel-svm -f TfKernelSvmDockerfile ./
+docker tag model-comp/tf-kernel-svm $gcpprefix/tf-kernel-svm:$tag
+gcloud docker -- push $gcpprefix/tf-kernel-svm:$tag
+
 time docker build -t model-comp/tf-resnet-feats -f TfResNetDockerfile ./
+docker tag model-comp/tf-resnet-feats $gcpprefix/tf-resnet-feats:$tag
+gcloud docker -- push $gcpprefix/tf-resnet-feats:$tag
+
 time docker build -t model-comp/tf-log-reg -f TfLogisticRegressionDockerfile ./
-# time docker build -t model-comp/vgg-feats -f VggFeaturizationDockerfile ./
-# time docker build -t model-comp/kpca-svm -f VggKpcaSvmDockerfile ./
-# time docker build -t model-comp/kernel-svm -f VggKernelSvmDockerfile ./
-# time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
+docker tag model-comp/tf-log-reg $gcpprefix/tf-log-reg:$tag
+gcloud docker -- push $gcpprefix/tf-log-reg:$tag
+
 time docker build -t model-comp/inception-feats -f InceptionFeaturizationDockerfile ./
-# time docker build -t model-comp/lgbm -f LgbmDockerfile ./
+docker tag model-comp/inception-feats $gcpprefix/tf-inception-feats:$tag
+gcloud docker -- push $gcpprefix/inception-feats:$tag
