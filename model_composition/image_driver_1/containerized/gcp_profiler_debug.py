@@ -103,14 +103,14 @@ def setup_resnet(batch_size,
     image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
     if gpu_type is None:
         image = "{}-nogpu".format(image)
-        return driver_utils.HeavyNodeConfigGCP(name=TF_RESNET_MODEL_APP_NAME,
-                                               input_type="floats",
-                                               model_image=image,
-                                               cpus_per_replica=cpus_per_replica,
-                                               gpu_type=gpu_type,
-                                               batch_size=batch_size,
-                                               num_replicas=num_replicas,
-                                               no_diverge=True)
+    return driver_utils.HeavyNodeConfigGCP(name=TF_RESNET_MODEL_APP_NAME,
+                                           input_type="floats",
+                                           model_image=image,
+                                           cpus_per_replica=cpus_per_replica,
+                                           gpu_type=gpu_type,
+                                           batch_size=batch_size,
+                                           num_replicas=num_replicas,
+                                           no_diverge=True)
 
 
 def setup_clipper_gcp(config):
@@ -265,7 +265,7 @@ class DriverBenchmarker(object):
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 20:
+        while len(predictor.stats["thrus"]) < 10:
             predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
@@ -292,7 +292,7 @@ class DriverBenchmarker(object):
         #     time.sleep(sleep_time_secs)
 
         # Now initialize request rate
-        while len(predictor.stats["thrus"]) < 40:
+        while len(predictor.stats["thrus"]) < 30:
             predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
@@ -347,7 +347,7 @@ class DriverBenchmarker(object):
         #     time.sleep(1)
 
         idx = 0
-        while len(predictor.stats["thrus"]) < 40:
+        while len(predictor.stats["thrus"]) < 30:
             predictor.predict(self.config.name, self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
@@ -459,7 +459,7 @@ if __name__ == "__main__":
     ]
 
     global GCP_CLUSTER_NAME
-    GCP_CLUSTER_NAME = "single-model-profiles-img-driver-1-res152"
+    GCP_CLUSTER_NAME = "smp-pipeline-1-res152"
     for gpu_type, num_cpus, batch_size in resnet_trials:
         config = setup_resnet(batch_size, 1, num_cpus, gpu_type)
         client_num = 0
