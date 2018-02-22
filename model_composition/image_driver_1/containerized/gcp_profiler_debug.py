@@ -487,6 +487,7 @@ if __name__ == "__main__":
         sftp = client.open_sftp()
         sftp.get("/tmp/loop_duration.log", "loop_duration.log")
         sftp.get("/tmp/handle_duration.log", "handle_duration.log")
+        sftp.get("/tmp/recv_times.log", "recv_times.log")
         loop_durs = []
         with open("loop_duration.log", "r") as f:
             for line in f:
@@ -495,6 +496,15 @@ if __name__ == "__main__":
         with open("handle_duration.log", "r") as f:
             for line in f:
                 handle_durs.append(float(line.strip()))
+        recv_times = []
+        with open("recv_times.log", "r") as f:
+            for line in f:
+                recv_times.append(float(line.strip()))
+        container_metrics = {
+            "loop_durs": loop_durs,
+            "handle_durs": handle_durs,
+            "recv_times": recv_times,
+        }
 
         fname = "results-{gpu}-{num_cpus}-{batch}-with-container-logs".format(
             gpu=gpu_type, num_cpus=num_cpus, batch=batch_size)
@@ -503,8 +513,7 @@ if __name__ == "__main__":
                                   [init_stats, ],
                                   "tf_resnet_smp_gcp_init_stats_and_steady_stats_no_convergence_check",
                                   prefix=fname,
-                                  loop_durs=loop_durs,
-                                  handle_durs=handle_durs)
+                                  container_metrics=container_metrics)
         cl.stop_all()
 
     sys.exit(0)
