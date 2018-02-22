@@ -35,5 +35,5 @@ docker tag model-comp/tf-log-reg $gcpprefix/tf-log-reg:$tag
 gcloud docker -- push $gcpprefix/tf-log-reg:$tag
 
 time docker build -t model-comp/inception-feats -f InceptionFeaturizationDockerfile ./
-docker tag model-comp/inception-feats $gcpprefix/tf-inception-feats:$tag
+docker tag model-comp/inception-feats $gcpprefix/inception-feats:$tag
 gcloud docker -- push $gcpprefix/inception-feats:$tag
