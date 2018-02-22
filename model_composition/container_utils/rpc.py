@@ -222,6 +222,8 @@ class Server(threading.Thread):
         self.full_buffers = 0
         self.request_queue = Queue()
         self.response_queue = Queue()
+        self.recv_time_log = open("/logs/recv_times.log", "w")
+        self.init_time = datetime.now()
 
     def connect(self):
         # 7000
@@ -306,6 +308,8 @@ class Server(threading.Thread):
 
     def recv_request(self):
         self.recv_socket.recv()
+        recv_time = (datetime.now() - self.init_time).total_seconds()
+        self.recv_time_log.write("{}\n".format(recv_time))
         msg_type_bytes = self.recv_socket.recv()
         msg_type = struct.unpack("<I", msg_type_bytes)[0]
         if msg_type is not MESSAGE_TYPE_CONTAINER_CONTENT:
@@ -378,6 +382,7 @@ class Server(threading.Thread):
             self.send_response()
             sys.stdout.flush()
             sys.stderr.flush()
+            self.recv_time_log.flush()
 
 
 
