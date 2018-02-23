@@ -230,6 +230,9 @@ class DockerContainerManager(ContainerManager):
                 cmd.append("%s=%s" % (k, v))
             if cpu_str:
                 cmd.append("--cpuset-cpus=%s" % cpu_str)
+            # Mount logs dir
+            cmd.append("-v")
+            cmd.append("/home/ubuntu/logs:/logs")
             cmd.append(image)
             logger.info("Docker command: \"%s\"" % cmd)
             subprocess.check_call(cmd, env=env)
