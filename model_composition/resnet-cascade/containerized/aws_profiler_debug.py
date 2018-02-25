@@ -231,9 +231,9 @@ class DriverBenchmarker(object):
         self.latency_upper_bound = latency_upper_bound
 
     def run(self):
-        self.initialize_request_rate()
-        # self.find_steady_state()
-        self.process_queue()
+        self.initialize_request_rate_queue_drain()
+        self.find_steady_state()
+        # self.process_queue()
         return
 
     # start with an overly aggressive request rate
@@ -254,7 +254,7 @@ class DriverBenchmarker(object):
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 5:
+        while len(predictor.stats["thrus"]) < 10:
             predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
@@ -271,6 +271,9 @@ class DriverBenchmarker(object):
         time.sleep(10)
         self.cl.drain_queues()
         time.sleep(10)
+
+
+
         # predictor = Predictor(self.clipper_address, clipper_metrics=True,
         #                       batch_size=self.max_batch_size)
         #
@@ -309,6 +312,78 @@ class DriverBenchmarker(object):
     def decrease_delay(self):
         self.increase_delay(multiple=-0.5)
 
+    def initialize_request_rate_queue_drain(self):
+        # initialize delay to be very small
+        self.delay = 0.001
+        self.queries_per_sleep = 1
+        self.clipper_address = setup_clipper(self.config)
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        self.cl.connect()
+        time.sleep(30)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True,
+                              batch_size=self.max_batch_size)
+        idx = 0
+
+        # First warm up the model.
+        # NOTE: The length of time the model needs to warm up for
+        # seems to be both framework and hardware dependent. 27 seems to work
+        # well for PyTorch resnet
+        while len(predictor.stats["thrus"]) < 10:
+            predictor.predict(self.config.name, self.inputs[idx])
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+
+        # Now let the queue drain
+        logger.info("Draining queue")
+
+        self.cl.drain_queues()
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
+        time.sleep(10)
+        self.cl.drain_queues()
+        time.sleep(10)
+        predictor = Predictor(self.clipper_address, clipper_metrics=True,
+                              batch_size=self.max_batch_size)
+
+        idx = 0
+        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 80000:
+            predictor.predict(self.config.name, self.inputs[idx])
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx += 1
+            idx = idx % len(self.inputs)
+        logger.info("Queue is big. Stopping sending queries")
+        while predictor.stats["mean_queue_sizes"][-1][self.config.name] > 10000:
+            time.sleep(1)
+
+        queue_sizes = [q[self.config.name] for q in predictor.stats["mean_queue_sizes"]]
+        diffs = np.diff(queue_sizes)
+        first_decrease_idx = 0
+        for i, d in enumerate(diffs):
+            if d < 0:
+                first_decrease_idx = i + 1  # add 1 because np.diff does the gaps between numbers
+                break
+        assert first_decrease_idx > 1
+        logger.info("First decrease idx: {}".format(first_decrease_idx))
+        logger.info("Included thrus: {}".format(predictor.stats["thrus"][first_decrease_idx:]))
+        max_thruput = np.mean(predictor.stats["thrus"][first_decrease_idx:])
+        self.queue.put((self.clipper_address, predictor.stats))
+        self.delay = 1.0 / max_thruput
+        # if self.delay < 0.01:
+        #     self.queries_per_sleep = 2
+        #     self.delay = self.delay*2.0 - 0.001
+        logger.info("Initializing delay to {}".format(self.delay))
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
+        self.cl.drain_queues()
+        time.sleep(10)
+        self.cl.drain_queues()
+        return
+
     def process_queue(self):
         self.delay = 0.001
         self.cl.drain_queues()
@@ -318,14 +393,14 @@ class DriverBenchmarker(object):
                               batch_size=self.max_batch_size)
 
         idx = 0
-        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 100000:
+        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 80000:
             predictor.predict(self.config.name, self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
         logger.info("Queue is big. Stopping sending queries")
-        while predictor.stats["mean_queue_sizes"][-1][self.config.name] > 5000:
+        while predictor.stats["mean_queue_sizes"][-1][self.config.name] > 10000:
             time.sleep(1)
         self.queue.put((self.clipper_address, predictor.stats))
         return
@@ -337,21 +412,9 @@ class DriverBenchmarker(object):
         logger.info("Queue is drained")
         predictor = Predictor(self.clipper_address, clipper_metrics=True,
                               batch_size=self.max_batch_size)
-        # self.active = False
-        # while not self.active:
-        #     logger.info("Trying to connect to Clipper")
-        #
-        #     def callback(output):
-        #         if output == DEFAULT_OUTPUT:
-        #             return
-        #         else:
-        #             logger.info("Succesful query issued")
-        #             self.active = True
-        #     predictor.client.send_request(self.config.name, self.inputs[0]).then(callback)
-        #     time.sleep(1)
 
         idx = 0
-        while len(predictor.stats["thrus"]) < 40:
+        while len(predictor.stats["thrus"]) < 30:
             predictor.predict(self.config.name, self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
@@ -422,7 +485,7 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    for batch_size in [8, 4, 32, 2, 64]:
+    for batch_size in [8, 16, 32, 4, 64, 1, 2]:
         config = get_heavy_node_config(
             model_name=RES50,
             batch_size=batch_size,
@@ -462,11 +525,12 @@ if __name__ == "__main__":
             "recv_times": recv_times,
         }
 
-        fname = "results-batch-{batch}-with-container-logs-fixed".format(batch=batch_size)
+        fname = "results-batch-{batch}".format(batch=batch_size)
         driver_utils.save_results([config, ],
                                   all_stats,
                                   [init_stats, ],
-                                  "pytorch_res50_smp_aws_init_then_drain_queue",
+                                  # [],
+                                  "pytorch_res50_smp_aws_drain_queue_then_actual_profile",
                                   prefix=fname,
                                   container_metrics=container_metrics)
         cl.stop_all()

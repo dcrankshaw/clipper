@@ -106,6 +106,7 @@ class RPCService {
   std::unordered_map<VersionedModelId, int> replica_ids_;
   std::shared_ptr<metrics::Histogram> msg_queueing_hist_;
   std::unordered_map<std::string, std::shared_ptr<metrics::DataList<long>>> model_processing_latencies_;
+  std::shared_ptr<metrics::DataList<long long>> model_send_times_;
   std::unordered_map<int, std::string> msg_id_models_map_;
   std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>> msg_id_timestamp_map_;
 

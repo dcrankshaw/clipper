@@ -111,7 +111,8 @@ void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
   socket.bind(recv_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   while (active_) {
-    zmq_poll(items, 1, 1);
+    // zmq_poll(items, 1, 1);
+    zmq_poll(items, 1, 0);
     if (items[0].revents & ZMQ_POLLIN) {
       receive_request(socket);
     }

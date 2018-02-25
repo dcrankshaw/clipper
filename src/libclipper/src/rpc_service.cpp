@@ -44,6 +44,7 @@ RPCService::RPCService()
       replica_ids_(std::unordered_map<VersionedModelId, int>({})) {
   msg_queueing_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
       "internal:rpc_request_queueing_delay", "microseconds", 2056);
+  model_send_times_ = metrics::MetricsRegistry::get_metrics().create_data_list<long long>("send_times", "timestamp");
 }
 
 RPCService::~RPCService() { stop(); }
@@ -248,7 +249,11 @@ void RPCService::send_messages(socket_t &socket,
     int msg_id = std::get<1>(request);
     auto outbound_timestamp = std::chrono::system_clock::now();
     msg_id_timestamp_map_.emplace(msg_id, std::move(outbound_timestamp));
-  }
+
+
+    long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
+    model_send_times_->insert(curr_system_time);
+    }
 }
 
 void RPCService::receive_message(socket_t &socket) {
