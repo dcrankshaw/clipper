@@ -137,6 +137,8 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     queue_get_times = []
     handle_times = []
     handle_start_times = []
+    trial_start = datetime.now()
+    pred_count = 0
 
     last_loop_start = datetime.now()
     loop_dur_file = "/logs/loop_duration.log"
@@ -156,6 +158,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
 
             handle_start_times.append(time.time()*1000)
             outputs = predict_fn(prediction_request.inputs)
+            pred_count += len(prediction_request.inputs)
             t3 = datetime.now()
             handle_times.append((t3 - t2).microseconds)
             hd.write("{}\n".format((t3 - t2).microseconds))
@@ -196,12 +199,16 @@ def handle_predictions(predict_fn, request_queue, response_queue):
                 print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
                 print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
                 print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
+                throughput = float(pred_count) / (datetime.now() - trial_start).total_seconds()
+                print("Throughput: {}".format(throughput))
                 ld.flush()
                 hd.flush()
 
                 loop_times = []
                 queue_get_times = []
                 handle_times = []
+                pred_count = 0
+                trial_start = datetime.now()
 
             # if len(handle_start_times) % 200 == 0:
             #     print(json.dumps(handle_start_times))

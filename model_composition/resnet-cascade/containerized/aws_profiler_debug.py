@@ -134,6 +134,27 @@ def get_queue_sizes(metrics_json):
             mean_queue_sizes[model] = round(float(mean), 2)
     return mean_queue_sizes
 
+def get_thruputs(metrics_json):
+    meters = metrics_json["meters"]
+    thrus = {}
+    for m in meters:
+        if "prediction_throughput" in m.keys()[0]:
+            name = m.keys()[0]
+            rate = m[name]["rate"]
+            thrus[name] = round(float(rate), 5)
+    return thrus
+
+
+def get_counts(metrics_json):
+    counters = metrics_json["counters"]
+    counts = {}
+    for c in counters:
+        if "internal" not in c.keys()[0]:
+            name = c.keys()[0]
+            count = c[name]["count"]
+            counts[name] = int(count)
+    return counts
+
 
 class Predictor(object):
 
@@ -177,14 +198,17 @@ class Predictor(object):
             metrics = self.cl.inspect_instance()
             batch_sizes = get_batch_sizes(metrics)
             queue_sizes = get_queue_sizes(metrics)
+            clipper_thrus = get_thruputs(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["mean_queue_sizes"].append(queue_sizes)
             self.stats["all_metrics"].append(metrics)
-            logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
+            logger.info(("p99: {p99}, mean: {mean}, client thruput: {thru}, clipper thruput: {clipper_thru}, "
                          "batch_sizes: {batches}, queue_sizes: {queues}").format(
                              p99=p99,
                              mean=mean,
                              thru=thru,
+                             clipper_thru=json.dumps(
+                                 clipper_thrus, sort_keys=True),
                              batches=json.dumps(
                                  batch_sizes, sort_keys=True),
                              queues=json.dumps(
@@ -231,9 +255,9 @@ class DriverBenchmarker(object):
         self.latency_upper_bound = latency_upper_bound
 
     def run(self):
-        self.initialize_request_rate_queue_drain()
-        self.find_steady_state()
-        # self.process_queue()
+        # self.initialize_request_rate_queue_drain()
+        # self.find_steady_state()
+        self.process_queue()
         return
 
     # start with an overly aggressive request rate
@@ -328,7 +352,7 @@ class DriverBenchmarker(object):
         # NOTE: The length of time the model needs to warm up for
         # seems to be both framework and hardware dependent. 27 seems to work
         # well for PyTorch resnet
-        while len(predictor.stats["thrus"]) < 10:
+        while len(predictor.stats["thrus"]) < 5:
             predictor.predict(self.config.name, self.inputs[idx])
             idx += 1
             if idx % self.queries_per_sleep == 0:
@@ -349,7 +373,7 @@ class DriverBenchmarker(object):
                               batch_size=self.max_batch_size)
 
         idx = 0
-        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 80000:
+        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 200000:
             predictor.predict(self.config.name, self.inputs[idx])
             if idx % self.queries_per_sleep == 0:
                 time.sleep(self.delay)
@@ -385,24 +409,52 @@ class DriverBenchmarker(object):
         return
 
     def process_queue(self):
+        self.clipper_address = setup_clipper(self.config)
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        self.cl.connect()
+        time.sleep(45)
         self.delay = 0.001
-        self.cl.drain_queues()
-        time.sleep(10)
-        logger.info("Queue is drained")
+        # self.cl.drain_queues()
+        # time.sleep(10)
+        # logger.info("Queue is drained")
         predictor = Predictor(self.clipper_address, clipper_metrics=True,
                               batch_size=self.max_batch_size)
 
         idx = 0
-        while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 80000:
+        total_sent = 0
+        # while len(predictor.stats["mean_queue_sizes"]) == 0 or predictor.stats["mean_queue_sizes"][-1][self.config.name] < 80000:
+        while total_sent < 200000:
             predictor.predict(self.config.name, self.inputs[idx])
-            if idx % self.queries_per_sleep == 0:
-                time.sleep(self.delay)
+            time.sleep(self.delay)
             idx += 1
+            total_sent += 1
             idx = idx % len(self.inputs)
-        logger.info("Queue is big. Stopping sending queries")
-        while predictor.stats["mean_queue_sizes"][-1][self.config.name] > 10000:
-            time.sleep(1)
-        self.queue.put((self.clipper_address, predictor.stats))
+
+        logger.info("Stopping sending queries")
+        while True:
+            time.sleep(5)
+            # metrics = self.cl.inspect_instance()
+            # batch_sizes = get_batch_sizes(metrics)
+            # # stats["batch_sizes"].append(batch_sizes)
+            # queue_sizes = get_queue_sizes(metrics)
+            # # stats["queue_sizes"].append(queue_sizes)
+            # thruputs = get_thruputs(metrics)
+            # # stats["thruputs"].append(thruputs)
+            # counts = get_counts(metrics)
+            # # stats["counts"].append(counts)
+            # logger.info(("thruputs: {thru}, batch_sizes: {batches}, queue_sizes: {queues}, counts: {counts}").format(
+            #     thru=json.dumps(thruputs, sort_keys=True),
+            #     batches=json.dumps(
+            #         batch_sizes, sort_keys=True),
+            #     queues=json.dumps(
+            #         queue_sizes, sort_keys=True),
+            #     counts=json.dumps(counts, sort_keys=True),
+            # ))
+
+
+        # while predictor.stats["mean_queue_sizes"][-1][self.config.name] > 10000:
+        #     time.sleep(1)
+        # self.queue.put((self.clipper_address, predictor.stats))
         return
 
     def find_steady_state(self):
@@ -485,7 +537,8 @@ if __name__ == "__main__":
 
     queue = Queue()
 
-    for batch_size in [8, 16, 32, 4, 64, 1, 2]:
+    # for batch_size in [8, 16, 32, 4, 64, 1, 2]:
+    for batch_size in [8, ]:
         config = get_heavy_node_config(
             model_name=RES50,
             batch_size=batch_size,
@@ -530,7 +583,7 @@ if __name__ == "__main__":
                                   all_stats,
                                   [init_stats, ],
                                   # [],
-                                  "pytorch_res50_smp_aws_drain_queue_then_actual_profile",
+                                  "pytorch_res50_smp_aws_frontend_rpc_debugging",
                                   prefix=fname,
                                   container_metrics=container_metrics)
         cl.stop_all()

@@ -16,11 +16,11 @@ using namespace clipper;
 const std::string LOGGING_TAG_ZMQ_FRONTEND = "ZMQ_FRONTEND";
 
 // We may have up to 50,000 outstanding requests
-constexpr size_t RESPONSE_QUEUE_SIZE = 50000;
+constexpr size_t RESPONSE_QUEUE_SIZE = 100000;
 constexpr size_t NUM_REQUESTS_RECV = 100;
-constexpr size_t NUM_RESPONSES_SEND = 100;
+constexpr size_t NUM_RESPONSES_SEND = 1000;
 
-constexpr size_t TOTAL_DATA_BYTES = 299 * 299 * 3 * sizeof(float) * 50000;
+constexpr size_t TOTAL_DATA_BYTES = 299 * 299 * 3 * sizeof(float) * RESPONSE_QUEUE_SIZE;
 
 // Tuple of input, request id, client id
 typedef std::tuple<InputVector, int, int> FrontendRPCRequest;

@@ -267,6 +267,7 @@ class ServerImpl {
             app_metrics.latency_->insert(duration_micros);
             app_metrics.latency_list_->insert(duration_micros);
             app_metrics.num_predictions_->increment(1);
+            app_metrics.throughput_->mark(1);
 
             rpc_service_->send_response(
                 std::make_tuple(std::move(output), request_id, client_id));

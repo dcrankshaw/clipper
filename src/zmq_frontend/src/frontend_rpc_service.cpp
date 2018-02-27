@@ -95,7 +95,8 @@ void FrontendRPCService::manage_send_service(const std::string ip, int port) {
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   int client_id = 0;
   while (active_) {
-    zmq_poll(items, 1, 1);
+    // zmq_poll(items, 1, 1);
+    zmq_poll(items, 1, 0);
     if (items[0].revents & ZMQ_POLLIN) {
       handle_new_connection(socket, client_id);
     }
@@ -110,12 +111,19 @@ void FrontendRPCService::manage_recv_service(const std::string ip, int port) {
   zmq::socket_t socket(context, ZMQ_ROUTER);
   socket.bind(recv_address);
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
+  int num_requests_received = 0;
   while (active_) {
     // zmq_poll(items, 1, 1);
     zmq_poll(items, 1, 0);
     if (items[0].revents & ZMQ_POLLIN) {
       receive_request(socket);
+      num_requests_received += 1;
     }
+    // if (num_requests_received > 400000) {
+    //   std::cout << "Shutting down recv service" << std::endl;
+    //   active_ = false;
+    //   break;
+    // }
   }
   shutdown_service(socket);
 }
