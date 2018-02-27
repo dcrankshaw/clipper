@@ -95,7 +95,8 @@ void FrontendRPCService::manage_send_service(const std::string ip, int port) {
   zmq::pollitem_t items[] = {{socket, 0, ZMQ_POLLIN, 0}};
   int client_id = 0;
   while (active_) {
-    zmq_poll(items, 1, 1);
+    // zmq_poll(items, 1, 1);
+    zmq_poll(items, 1, 0);
     if (items[0].revents & ZMQ_POLLIN) {
       handle_new_connection(socket, client_id);
     }

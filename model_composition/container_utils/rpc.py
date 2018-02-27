@@ -141,7 +141,8 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     last_loop_start = datetime.now()
     loop_dur_file = "/logs/loop_duration.log"
     handle_dur_file = "/logs/handle_duration.log"
-    with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+    queue_get_dur_file = "/logs/queue_get_duration.log"
+    with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd, open(queue_get_dur_file, "w") as qd:
         while True:
             cur_loop_start = datetime.now()
             loop_duration = (cur_loop_start - last_loop_start).microseconds
@@ -152,7 +153,9 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             t1 = datetime.now()
             prediction_request = request_queue.get(block=True)
             t2 = datetime.now()
-            queue_get_times.append((t2 - t1).microseconds)
+            queue_get_time = (t2 - t1).microseconds
+            qd.write("{}\n".format(queue_get_time))
+            queue_get_times.append(queue_get_time)
 
             handle_start_times.append(time.time()*1000)
             outputs = predict_fn(prediction_request.inputs)
@@ -198,6 +201,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
                 print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
                 ld.flush()
                 hd.flush()
+                qd.flush()
 
                 loop_times = []
                 queue_get_times = []

@@ -68,13 +68,14 @@ class AppMetrics {
 class ServerImpl {
  public:
   ServerImpl(const std::string ip, int send_port, int recv_port)
-      : rpc_service_(std::make_shared<FrontendRPCService>()),
-        task_executor_(),
+      // : rpc_service_(std::make_shared<FrontendRPCService>()),
+        : task_executor_(),
         request_rate_(metrics::MetricsRegistry::get_metrics().create_meter(
             "zmq_frontend:request_rate")) {
     // Start the frontend rpc service
-    rpc_service_->start(ip, send_port, recv_port);
+    // rpc_service_->start(ip, send_port, recv_port);
 
+    recv_data_buffer_ = static_cast<uint8_t *>(std::calloc(1, TOTAL_DATA_BYTES));
     // std::string server_address = address + std::to_string(portno);
     clipper::Config& conf = clipper::get_config();
     while (!redis_connection_.connect(conf.get_redis_address(),
@@ -211,7 +212,7 @@ class ServerImpl {
   ~ServerImpl() {
     redis_connection_.disconnect();
     redis_subscriber_.disconnect();
-    rpc_service_->stop();
+    // rpc_service_->stop();
   }
 
   void set_linked_models_for_app(std::string name,
@@ -230,10 +231,10 @@ class ServerImpl {
                        long latency_slo_micros) {
     AppMetrics app_metrics(name);
 
-    auto predict_fn = [
+    app_function_ = [
       this, name, application_input_type = input_type, latency_slo_micros,
       app_metrics
-    ](FrontendRPCRequest request) {
+    ](InputVector input) {
       std::vector<std::string> models = get_linked_models_for_app(name);
       std::vector<VersionedModelId> versioned_models;
       {
@@ -246,16 +247,16 @@ class ServerImpl {
         }
       }
 
-      int request_id = std::get<1>(request);
-      int client_id = std::get<2>(request);
+      // int request_id = std::get<1>(request);
+      // int client_id = std::get<2>(request);
       long query_id = query_counter_.fetch_add(1);
       std::chrono::time_point<std::chrono::system_clock> create_time =
           std::chrono::system_clock::now();
 
       task_executor_.schedule_prediction(
-          PredictTask{std::get<0>(request), versioned_models.front(), 1.0,
+          PredictTask{input, versioned_models.front(), 1.0,
                       query_id, latency_slo_micros},
-          [this, app_metrics, request_id, client_id,
+          [this, app_metrics, /*request_id, client_id,*/
            create_time](Output output) mutable {
             std::chrono::time_point<std::chrono::system_clock> end =
                 std::chrono::system_clock::now();
@@ -267,13 +268,14 @@ class ServerImpl {
             app_metrics.latency_->insert(duration_micros);
             app_metrics.latency_list_->insert(duration_micros);
             app_metrics.num_predictions_->increment(1);
+            app_metrics.throughput_->mark(1);
 
-            rpc_service_->send_response(
-                std::make_tuple(std::move(output), request_id, client_id));
+            // rpc_service_->send_response(
+            //     std::make_tuple(std::move(output), request_id, client_id));
           });
     };
 
-    rpc_service_->add_application(name, predict_fn);
+    // rpc_service_->add_application(name, predict_fn);
   }
 
   std::string get_metrics() const {
@@ -292,8 +294,40 @@ class ServerImpl {
     task_executor_.drain_queues();
   }
 
+  void start_queueing(int num_preds, int delay_millis) {
+    queue_threads_.push_back(std::thread([this, num_preds, delay_millis]() {
+        for (int i = 0; i < num_preds; ++i) {
+          uint8_t *input_buffer =
+              reinterpret_cast<uint8_t *>(alloc_data(8));
+          InputVector input(input_buffer, 2, 8,
+                            DataType::Floats);
+          app_function_(input);
+          std::this_thread::sleep_for(std::chrono::milliseconds(delay_millis));
+        }
+    }));
+    
+  }
+
  private:
-  std::shared_ptr<FrontendRPCService> rpc_service_;
+  // WARNING: THIS IS A QUICK AND DIRTY HACK. IT'S TOTALLY NOT SAFE TO ACTUALLY
+  // USE.
+  void *alloc_data(size_t size_bytes) {
+    if (size_bytes > TOTAL_DATA_BYTES) {
+      throw std::runtime_error("Requested a memory allocation that was too big");
+    }
+    std::lock_guard<std::mutex> l(data_mutex_);
+    // Check if we've reached end of buffer and need to wrap back
+    if ((next_data_offset_ + size_bytes) > TOTAL_DATA_BYTES) {
+      std::cout << "Wrapping around to front of buffer" << std::endl;
+      next_data_offset_ = 0;
+    }
+
+    void *alloc_ptr = static_cast<void *>(recv_data_buffer_ + next_data_offset_);
+    next_data_offset_ += size_bytes;
+    return alloc_ptr;
+  }
+
+  // std::shared_ptr<FrontendRPCService> rpc_service_;
   TaskExecutor task_executor_;
   std::atomic<long> query_counter_{0};
   redox::Redox redis_connection_;
@@ -305,6 +339,12 @@ class ServerImpl {
   std::unordered_map<std::string, std::vector<std::string>>
       linked_models_for_apps_;
   std::shared_ptr<metrics::Meter> request_rate_;
+  std::mutex data_mutex_;
+  size_t next_data_offset_;
+  uint8_t *recv_data_buffer_;
+  
+  std::function<void(InputVector)> app_function_;
+  std::vector<std::thread> queue_threads_;
 };
 
 }  // namespace zmq_frontend

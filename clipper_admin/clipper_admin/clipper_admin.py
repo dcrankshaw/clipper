@@ -1008,6 +1008,20 @@ class ClipperConnection(object):
             logger.error(msg)
             raise ClipperException(msg)
 
+    def start_queuing(self, num_preds, delay_millis):
+        if not self.connected:
+            raise UnconnectedException()
+        url = "http://{host}/start_queueing".format(host=self.cm.get_query_addr())
+        req_json = json.dumps({"num_preds": num_preds, "delay_millis": delay_millis})
+        headers = {'Content-type': 'application/json'}
+        r = requests.post(url, headers=headers, data=req_json)
+        logger.debug(r.text)
+        if r.status_code != requests.codes.ok:
+            msg = "Received error status code: {code} and message: {msg}".format(
+                code=r.status_code, msg=r.text)
+            logger.error(msg)
+            raise ClipperException(msg)
+
     def set_model_version(self, name, version, num_replicas=None):
         """Changes the current model version to "model_version".
 

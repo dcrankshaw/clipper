@@ -4,7 +4,8 @@ RUN conda install torchvision -c pytorch
 
 COPY pytorch_models/ /root/.torch/
 
-COPY pytorch_container.py /container/
+# COPY pytorch_container.py /container/
+COPY pytorch_container_dummy_inputs.py /container/pytorch_container.py
 
 CMD ["python", "/container/pytorch_container.py"]
 

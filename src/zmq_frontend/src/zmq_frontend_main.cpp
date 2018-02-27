@@ -3,14 +3,17 @@
 
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
+#include <clipper/json_util.hpp>
 #include <cxxopts.hpp>
 #include <server_http.hpp>
 #include <clipper/clock.hpp>
+#include "rapidjson/document.h"
 
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 const std::string GET_METRICS = "^/metrics$";
 const std::string DRAIN_QUEUES = "^/drain_queues$";
+const std::string START_QUEUING = "^/start_queueing$";
 
 void respond_http(std::string content, std::string message,
                   std::shared_ptr<HttpServer::Response> response) {
@@ -69,6 +72,32 @@ int main(int argc, char* argv[]) {
         std::cout << "Drained queues" << std::endl;
         respond_http("DONE", "200 OK", response);
       });
+
+
+  metrics_server.add_endpoint(
+      START_QUEUING, "POST", [&zmq_server](std::shared_ptr<HttpServer::Response> response,
+                             std::shared_ptr<HttpServer::Request> request) {
+      try {
+        rapidjson::Document d;
+        clipper::json::parse_json(request->content.string(), d);
+        int num_preds = clipper::json::get_int(d, "num_preds");
+        int delay_millis = clipper::json::get_int(d, "delay_millis");
+        std::cout << "Starting queuing. Num preds: " << std::to_string(num_preds) << ", delay millis: " << std::to_string(delay_millis) << std::endl;
+        zmq_server.start_queueing(num_preds, delay_millis);
+        std::cout << "Drained queues" << std::endl;
+        respond_http("DONE", "200 OK", response);
+      } catch (const clipper::json::json_parse_error& e) {
+        std::stringstream ss;
+        ss << "Error parsing JSON: " << e.what() << ". ";
+        std::string err_msg = ss.str();
+        respond_http(err_msg, "400 Bad Request", response);
+      } catch (const clipper::json::json_semantic_error& e) {
+        std::stringstream ss;
+        ss << "Error parsing JSON: " << e.what() << ". ";
+        std::string err_msg = ss.str();
+        respond_http(err_msg, "400 Bad Request", response);
+      }
+    });
 
   metrics_server.start();
 }
