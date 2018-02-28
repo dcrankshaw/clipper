@@ -1,12 +1,12 @@
 #ifndef CLIPPER_LIB_THREADPOOL_HPP
 #define CLIPPER_LIB_THREADPOOL_HPP
 
+#include <concurrentqueue.h>
+#include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
-#include <condition_variable>
-#include <concurrentqueue.h>
 
 #include <boost/thread.hpp>
 
@@ -169,7 +169,7 @@ class ThreadPool {
     log_info(LOGGING_TAG_THREADPOOL, "Destroying threadpool");
     done_ = true;
     // for (auto& queue : queues_) {
-      // queue.second.invalidate();
+    // queue.second.invalidate();
     // }
     for (auto& thread : threads_) {
       if (thread.second.joinable()) {
@@ -181,7 +181,8 @@ class ThreadPool {
  private:
   std::atomic_bool done_;
   boost::shared_mutex queues_mutex_;
-  std::unordered_map<size_t, moodycamel::ConcurrentQueue<std::unique_ptr<IThreadTask>>>
+  std::unordered_map<size_t,
+                     moodycamel::ConcurrentQueue<std::unique_ptr<IThreadTask>>>
       queues_;
   std::unordered_map<size_t, std::thread> threads_;
 };

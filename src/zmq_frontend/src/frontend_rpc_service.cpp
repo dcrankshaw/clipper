@@ -286,6 +286,8 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
     socket.send("", 0, ZMQ_SNDMORE);
     socket.send(&request_id, sizeof(int), ZMQ_SNDMORE);
     socket.send(&output_type, sizeof(int), ZMQ_SNDMORE);
+    int output_length_bytes = output.y_hat_->byte_size();
+    socket.send(&output_length_bytes, sizeof(int), ZMQ_SNDMORE);
     socket.send(output.y_hat_->get_data(), output.y_hat_->byte_size());
 
     sent_responses += 1;
