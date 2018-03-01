@@ -138,6 +138,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting driver" << std::endl;
     driver.start();
   } else {
-    std::cout << "Invalid input type " << options["input_type"].as<std::string>() << std::endl;
+    std::cout << "Invalid input type "
+              << options["input_type"].as<std::string>() << std::endl;
   }
 }

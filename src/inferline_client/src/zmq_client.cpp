@@ -56,8 +56,11 @@ void FrontendRPCClient::stop() {
 void FrontendRPCClient::send_request(
     std::string app_name, ClientFeatureVector input,
     std::function<void(ClientFeatureVector)> &&callback) {
-  request_queue_->enqueue(
-      std::make_tuple(request_id_.fetch_add(1), app_name, input));
+  std::unique_lock<std::mutex> closure_map_lock(closure_map_mutex_);
+  int cur_request_id = request_id_.fetch_add(1);
+  closure_map_.emplace(cur_request_id, callback);
+
+  request_queue_->enqueue(std::make_tuple(cur_request_id, app_name, input));
 }
 
 void FrontendRPCClient::manage_send_service(const std::string ip, int port) {
@@ -198,7 +201,8 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   auto search = closure_map_.find(request_id);
   if (search == closure_map_.end()) {
     std::stringstream ss;
-    ss << "Received a response with no associated request ID";
+    ss << "Received a response for request ID " << std::to_string(request_id);
+    ss << " with no associated closure";
     throw std::runtime_error(ss.str());
   } else {
     auto closure = search->second;
