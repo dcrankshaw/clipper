@@ -1,10 +1,14 @@
 #include <concurrentqueue.h>
+#include <mutex>
+#include <zmq.hpp>
 
 #include <clipper/datatypes.hpp>
 #include <clipper/logging.hpp>
 #include <clipper/metrics.hpp>
 #include <clipper/threadpool.hpp>
 #include <clipper/util.hpp>
+
+#include "zmq_client.hpp"
 
 using zmq::socket_t;
 using zmq::message_t;
@@ -15,10 +19,14 @@ using std::vector;
 
 namespace zmq_client {
 
+using namespace clipper;
+
+FrontendRPCClient::FrontendRPCClient() : FrontendRPCClient(1) {}
+
 FrontendRPCClient::FrontendRPCClient(int num_threads)
-    : request_queue_(
-          std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCResponse>>(
-              QUEUE_SIZE)),
+    : request_queue_(std::make_shared<
+                     moodycamel::ConcurrentQueue<FrontendRPCClientRequest>>(
+          QUEUE_SIZE)),
       active_(false),
       closure_map_{},
       closure_threadpool_("frontend_rpc", 2),
@@ -48,7 +56,7 @@ void FrontendRPCClient::stop() {
 void FrontendRPCClient::send_request(
     std::string app_name, ClientFeatureVector input,
     std::function<void(ClientFeatureVector)> &&callback) {
-  request_queue_.enqueue(
+  request_queue_->enqueue(
       std::make_tuple(request_id_.fetch_add(1), app_name, input));
 }
 
@@ -65,7 +73,7 @@ void FrontendRPCClient::manage_send_service(const std::string ip, int port) {
       send_messages(socket, num_send);
     }
   }
-  socket.disconnect(send_address)
+  socket.disconnect(send_address);
 }
 
 void noop_free(void *data, void *hint) {
@@ -79,12 +87,12 @@ void FrontendRPCClient::send_messages(socket_t &socket, int max_num_messages) {
   FrontendRPCClientRequest request;
   size_t sent_requests = 0;
   while (sent_requests < max_num_messages &&
-         request_queue_->try_queue(request)) {
+         request_queue_->try_dequeue(request)) {
     int request_id = std::get<0>(request);
     std::string app_name = std::get<1>(request);
-    ClientFeatureVector vector = std::get<2>(request);
-    int datatype = input_vector_.type_;
-    int datalength = int(input_vector_.size_typed_);
+    ClientFeatureVector input = std::get<2>(request);
+    int datatype = (int)input.type_;
+    int datalength = int(input.size_typed_);
 
     zmq::message_t msg_data(input.get_data(), input.size_bytes_, noop_free);
 
@@ -123,7 +131,7 @@ void FrontendRPCClient::manage_recv_service(const std::string ip, int port) {
       }
     }
   }
-  socket.disconnect(recv_address)
+  socket.disconnect(recv_address);
 }
 
 void FrontendRPCClient::handle_new_connection(zmq::socket_t &socket) {
@@ -131,7 +139,7 @@ void FrontendRPCClient::handle_new_connection(zmq::socket_t &socket) {
   zmq::message_t msg_client_id;
   socket.recv(&msg_delimiter, 0);
   socket.recv(&msg_client_id, 0);
-  client_id_ = static_cast<int *>(message_client_id.data())[0]
+  client_id_ = static_cast<int *>(msg_client_id.data())[0];
 }
 
 void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
@@ -166,7 +174,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
     default: {
       std::stringstream ss;
       ss << "Received a request with an input with invalid type: "
-         << get_readable_input_type(input_type);
+         << get_readable_input_type(output_type);
       throw std::runtime_error(ss.str());
     }
   }
@@ -183,7 +191,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   ClientFeatureVector output(output_recv_buffer, data_length_typed,
                              data_length_bytes, output_type);
 
-  std::lock_guard<std::mutex> closure_map_lock(closure_map_mutex_);
+  std::unique_lock<std::mutex> closure_map_lock(closure_map_mutex_);
   auto search = closure_map_.find(request_id);
   if (search == closure_map_.end()) {
     std::stringstream ss;

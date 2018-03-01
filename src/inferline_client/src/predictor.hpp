@@ -10,17 +10,20 @@ using namespace clipper;
 
 class Driver {
  public:
-  Driver(std::function<void(FrontendRPCClient, ClientFeatureVector,
+  Driver(std::function<void(FrontendRPCClient&, ClientFeatureVector,
                             std::atomic<int>&)>
              predict_func,
          std::vector<ClientFeatureVector> inputs, int request_delay_micros,
-         int trial_length, int num_trials, std::string log_file);
+         int trial_length, int num_trials, std::string log_file,
+         std::string clipper_address);
 
   void start();
 
  private:
-  std::function<void(FrontendRPCClient, ClientFeatureVector, std::atomic<int>&)>
-      pred_function_;
+  void monitor_results();
+  std::function<void(FrontendRPCClient&, ClientFeatureVector,
+                     std::atomic<int>&)>
+      predict_func_;
   std::vector<ClientFeatureVector> inputs_;
   int request_delay_micros_;
   int trial_length_;
@@ -30,7 +33,7 @@ class Driver {
   std::atomic_bool done_;
   std::atomic<int> prediction_counter_;
   std::string clipper_address_;
-}
+};
 
 }  // namespace zmq_client
 

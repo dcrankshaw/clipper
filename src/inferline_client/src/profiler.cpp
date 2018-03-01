@@ -1,11 +1,15 @@
+#include <atomic>
 #include <chrono>
 #include <clipper/clock.hpp>
 #include <clipper/metrics.hpp>
 #include <cxxopts.hpp>
 #include <random>
 #include <string>
+#include "predictor.hpp"
+#include "zmq_client.hpp"
 
 using namespace clipper;
+using namespace zmq_client;
 
 class ProfilerMetrics {
  public:
@@ -13,10 +17,10 @@ class ProfilerMetrics {
       : name_(name),
         latency_(
             clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-                name_ ":prediction_latency", "microseconds", 32768)),
+                name_ + ":prediction_latency", "microseconds", 32768)),
         latency_list_(clipper::metrics::MetricsRegistry::get_metrics()
                           .create_data_list<long long>(
-                              name_ ":prediction_latencies", "microseconds")),
+                              name_ + ":prediction_latencies", "microseconds")),
         throughput_(
             clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                 name_ + ":prediction_throughput")),
@@ -40,11 +44,11 @@ class ProfilerMetrics {
   std::shared_ptr<clipper::metrics::Counter> num_predictions_;
 };
 
-void predict(FrontendRPCClient client, std::string name,
+void predict(FrontendRPCClient& client, std::string name,
              ClientFeatureVector input, ProfilerMetrics metrics,
              std::atomic<int>& prediction_counter) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, prediction_counter,
+  client.send_request(name, input, [metrics, &prediction_counter,
                                     start_time](ClientFeatureVector output) {
     if (output.type_ == DataType::Strings) {
       std::string output_str = std::string(
@@ -60,7 +64,7 @@ void predict(FrontendRPCClient client, std::string name,
     metrics.latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
-    prediction_counter.fetch_add(1);
+    prediction_counter += 1;
 
   });
 }
@@ -119,16 +123,17 @@ int main(int argc, char* argv[]) {
         generate_float_inputs(options["input_size"].as<int>());
     std::string name = options["name"].as<std::string>();
     ProfilerMetrics metrics{name};
-    auto predict_func = [metrics, name](FrontendRPCClient client,
+    auto predict_func = [metrics, name](FrontendRPCClient& client,
                                         ClientFeatureVector input,
                                         std::atomic<int>& prediction_counter) {
       predict(client, name, input, metrics, prediction_counter);
     };
-    Driver driver(
-        predict_func, inputs, options["request_delay_micros"].as<int>(),
-        options["trial_length"].as<int>(), options["num_trials"].as<int>(),
-        options["log_file"].as<std::string>(),
-        options["clipper_address"].as<std::string>());
-    driver_start();
+    Driver driver(predict_func, std::move(inputs),
+                  options["request_delay_micros"].as<int>(),
+                  options["trial_length"].as<int>(),
+                  options["num_trials"].as<int>(),
+                  options["log_file"].as<std::string>(),
+                  options["clipper_address"].as<std::string>());
+    driver.start();
   }
 }
