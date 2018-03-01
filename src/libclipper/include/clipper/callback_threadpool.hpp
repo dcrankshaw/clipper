@@ -6,13 +6,13 @@
 #include <thread>
 #include <unordered_map>
 
-#include <boost/thread.hpp>
 #include <blockingconcurrentqueue.h>
+#include <boost/thread.hpp>
 
 #include "datatypes.hpp"
 #include "logging.hpp"
-#include "threadpool.hpp"
 #include "metrics.hpp"
+#include "threadpool.hpp"
 
 namespace clipper {
 
@@ -59,17 +59,18 @@ class CallbackThreadPool {
   };
 
  public:
-  CallbackThreadPool(const std::string name,
-      const std::uint32_t numThreads) : done_{false}, queue_{100000}, threads_{},
-    queue_submit_latency_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
-        name + ":queue_submit_latency",
-        "microseconds", 4096)) {
+  CallbackThreadPool(const std::string name, const std::uint32_t numThreads)
+      : done_{false},
+        queue_{100000},
+        threads_{},
+        queue_submit_latency_hist_(
+            metrics::MetricsRegistry::get_metrics().create_histogram(
+                name + ":queue_submit_latency", "microseconds", 4096)) {
     try {
-      for(std::uint32_t i = 0u; i < numThreads; ++i) {
+      for (std::uint32_t i = 0u; i < numThreads; ++i) {
         threads_.emplace_back(&CallbackThreadPool::worker, this);
       }
-    }
-    catch(...) {
+    } catch (...) {
       destroy();
       throw;
     }
@@ -112,7 +113,8 @@ class CallbackThreadPool {
     long submit_latency_micros =
         std::chrono::duration_cast<std::chrono::microseconds>(submit_latency)
             .count();
-    queue_submit_latency_hist_->insert(static_cast<int64_t>(submit_latency_micros));
+    queue_submit_latency_hist_->insert(
+        static_cast<int64_t>(submit_latency_micros));
     return result_future;
   }
 
@@ -124,10 +126,12 @@ class CallbackThreadPool {
   void worker() {
     while (!done_) {
       std::unique_ptr<IThreadTask> pTask{nullptr};
-      // NOTE: This is a blocking call. In this threadpool, we want the workers to block
+      // NOTE: This is a blocking call. In this threadpool, we want the workers
+      // to block
       // instead of spin if there is no work.
-      queue_.wait_dequeue(pTask);
-      pTask->execute();
+      if (queue_.wait_dequeue_timed(pTask, 100000)) {
+        pTask->execute();
+      }
     }
   }
 
@@ -152,8 +156,6 @@ class CallbackThreadPool {
   std::vector<std::thread> threads_;
   std::shared_ptr<metrics::Histogram> queue_submit_latency_hist_;
 };
-
 }
-
 
 #endif  // CLIPPER_LIB_CALLBACK_THREADPOOL_HPP

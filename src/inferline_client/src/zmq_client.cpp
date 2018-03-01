@@ -48,8 +48,8 @@ void FrontendRPCClient::start(const std::string address, int send_port,
 void FrontendRPCClient::stop() {
   if (active_) {
     active_ = false;
-    rpc_send_thread_.join();
     rpc_recv_thread_.join();
+    rpc_send_thread_.join();
   }
 }
 
@@ -90,7 +90,7 @@ void FrontendRPCClient::send_messages(socket_t &socket, int max_num_messages) {
   FrontendRPCClientRequest request;
   size_t sent_requests = 0;
   while (sent_requests < max_num_messages &&
-         request_queue_->try_dequeue(request)) {
+         request_queue_->try_dequeue(request) && active_) {
     int request_id = std::get<0>(request);
     std::string app_name = std::get<1>(request);
     ClientFeatureVector input = std::get<2>(request);

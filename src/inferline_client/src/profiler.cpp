@@ -137,8 +137,11 @@ int main(int argc, char* argv[]) {
                   options["clipper_address"].as<std::string>());
     std::cout << "Starting driver" << std::endl;
     driver.start();
+    std::cout << "Driver completed" << std::endl;
+    return 0;
   } else {
     std::cout << "Invalid input type "
               << options["input_type"].as<std::string>() << std::endl;
+    return 1;
   }
 }

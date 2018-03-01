@@ -1,7 +1,10 @@
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 
-#include "httplib.h"
+// #include "httplib.h"
+// #define HTTP_IMPLEMENTATION
+// #include "http.h"
 #include "predictor.hpp"
 #include "zmq_client.hpp"
 
@@ -36,6 +39,9 @@ void Driver::start() {
 
   while (!done_) {
     for (ClientFeatureVector f : inputs_) {
+      if (done_) {
+        break;
+      }
       predict_func_(client_, f, prediction_counter_);
       std::this_thread::sleep_for(
           std::chrono::microseconds(request_delay_micros_));
@@ -53,7 +59,7 @@ void Driver::monitor_results() {
   clipper_metrics_file.open(log_file_ + "-clipper_metrics.json");
   client_metrics_file << "[" << std::endl;
   clipper_metrics_file << "[" << std::endl;
-  httplib::Client http_client(clipper_address_.c_str(), 1337);
+  // httplib::Client http_client(clipper_address_.c_str(), 1337);
 
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
 
@@ -62,17 +68,24 @@ void Driver::monitor_results() {
     if (current_count > trial_length_) {
       prediction_counter_ = 0;
       num_completed_trials += 1;
+      std::cout << "Trial " << std::to_string(num_completed_trials)
+                << " completed" << std::endl;
       std::string metrics_report =
           // registry.report_metrics(false);
           registry.report_metrics(true);
       client_metrics_file << metrics_report;
       client_metrics_file << "," << std::endl;
-
-      auto result = http_client.get("/metrics");
-      if (result && result->status == 200) {
-        clipper_metrics_file << result->body;
-        clipper_metrics_file << "," << std::endl;
-      }
+      std::string address = "http://" + clipper_address_ + ":" +
+                            std::to_string(1337) + "/metrics";
+      std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
+      std::system(cmd_str.c_str());
+      std::ifstream curl_output("curl_out.txt");
+      std::stringstream curl_str_buf;
+      curl_output >> curl_str_buf.rdbuf();
+      std::string curl_str = curl_str_buf.str();
+      clipper_metrics_file << curl_str;
+      clipper_metrics_file << "," << std::endl;
+      curl_output.close();
     }
 
     if (num_completed_trials >= num_trials_) {
@@ -86,5 +99,6 @@ void Driver::monitor_results() {
   client_metrics_file.close();
   clipper_metrics_file << "]";
   clipper_metrics_file.close();
+  return;
 }
 }
