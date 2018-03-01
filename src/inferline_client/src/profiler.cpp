@@ -114,11 +114,12 @@ int main(int argc, char* argv[]) {
        ;
   // clang-format on
   options.parse(argc, argv);
+  std::cout << "Parsed options" << std::endl;
 
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
-  if (options["input_type"].as<std::string>() == "float") {
+  if (options["input_type"].as<std::string>() == "floats") {
     std::vector<ClientFeatureVector> inputs =
         generate_float_inputs(options["input_size"].as<int>());
     std::string name = options["name"].as<std::string>();
@@ -134,6 +135,9 @@ int main(int argc, char* argv[]) {
                   options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),
                   options["clipper_address"].as<std::string>());
+    std::cout << "Starting driver" << std::endl;
     driver.start();
+  } else {
+    std::cout << "Invalid input type " << options["input_type"].as<std::string>() << std::endl;
   }
 }

@@ -190,7 +190,7 @@ def run_profiler(config, trial_length, driver_path, input_size):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     time.sleep(30)
-    log_dir = "driver_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
+    log_dir = "{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name, ts=datetime.now())
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -199,22 +199,33 @@ def run_profiler(config, trial_length, driver_path, input_size):
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        log_path = os.path.join(log_dir, "delay-{n}-delay-{d}".format(n=name, d=delay_micros))
-        with subprocess.Popen([os.path.abspath(driver_path), "--name={}".format(config.name),
-                               "--input_type={}".format(config.input_type),
-                               "--input_size={}".format(input_size),
-                               "--request_delay_micros={}".format(delay_micros),
-                               "--trial_length={}".format(trial_length),
-                               "--num_trials={}".format(num_trials),
-                               "--log_file={}".format(log_path),
-                               "--clipper_address={}".format(clipper_address)],
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+        log_path = os.path.join(log_dir, "name-{n}-delay-{d}".format(n=name, d=delay_micros))
+        # TODO: pin the driver to certain cores
+        cmd = [os.path.abspath(driver_path), "--name={}".format(config.name),
+               "--input_type={}".format(config.input_type),
+               "--input_size={}".format(input_size),
+               "--request_delay_micros={}".format(delay_micros),
+               "--trial_length={}".format(trial_length),
+               "--num_trials={}".format(num_trials),
+               "--log_file={}".format(log_path),
+               "--clipper_address={}".format(clipper_address)]
+        logger.info("Driver command: {}".format(" ".join(cmd)))
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             all_results = []
             while recorded_trials < num_trials:
                 time.sleep(15)
-                with open("{p}-client_metrics.json".format(p=log_path), "r") as client_file, \
-                        open("{p}-clipper_metrics.json".format(p=log_path), "r") as clipper_file:
+                if proc.poll() is not None:
+                    logger.info("Driver process finished with return code {}".format(
+                        proc.returncode))
+                    break
+                client_path = "{p}-client_metrics.json".format(p=log_path)
+                clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+                if not (os.path.exists(client_path) and os.path.exists(clipper_path)):
+                    logger.info("metrics don't exist yet")
+                    continue
+                with open(client_path, "r") as client_file, \
+                        open(clipper_path, "r") as clipper_file:
                     client_metrics_str = client_file.read()
                     clipper_metrics_str = clipper_file.read()
                     if client_metrics_str[-1] != "]":
@@ -237,18 +248,17 @@ def run_profiler(config, trial_length, driver_path, input_size):
                                                                clipper_metrics[-1]))
                     except ValueError as e:
                         logger.warn("Unable to parse metrics. Skipping for now. {}".format(e))
-                if proc.poll() is not None:
-                    logger.info("Driver process finished with return code {}".format(
-                        proc.returncode))
-                    break
+
+            logger.info("stdout: {}".format(proc.stdout.read()))
+            logger.info("stderr: {}".format(proc.stderr.read()))
             return all_results
 
     run(1000, 5, "warmup")
-    init_results = run(1000, 10, "init")
-    mean_thruput = np.mean([r["client_thrus"] for r in init_results][1:])
-    steady_state_delay = round(1.0 / mean_thruput * 1000.0 * 1000.0)
-    logger.info("Setting delay to {}".format(steady_state_delay))
-    run(steady_state_delay, 20, "steady_state")
+    # init_results = run(1000, 10, "init")
+    # mean_thruput = np.mean([r["client_thrus"] for r in init_results][1:])
+    # steady_state_delay = round(1.0 / mean_thruput * 1000.0 * 1000.0)
+    # logger.info("Setting delay to {}".format(steady_state_delay))
+    # run(steady_state_delay, 20, "steady_state")
 
 
 if __name__ == "__main__":
@@ -262,4 +272,4 @@ if __name__ == "__main__":
         allocated_gpus=range(4)
     )
 
-    run_profiler(config, 500, "../../debug/src/inferline_client/profiler", 299*299*3)
+    run_profiler(config, 500, "../../release/src/inferline_client/profiler", 299*299*3)

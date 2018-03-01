@@ -170,10 +170,13 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
     case DataType::Doubles: {
       bytes_per_input = sizeof(double);
     } break;
+    case DataType::Strings: {
+      bytes_per_input = sizeof(char);
+    } break;
     case DataType::Invalid:
     default: {
       std::stringstream ss;
-      ss << "Received a request with an input with invalid type: "
+      ss << "Received a response with an invalid output type: "
          << get_readable_input_type(output_type);
       throw std::runtime_error(ss.str());
     }
