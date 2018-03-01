@@ -65,13 +65,6 @@ class FrontendRPCClient {
   int client_id_;
   int std::atomic<int> request_id_;
   std::atomic_bool connected_;
-
-  // std::shared_ptr<metrics::Meter> request_enqueue_meter_;
-  //
-  // std::shared_ptr<metrics::Meter> response_enqueue_meter_;
-  // std::shared_ptr<metrics::Meter> response_dequeue_meter_;
-  // // std::shared_ptr<metrics::Histogram> malloc_latency_;
-  // std::shared_ptr<metrics::Histogram> recv_latency_;
 };
 
 class ClientFeatureVector {
