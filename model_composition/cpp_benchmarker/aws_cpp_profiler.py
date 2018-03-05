@@ -1,6 +1,6 @@
 import subprocess32 as subprocess
 import os
-# import sys
+import sys
 import numpy as np
 import time
 import logging
@@ -73,9 +73,24 @@ def get_heavy_node_config(model_name,
                                             no_diverge=True,
                                             )
 
+    elif model_name == "sleep":
+        image = "gcr.io/clipper-model-comp/sleep:bench"
+        return driver_utils.HeavyNodeConfig(name="sleep",
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=[],
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=False,
+                                            no_diverge=True,
+                                            )
+
 
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+    cl.connect()
     cl.stop_all()
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
@@ -156,7 +171,7 @@ def get_profiler_stats(metrics_json):
         if "prediction_throughput" in m.keys()[0]:
             name = m.keys()[0]
             model = name.split(":")[0]
-            rate = m[model]["rate"]
+            rate = m[name]["rate"]
             thrus[model] = round(float(rate), 5)
     counters = metrics_json["counters"]
     counts = {}
@@ -164,7 +179,7 @@ def get_profiler_stats(metrics_json):
         if "num_predictions" not in c.keys()[0]:
             name = c.keys()[0]
             model = name.split(":")[0]
-            count = c[model]["count"]
+            count = c[name]["count"]
             counts[model] = int(count)
     return (mean_latencies, p99_latencies, thrus, counts)
 
@@ -178,15 +193,16 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
-    logger.info(("Client thrus: {client_thrus}, clipper thrus: {clipper_thrus "
+    logger.info(("Client thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
                  "client counts: {client_counts}, clipper counts: {clipper_counts}, "
                  "client p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
                  "queue sizes: {queue_sizes}, batch sizes: {batch_sizes}").format(**results_dict))
     return results_dict
 
 
-def run_profiler(config, trial_length, driver_path, input_size):
+def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
     clipper_address = setup_clipper([config, ])
+    clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     time.sleep(30)
@@ -201,7 +217,7 @@ def run_profiler(config, trial_length, driver_path, input_size):
         time.sleep(10)
         log_path = os.path.join(log_dir, "name-{n}-delay-{d}".format(n=name, d=delay_micros))
         # TODO: pin the driver to certain cores
-        cmd = [os.path.abspath(driver_path), "--name={}".format(config.name),
+        cmd = ["numactl", "-C", profiler_cores_str, "os.path.abspath(driver_path)", "--name={}".format(config.name),
                "--input_type={}".format(config.input_type),
                "--input_size={}".format(input_size),
                "--request_delay_micros={}".format(delay_micros),
@@ -214,7 +230,7 @@ def run_profiler(config, trial_length, driver_path, input_size):
             recorded_trials = 0
             all_results = []
             while recorded_trials < num_trials:
-                time.sleep(15)
+                time.sleep(5)
                 if proc.poll() is not None:
                     logger.info("Driver process finished with return code {}".format(
                         proc.returncode))
@@ -226,34 +242,45 @@ def run_profiler(config, trial_length, driver_path, input_size):
                     continue
                 with open(client_path, "r") as client_file, \
                         open(clipper_path, "r") as clipper_file:
-                    client_metrics_str = client_file.read()
-                    clipper_metrics_str = clipper_file.read()
-                    if client_metrics_str[-1] != "]":
+                    client_metrics_str = client_file.read().strip()
+                    # client_metrics_str = client_metrics_str.replace("\n", "")
+                    clipper_metrics_str = clipper_file.read().strip()
+                    # clipper_metrics_str = clipper_metrics_str.replace("\n", "")
+                    if client_metrics_str[-1] == ",":
+                        client_metrics_str = client_metrics_str.rstrip(",")
                         client_metrics_str += "]"
-                    if clipper_metrics_str[-1] != "]":
+                    if clipper_metrics_str[-1] == ",":
+                        clipper_metrics_str = clipper_metrics_str.rstrip(",")
                         clipper_metrics_str += "]"
                     try:
                         client_metrics = json.loads(client_metrics_str)
-                        clipper_metrics = json.loads(client_metrics_str)
-                        client_trials = len(client_metrics)
-                        clipper_trials = len(clipper_metrics)
-                        if clipper_trials != client_trials:
-                            logger.warn(("Clipper trials ({}) and client trials ({}) not the "
-                                         "same length").format(clipper_trials, client_trials))
-                        else:
-                            new_recorded_trials = clipper_trials
-                            if new_recorded_trials > recorded_trials:
-                                recorded_trials = new_recorded_trials
-                                all_results.append(print_stats(client_metrics[-1],
-                                                               clipper_metrics[-1]))
                     except ValueError as e:
-                        logger.warn("Unable to parse metrics. Skipping for now. {}".format(e))
+                        logger.warn("Unable to parse client metrics. Skipping for now. {}".format(e))
+                        print(client_metrics_str)
+                        continue
+                    try:
+                        clipper_metrics = json.loads(clipper_metrics_str)
+                    except ValueError as e:
+                        logger.warn("Unable to parse clipper metrics. Skipping for now. {}".format(e))
+                        print(clipper_metrics_str)
+                        continue
+                    client_trials = len(client_metrics)
+                    clipper_trials = len(clipper_metrics)
+                    if clipper_trials != client_trials:
+                        logger.warn(("Clipper trials ({}) and client trials ({}) not the "
+                                     "same length").format(clipper_trials, client_trials))
+                    else:
+                        new_recorded_trials = clipper_trials
+                        if new_recorded_trials > recorded_trials:
+                            recorded_trials = new_recorded_trials
+                            all_results.append(print_stats(client_metrics[-1],
+                                                           clipper_metrics[-1]))
 
             logger.info("stdout: {}".format(proc.stdout.read()))
             logger.info("stderr: {}".format(proc.stderr.read()))
             return all_results
 
-    run(1000, 5, "warmup")
+    run(100000, 5, "warmup")
     # init_results = run(1000, 10, "init")
     # mean_thruput = np.mean([r["client_thrus"] for r in init_results][1:])
     # steady_state_delay = round(1.0 / mean_thruput * 1000.0 * 1000.0)
@@ -264,7 +291,7 @@ def run_profiler(config, trial_length, driver_path, input_size):
 if __name__ == "__main__":
 
     config = get_heavy_node_config(
-        model_name=RES50,
+        model_name="sleep",
         batch_size=8,
         num_replicas=1,
         cpus_per_replica=1,
@@ -272,4 +299,5 @@ if __name__ == "__main__":
         allocated_gpus=range(4)
     )
 
-    run_profiler(config, 500, "../../release/src/inferline_client/profiler", 299*299*3)
+    # run_profiler(config, 500, "../../release/src/inferline_client/profiler", 299*299*3)
+    run_profiler(config, 50, "../../release/src/inferline_client/profiler", 4, "9,25,10,26")
