@@ -1,6 +1,6 @@
 import subprocess32 as subprocess
 import os
-import sys
+# import sys
 import numpy as np
 import time
 import logging
@@ -31,7 +31,7 @@ def get_heavy_node_config(model_name,
                           allocated_cpus,
                           allocated_gpus):
 
-    if model_name == "alexnet":
+    if model_name == ALEXNET:
         image = "gcr.io/clipper-model-comp/pytorch-alexnet:bench"
         return driver_utils.HeavyNodeConfig(name="alexnet",
                                             input_type="floats",
@@ -45,7 +45,7 @@ def get_heavy_node_config(model_name,
                                             no_diverge=True,
                                             )
 
-    elif model_name == "res50":
+    elif model_name == RES50:
         image = "gcr.io/clipper-model-comp/pytorch-res50:bench"
         return driver_utils.HeavyNodeConfig(name="res50",
                                             input_type="floats",
@@ -59,7 +59,7 @@ def get_heavy_node_config(model_name,
                                             no_diverge=True,
                                             )
 
-    elif model_name == "res152":
+    elif model_name == RES152:
         image = "gcr.io/clipper-model-comp/pytorch-res152:bench"
         return driver_utils.HeavyNodeConfig(name="res152",
                                             input_type="floats",
@@ -112,7 +112,7 @@ def get_clipper_batch_sizes(metrics_json):
         if "batch_size" in h.keys()[0]:
             name = h.keys()[0]
             model = name.split(":")[1]
-            mean = h[name]["mean"]
+            mean = float(h[name]["mean"])
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
@@ -124,7 +124,7 @@ def get_clipper_queue_sizes(metrics_json):
         if "queue_size" in h.keys()[0]:
             name = h.keys()[0]
             model = name.split(":")[0]
-            mean = h[name]["mean"]
+            mean = float(h[name]["mean"])
             mean_queue_sizes[model] = round(float(mean), 2)
     return mean_queue_sizes
 
@@ -135,7 +135,7 @@ def get_clipper_thruputs(metrics_json):
     for m in meters:
         if "prediction_throughput" in m.keys()[0]:
             name = m.keys()[0]
-            rate = m[name]["rate"]
+            rate = float(m[name]["rate"])
             thrus[name] = round(float(rate), 5)
     return thrus
 
@@ -162,8 +162,8 @@ def get_profiler_stats(metrics_json):
         if "prediction_latency" in h.keys()[0]:
             name = h.keys()[0]
             model = name.split(":")[0]
-            mean = h[name]["mean"]
-            p99 = h[name]["p99"]
+            mean = float(h[name]["mean"]) / 1000.0
+            p99 = float(h[name]["p99"]) / 1000.0
             mean_latencies[model] = round(float(mean), 3)
             p99_latencies[model] = round(float(p99), 3)
     meters = metrics_json["meters"]
@@ -171,12 +171,12 @@ def get_profiler_stats(metrics_json):
         if "prediction_throughput" in m.keys()[0]:
             name = m.keys()[0]
             model = name.split(":")[0]
-            rate = m[name]["rate"]
+            rate = float(m[name]["rate"])
             thrus[model] = round(float(rate), 5)
     counters = metrics_json["counters"]
     counts = {}
     for c in counters:
-        if "num_predictions" not in c.keys()[0]:
+        if "num_predictions" in c.keys()[0]:
             name = c.keys()[0]
             model = name.split(":")[0]
             count = c[name]["count"]
@@ -193,11 +193,40 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
-    logger.info(("Client thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
-                 "client counts: {client_counts}, clipper counts: {clipper_counts}, "
-                 "client p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
-                 "queue sizes: {queue_sizes}, batch sizes: {batch_sizes}").format(**results_dict))
+    # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+    #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+    #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+    #              "\nqueue sizes: {queue_sizes}, "
+    #              "batch sizes: {batch_sizes}").format(**results_dict))
+    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
+                 "mean lat: {client_mean_lats} "
+                 "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
+                 "counts: {client_counts}\n").format(**results_dict))
     return results_dict
+
+
+def load_metrics(client_path, clipper_path):
+    with open(client_path, "r") as client_file, \
+            open(clipper_path, "r") as clipper_file:
+        client_metrics_str = client_file.read().strip()
+        clipper_metrics_str = clipper_file.read().strip()
+        if client_metrics_str[-1] == ",":
+            client_metrics_str = client_metrics_str.rstrip(",")
+            client_metrics_str += "]"
+        if clipper_metrics_str[-1] == ",":
+            clipper_metrics_str = clipper_metrics_str.rstrip(",")
+            clipper_metrics_str += "]"
+        try:
+            client_metrics = json.loads(client_metrics_str)
+        except ValueError as e:
+            # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
+            return None
+        try:
+            clipper_metrics = json.loads(clipper_metrics_str)
+        except ValueError as e:
+            # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
+            return None
+    return client_metrics, clipper_metrics
 
 
 def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
@@ -206,7 +235,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     time.sleep(30)
-    log_dir = "{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name, ts=datetime.now())
+    log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
+                                                                    ts=datetime.now())
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -215,9 +245,10 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        log_path = os.path.join(log_dir, "name-{n}-delay-{d}".format(n=name, d=delay_micros))
-        # TODO: pin the driver to certain cores
-        cmd = ["numactl", "-C", profiler_cores_str, "os.path.abspath(driver_path)", "--name={}".format(config.name),
+        log_path = os.path.join(log_dir, "{n}-delay-{d}".format(n=name, d=delay_micros))
+        cmd = ["numactl", "-C", profiler_cores_str,
+               os.path.abspath(driver_path),
+               "--name={}".format(config.name),
                "--input_type={}".format(config.input_type),
                "--input_size={}".format(input_size),
                "--request_delay_micros={}".format(delay_micros),
@@ -226,73 +257,76 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                "--log_file={}".format(log_path),
                "--clipper_address={}".format(clipper_address)]
         logger.info("Driver command: {}".format(" ".join(cmd)))
+        client_path = "{p}-client_metrics.json".format(p=log_path)
+        clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
-            all_results = []
+            summary_results = []
             while recorded_trials < num_trials:
                 time.sleep(5)
                 if proc.poll() is not None:
-                    logger.info("Driver process finished with return code {}".format(
-                        proc.returncode))
-                    break
-                client_path = "{p}-client_metrics.json".format(p=log_path)
-                clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+                    if proc.returncode != 0:
+                        logger.warn("Driver process finished with return code {}".format(
+                            proc.returncode))
+                        break
+                    # else:
+                    #     logger.warn("Driver process finished without enough trials. "
+                    #                 "Expected {num}, recorded {rec}".format(num=num_trials,
+                    #                                                         rec=recorded_trials))
                 if not (os.path.exists(client_path) and os.path.exists(clipper_path)):
                     logger.info("metrics don't exist yet")
                     continue
-                with open(client_path, "r") as client_file, \
-                        open(clipper_path, "r") as clipper_file:
-                    client_metrics_str = client_file.read().strip()
-                    # client_metrics_str = client_metrics_str.replace("\n", "")
-                    clipper_metrics_str = clipper_file.read().strip()
-                    # clipper_metrics_str = clipper_metrics_str.replace("\n", "")
-                    if client_metrics_str[-1] == ",":
-                        client_metrics_str = client_metrics_str.rstrip(",")
-                        client_metrics_str += "]"
-                    if clipper_metrics_str[-1] == ",":
-                        clipper_metrics_str = clipper_metrics_str.rstrip(",")
-                        clipper_metrics_str += "]"
-                    try:
-                        client_metrics = json.loads(client_metrics_str)
-                    except ValueError as e:
-                        logger.warn("Unable to parse client metrics. Skipping for now. {}".format(e))
-                        print(client_metrics_str)
-                        continue
-                    try:
-                        clipper_metrics = json.loads(clipper_metrics_str)
-                    except ValueError as e:
-                        logger.warn("Unable to parse clipper metrics. Skipping for now. {}".format(e))
-                        print(clipper_metrics_str)
-                        continue
-                    client_trials = len(client_metrics)
-                    clipper_trials = len(clipper_metrics)
-                    if clipper_trials != client_trials:
-                        logger.warn(("Clipper trials ({}) and client trials ({}) not the "
-                                     "same length").format(clipper_trials, client_trials))
-                    else:
-                        new_recorded_trials = clipper_trials
-                        if new_recorded_trials > recorded_trials:
-                            recorded_trials = new_recorded_trials
-                            all_results.append(print_stats(client_metrics[-1],
+                loaded_metrics = load_metrics(client_path, clipper_path)
+                if loaded_metrics is not None:
+                    client_metrics, clipper_metrics = loaded_metrics
+                else:
+                    continue
+                client_trials = len(client_metrics)
+                clipper_trials = len(clipper_metrics)
+                if clipper_trials != client_trials:
+                    logger.warn(("Clipper trials ({}) and client trials ({}) not the "
+                                 "same length").format(clipper_trials, client_trials))
+                else:
+                    new_recorded_trials = clipper_trials
+                    if new_recorded_trials > recorded_trials:
+                        recorded_trials = new_recorded_trials
+                        summary_results.append(print_stats(client_metrics[-1],
                                                            clipper_metrics[-1]))
 
-            logger.info("stdout: {}".format(proc.stdout.read()))
-            logger.info("stderr: {}".format(proc.stderr.read()))
-            return all_results
+            # prof_stdout = proc.stdout.read().strip()
+            # if len(prof_stdout) > 0:
+            #     logger.info("Profiler stdout: {}".format(prof_stdout))
+            prof_stderr = proc.stderr.read().strip()
+            if len(prof_stderr) > 0:
+                logger.info("stderr: {}".format(prof_stderr))
+            try:
+                loaded_metrics = load_metrics(client_path, clipper_path)
+                if loaded_metrics is not None:
+                    client_metrics, clipper_metrics = loaded_metrics
+                    return (client_metrics, clipper_metrics, summary_results)
+                else:
+                    logger.error("Error loading final metrics")
+            except ValueError as e:
+                logger.error("Unable to parse final metrics")
+                raise e
 
-    run(100000, 5, "warmup")
-    # init_results = run(1000, 10, "init")
-    # mean_thruput = np.mean([r["client_thrus"] for r in init_results][1:])
-    # steady_state_delay = round(1.0 / mean_thruput * 1000.0 * 1000.0)
-    # logger.info("Setting delay to {}".format(steady_state_delay))
-    # run(steady_state_delay, 20, "steady_state")
+    run(1000, 10, "warmup")
+    _, _, init_results = run(1000, 10, "init")
+    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results][1:])
+    steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
+    logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
+        delay=steady_state_delay, thru=mean_thruput))
+    steady_results = run(steady_state_delay, 20, "steady_state")
+    cl.stop_all()
+    return steady_results
 
 
 if __name__ == "__main__":
 
+    batch_size = 8
     config = get_heavy_node_config(
-        model_name="sleep",
-        batch_size=8,
+        model_name=RES50,
+        batch_size=batch_size,
         num_replicas=1,
         cpus_per_replica=1,
         allocated_cpus=range(4, 8),
@@ -300,4 +334,13 @@ if __name__ == "__main__":
     )
 
     # run_profiler(config, 500, "../../release/src/inferline_client/profiler", 299*299*3)
-    run_profiler(config, 50, "../../release/src/inferline_client/profiler", 4, "9,25,10,26")
+    client_mets, clipper_mets, summary_mets = run_profiler(
+        config, 1000, "../../release/src/inferline_client/profiler",
+        299*299*3, "9,25,10,26")
+    fname = "results-batch-{batch}".format(batch=batch_size)
+    driver_utils.save_results_cpp_client([config, ],
+                                         client_mets,
+                                         clipper_mets,
+                                         summary_mets,
+                                         "pytorch_res50_smp_aws_cpp_profiling_DEBUG",
+                                         prefix=fname)

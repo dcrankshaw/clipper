@@ -44,7 +44,7 @@ RPCService::RPCService()
       replica_ids_(std::unordered_map<VersionedModelId, int>({})) {
   msg_queueing_hist_ = metrics::MetricsRegistry::get_metrics().create_histogram(
       "internal:rpc_request_queueing_delay", "microseconds", 2056);
-  model_send_times_ = metrics::MetricsRegistry::get_metrics().create_data_list<long long>("send_times", "timestamp");
+  // model_send_times_ = metrics::MetricsRegistry::get_metrics().create_data_list<long long>("send_times", "timestamp");
 }
 
 RPCService::~RPCService() { stop(); }
@@ -165,12 +165,12 @@ int RPCService::send_model_message(std::string model_name,
           .count();
   RPCRequest request(zmq_connection_id, id, std::move(msg),
                      current_time_micros);
-  auto model_metrics_search = model_processing_latencies_.find(model_name);
-  if (model_metrics_search == model_processing_latencies_.end()) {
-    auto model_metric = metrics::MetricsRegistry::get_metrics()
-        .create_data_list<long>(model_name + ":processing_latency", "milliseconds");
-    model_processing_latencies_.emplace(model_name, model_metric);
-  }
+  // auto model_metrics_search = model_processing_latencies_.find(model_name);
+  // if (model_metrics_search == model_processing_latencies_.end()) {
+  //   auto model_metric = metrics::MetricsRegistry::get_metrics()
+  //       .create_data_list<long>(model_name + ":processing_latency", "milliseconds");
+  //   model_processing_latencies_.emplace(model_name, model_metric);
+  // }
 
   msg_id_models_map_.emplace(id, model_name);
   request_queue_->enqueue(std::move(request));
@@ -252,7 +252,7 @@ void RPCService::send_messages(socket_t &socket,
 
 
     long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
-    model_send_times_->insert(curr_system_time);
+    // model_send_times_->insert(curr_system_time);
     }
 }
 
@@ -306,13 +306,13 @@ void RPCService::receive_message(socket_t &socket) {
 
   auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
   std::string model_name = msg_id_models_map_.find(id)->second;
-  auto model_latencies_list = model_processing_latencies_.find(model_name)->second;
+  // auto model_latencies_list = model_processing_latencies_.find(model_name)->second;
 
   auto inbound_timestamp = std::chrono::system_clock::now();
   long model_processing_latency =
       std::chrono::duration_cast<std::chrono::milliseconds>(inbound_timestamp - outbound_timestamp).count();
 
-  model_latencies_list->insert(model_processing_latency);
+  // model_latencies_list->insert(model_processing_latency);
   msg_id_timestamp_map_.erase(id);
   msg_id_models_map_.erase(id);
 

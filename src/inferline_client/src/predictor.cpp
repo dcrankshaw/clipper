@@ -95,9 +95,9 @@ void Driver::monitor_results() {
     }
   }
 
-  client_metrics_file << "]";
+  // client_metrics_file << "]";
   client_metrics_file.close();
-  clipper_metrics_file << "]";
+  // clipper_metrics_file << "]";
   clipper_metrics_file.close();
   return;
 }

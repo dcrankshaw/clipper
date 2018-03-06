@@ -162,6 +162,51 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
         logger.info("Saved results to {}".format(results_file))
 
 
+def save_results_cpp_client(configs,
+                            client_metrics,
+                            clipper_metrics,
+                            summary_metrics,
+                            results_dir,
+                            prefix="results",
+                            container_metrics=None):
+    """
+    Parameters
+    ----------
+    configs : list(HeavyNodeConfig)
+        The configs for any models deployed
+
+
+    """
+
+    results_dir = os.path.abspath(os.path.expanduser(results_dir))
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+        logger.info("Created experiments directory: %s" % results_dir)
+
+    # if "all_lats" not in client_metrics[0]:
+    #     raise Exception("No latencies list found under key \"all_lats\"."
+    #                     " Please update your driver to include all latencies so we can"
+    #                     " plot the latency CDF")
+    # else:
+    #     for c in client_metrics:
+    #         all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
+    #         c["all_lats"] = all_lats_strs
+
+    results_obj = {
+        "node_configs": [c.__dict__ for c in configs],
+        "summary_metrics": summary_metrics,
+        "client_metrics": client_metrics,
+        "clipper_metrics": clipper_metrics,
+    }
+    if container_metrics is not None:
+        results_obj["container_metrics"] = container_metrics
+    results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
+        prefix=prefix, ts=datetime.datetime.now()))
+    with open(results_file, "w") as f:
+        json.dump(results_obj, f, indent=4)
+        logger.info("Saved results to {}".format(results_file))
+
+
 def check_convergence_via_queue(stats, configs):
     """
     Returns

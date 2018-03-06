@@ -35,9 +35,9 @@ class ModelMetrics {
         latency_(metrics::MetricsRegistry::get_metrics().create_histogram(
             "model:" + model.serialize() + ":prediction_latency",
             "microseconds", 4096)),
-        latency_list_(metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
-            "model:" + model.serialize() + ":prediction_latencies_list", "microseconds"
-        )),
+        // latency_list_(metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
+        //     "model:" + model.serialize() + ":prediction_latencies_list", "microseconds"
+        // )),
         throughput_(metrics::MetricsRegistry::get_metrics().create_meter(
             "model:" + model.serialize() + ":prediction_throughput")),
         num_predictions_(metrics::MetricsRegistry::get_metrics().create_counter(
@@ -56,7 +56,7 @@ class ModelMetrics {
 
   VersionedModelId model_;
   std::shared_ptr<metrics::Histogram> latency_;
-  std::shared_ptr<metrics::DataList<long long>> latency_list_;
+  // std::shared_ptr<metrics::DataList<long long>> latency_list_;
   std::shared_ptr<metrics::Meter> throughput_;
   std::shared_ptr<metrics::Counter> num_predictions_;
   std::shared_ptr<metrics::RatioCounter> cache_hit_ratio_;
@@ -127,13 +127,13 @@ class ModelQueue {
                 name + ":lock_latency", "microseconds", 4096)),
         queue_size_hist_(
             metrics::MetricsRegistry::get_metrics().create_histogram(
-                name + ":queue_size", "microseconds", 1000)),
-        queue_size_list_(
-            metrics::MetricsRegistry::get_metrics()
-                .create_data_list<size_t>(name + ":queue_sizes", "queue size")),
-        queue_arrivals_list_(
-            metrics::MetricsRegistry::get_metrics()
-                .create_data_list<long long>(name + ":queue_arrivals", "timestamp")) {}
+                name + ":queue_size", "microseconds", 1000)) {}
+        // queue_size_list_(
+        //     metrics::MetricsRegistry::get_metrics()
+        //         .create_data_list<size_t>(name + ":queue_sizes", "queue size")),
+        // queue_arrivals_list_(
+        //     metrics::MetricsRegistry::get_metrics()
+        //         .create_data_list<long long>(name + ":queue_arrivals", "timestamp")) {}
 
   // Disallow copy and assign
   ModelQueue(const ModelQueue &) = delete;
@@ -162,10 +162,10 @@ class ModelQueue {
         current_time + std::chrono::microseconds(task.latency_slo_micros_);
     queue_.emplace(deadline, std::move(task));
 
-    long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
-    queue_arrivals_list_->insert(curr_system_time);
+    // long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
+    // queue_arrivals_list_->insert(curr_system_time);
 
-    queue_size_list_->insert(queue_.size());
+    // queue_size_list_->insert(queue_.size());
     queue_not_empty_condition_.notify_one();
   }
 
@@ -186,7 +186,7 @@ class ModelQueue {
       queue_.pop();
     }
     queue_size_hist_->insert(static_cast<int64_t>(queue_.size()));
-    queue_size_list_->insert(queue_.size());
+    // queue_size_list_->insert(queue_.size());
     return batch;
   }
 
@@ -207,8 +207,8 @@ class ModelQueue {
   std::condition_variable queue_not_empty_condition_;
   std::shared_ptr<metrics::Histogram> lock_latency_hist_;
   std::shared_ptr<metrics::Histogram> queue_size_hist_;
-  std::shared_ptr<metrics::DataList<size_t>> queue_size_list_;
-  std::shared_ptr<metrics::DataList<long long>> queue_arrivals_list_;
+  // std::shared_ptr<metrics::DataList<size_t>> queue_size_list_;
+  // std::shared_ptr<metrics::DataList<long long>> queue_arrivals_list_;
 
   // Deletes tasks with deadlines prior or equivalent to the
   // current system time. This method should only be called
@@ -570,8 +570,8 @@ class TaskExecutor {
         (*cur_model_metric).batch_size_->insert(batch_size);
         (*cur_model_metric)
             .latency_->insert(static_cast<int64_t>(task_latency_micros));
-        (*cur_model_metric)
-            .latency_list_->insert(static_cast<int64_t>(task_latency_micros));
+        // (*cur_model_metric)
+        //     .latency_list_->insert(static_cast<int64_t>(task_latency_micros));
       }
       for (int batch_num = 0; batch_num < batch_size; ++batch_num) {
         InflightMessage completed_msg = keys[batch_num];

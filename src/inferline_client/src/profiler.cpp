@@ -114,7 +114,6 @@ int main(int argc, char* argv[]) {
        ;
   // clang-format on
   options.parse(argc, argv);
-  std::cout << "Parsed options" << std::endl;
 
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
@@ -140,7 +139,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Driver completed" << std::endl;
     return 0;
   } else {
-    std::cout << "Invalid input type "
+    std::cerr << "Invalid input type "
               << options["input_type"].as<std::string>() << std::endl;
     return 1;
   }
