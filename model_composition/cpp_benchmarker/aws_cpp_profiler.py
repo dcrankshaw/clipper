@@ -134,7 +134,7 @@ def get_input_size(name):
     if name in [TF_LOG_REG, TF_KERNEL_SVM]:
         return 2048
     elif name in [ALEXNET, RES50, RES152, INCEPTION_FEATS]:
-        return 299*299*299
+        return 299*299*3
     elif name in [TF_RESNET, ]:
         return 224*224*3
 
@@ -375,26 +375,27 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for batch_size in [1, 2, 4, 8, 16, 24, 32]:
-        config = get_heavy_node_config(
-            model_name=RES50,
-            batch_size=batch_size,
-            num_replicas=1,
-            cpus_per_replica=1,
-            allocated_cpus=range(4, 8),
-            allocated_gpus=range(4)
-        )
+    for model in [INCEPTION_FEATS, TF_RESNET, TF_KERNEL_SVM, TF_LOG_REG]:
+        for batch_size in [1, 2, 4, 8, 16, 24, 32]:
+            config = get_heavy_node_config(
+                model_name=model,
+                batch_size=batch_size,
+                num_replicas=1,
+                cpus_per_replica=1,
+                allocated_cpus=range(4, 8),
+                allocated_gpus=range(4)
+            )
 
-        input_size = get_input_size(config.name)
-        client_mets, clipper_mets, summary_mets = run_profiler(
-            config, 1000, "../../release/src/inferline_client/profiler",
-            input_size, "9,25,10,26")
-        fname = "results-batch-{batch}".format(batch=batch_size)
-        results_dir = "pytorch_res50_smp_aws_cpp_profiling"
-        driver_utils.save_results_cpp_client([config, ],
-                                             client_mets,
-                                             clipper_mets,
-                                             summary_mets,
-                                             results_dir,
-                                             prefix=fname)
+            input_size = get_input_size(config.name)
+            client_mets, clipper_mets, summary_mets = run_profiler(
+                config, 1000, "../../release/src/inferline_client/profiler",
+                input_size, "9,25,10,26")
+            fname = "results-batch-{batch}".format(batch=batch_size)
+            results_dir = "{}_smp_aws_cpp_profiling".format(model)
+            driver_utils.save_results_cpp_client([config, ],
+                                                 client_mets,
+                                                 clipper_mets,
+                                                 summary_mets,
+                                                 results_dir,
+                                                 prefix=fname)
     sys.exit(0)
