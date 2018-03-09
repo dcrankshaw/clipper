@@ -362,7 +362,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     delay_micros = 1000
-    run(delay_micros, 5, "warmup")
+    run(delay_micros, 10, "warmup")
     _, _, init_results = run(delay_micros, 10, "init")
     mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results][1:])
     steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
@@ -375,22 +375,22 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for model in [INCEPTION_FEATS, TF_RESNET, TF_KERNEL_SVM, TF_LOG_REG]:
-        for batch_size in [1, 2, 4, 8, 16, 24, 32]:
+    for model in [RES50, RES152, ALEXNET, INCEPTION_FEATS, TF_RESNET]:
+        for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
                 num_replicas=1,
                 cpus_per_replica=1,
-                allocated_cpus=range(4, 8),
-                allocated_gpus=range(4)
+                allocated_cpus=range(2,3),
+                allocated_gpus=range(0,1)
             )
 
             input_size = get_input_size(config.name)
             client_mets, clipper_mets, summary_mets = run_profiler(
-                config, 1000, "../../release/src/inferline_client/profiler",
+                config, 2000, "../../release/src/inferline_client/profiler",
                 input_size, "9,25,10,26")
-            fname = "results-batch-{batch}".format(batch=batch_size)
+            fname = "cpp-aws-results-v100-batch-{batch}".format(batch=batch_size)
             results_dir = "{}_smp_aws_cpp_profiling".format(model)
             driver_utils.save_results_cpp_client([config, ],
                                                  client_mets,
