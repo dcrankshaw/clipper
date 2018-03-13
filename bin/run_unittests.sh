@@ -144,6 +144,9 @@ function run_integration_tests {
   python ../integration-tests/deploy_tensorflow_models.py
   ../integration-tests/r_integration_test/rclipper_test.sh
   python ../integration-tests/clipper_metric.py 
+  python ../integration-tests/deploy_mxnet_models.py 
+  python ../integration-tests/deploy_pytorch_models.py 
+  python ../integration-tests/deploy_pytorch_to_models.py 
 }
 
 function run_all_tests {
