@@ -36,12 +36,19 @@ Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
 
 void Driver::start() {
   auto monitor_thread = std::thread([this]() { monitor_results(); });
+  // auto last_send_time = std::chrono::system_clock::now();
+  // long cur_delay_micros = 0;
 
   while (!done_) {
     for (ClientFeatureVector f : inputs_) {
       if (done_) {
         break;
       }
+      // while (cur_delay_micros < request_delay_micros_) {
+      //   auto cur_delay = std::chrono::system_clock::now() - last_send_time;
+      //   cur_delay_micros =
+      //       std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
+      // }
       predict_func_(client_, f, prediction_counter_);
       std::this_thread::sleep_for(
           std::chrono::microseconds(request_delay_micros_));
