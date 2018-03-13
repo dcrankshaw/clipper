@@ -1,6 +1,6 @@
 FROM model-comp/cuda-rpc
 
-RUN conda install torchvision -c pytorch
+RUN conda install pytorch torchvision cuda90 -c pytorch
 
 COPY pytorch_models/ /root/.torch/
 

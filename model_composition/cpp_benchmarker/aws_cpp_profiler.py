@@ -92,7 +92,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_RESNET:
         image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
-        return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS,
+        return driver_utils.HeavyNodeConfig(name=TF_RESNET,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -105,7 +105,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_LOG_REG:
         image = "gcr.io/clipper-model-comp/tf-log-reg:bench"
-        return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS,
+        return driver_utils.HeavyNodeConfig(name=TF_LOG_REG,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -118,7 +118,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_KERNEL_SVM:
         image = "gcr.io/clipper-model-comp/tf-kernel-svm:bench"
-        return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS,
+        return driver_utils.HeavyNodeConfig(name=TF_KERNEL_SVM,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -375,7 +375,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for model in [RES50, RES152, ALEXNET, INCEPTION_FEATS, TF_RESNET]:
+    for model in [TF_RESNET, ]:
         for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
             config = get_heavy_node_config(
                 model_name=model,
