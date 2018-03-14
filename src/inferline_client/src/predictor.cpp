@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <time.h>
 
 // #include "httplib.h"
 // #define HTTP_IMPLEMENTATION
@@ -34,24 +35,35 @@ Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
   client_.start(clipper_address, SEND_PORT, RECV_PORT);
 }
 
+void spin_sleep(int duration_micros) {
+  auto start_time = std::chrono::system_clock::now();
+  long cur_delay_micros = 0;
+  while (cur_delay_micros < duration_micros) {
+    auto cur_delay = std::chrono::system_clock::now() - start_time;
+    cur_delay_micros =
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
+  }
+}
+
 void Driver::start() {
   auto monitor_thread = std::thread([this]() { monitor_results(); });
   // auto last_send_time = std::chrono::system_clock::now();
   // long cur_delay_micros = 0;
+
+  struct timespec req = {0};
+  req.tv_sec = 0;
+  req.tv_nsec = request_delay_micros_ * 1000;
 
   while (!done_) {
     for (ClientFeatureVector f : inputs_) {
       if (done_) {
         break;
       }
-      // while (cur_delay_micros < request_delay_micros_) {
-      //   auto cur_delay = std::chrono::system_clock::now() - last_send_time;
-      //   cur_delay_micros =
-      //       std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
-      // }
       predict_func_(client_, f, prediction_counter_);
-      std::this_thread::sleep_for(
-          std::chrono::microseconds(request_delay_micros_));
+      spin_sleep(request_delay_micros_);
+      // nanosleep(&req, (struct timespec *)NULL);
+      // std::this_thread::sleep_for(
+      //     std::chrono::microseconds(request_delay_micros_));
     }
   }
   client_.stop();

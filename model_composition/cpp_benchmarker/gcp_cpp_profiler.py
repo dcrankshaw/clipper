@@ -213,7 +213,7 @@ def get_profiler_stats(metrics_json):
     return (mean_latencies, p99_latencies, thrus, counts)
 
 
-def print_stats(client_metrics, clipper_metrics):
+def print_stats(client_metrics, clipper_metrics, verbose=False):
     results_dict = {}
     results_dict["batch_sizes"] = get_clipper_batch_sizes(clipper_metrics)
     results_dict["queue_sizes"] = get_clipper_queue_sizes(clipper_metrics)
@@ -222,15 +222,17 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
-    # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
-    #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
-    #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
-    #              "\nqueue sizes: {queue_sizes}, "
-    #              "batch sizes: {batch_sizes}").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-                 "mean lat: {client_mean_lats} "
-                 "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
-                 "counts: {client_counts}\n").format(**results_dict))
+    if verbose:
+        logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+                     "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+                     "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+                     "\nqueue sizes: {queue_sizes}, "
+                     "batch sizes: {batch_sizes}\n").format(**results_dict))
+    else:
+        logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
+                     "mean lat: {client_mean_lats} "
+                     "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
+                     "counts: {client_counts}\n").format(**results_dict))
     return results_dict
 
 
@@ -331,7 +333,7 @@ def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000)
                 loaded_metrics = load_metrics(client_path, clipper_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
-                    return (client_metrics, clipper_metrics, summary_results)
+                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
@@ -339,48 +341,48 @@ def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000)
                 raise e
 
     delay_micros = init_delay
-    run(delay_micros, 15, "warmup")
-    _, _, init_results = run(delay_micros, 15, "init")
-    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results][1:])
+    run(delay_micros, 20, "warmup")
+    init_results = run(delay_micros, 15, "init")
+    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
     steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
     logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
         delay=steady_state_delay, thru=mean_thruput))
     steady_results = run(steady_state_delay, 30, "steady_state")
     cl.stop_all()
-    return steady_results
+    return init_results, steady_results
+
 
 
 if __name__ == "__main__":
 
     global GCP_CLUSTER_NAME
     num_cpus = 2
+    gpu = "p100"
+    model = RES50
     for gpu in ["p100", "k80"]:
-        for model in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM]:
-            GCP_CLUSTER_NAME = "smp-cascade-{}".format(model)
-            for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
-                if gpu == "k80" and batch_size > 32:
-                    continue
-                if gpu == "p100" and model == TF_RESNET and batch_size <= 32:
-                    continue
-                config = get_heavy_node_config(
-                    model_name=model,
-                    batch_size=batch_size,
-                    num_replicas=1,
-                    cpus_per_replica=num_cpus,
-                    gpu_type=gpu)
+        for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
+            if gpu == "k80" and batch_size > 32:
+                continue
 
-                input_size = get_input_size(config.name)
-                client_mets, clipper_mets, summary_mets = run_profiler(
-                    config, 2000, "../../release/src/inferline_client/profiler", input_size,
-                    init_delay=1000)
-                fname = "cpp-gcp-results-batch-{batch}-{gpu}".format(batch=batch_size, gpu=gpu)
-                results_dir = "{model}_smp_gcp_cpp_profiling_round".format(model=model)
-                driver_utils.save_results_cpp_client([config, ],
-                                                     client_mets,
-                                                     clipper_mets,
-                                                     summary_mets,
-                                                     results_dir,
-                                                     prefix=fname)
+            GCP_CLUSTER_NAME = "smp-cascade-{}".format(model)
+            config = get_heavy_node_config(
+                model_name=model,
+                batch_size=batch_size,
+                num_replicas=1,
+                cpus_per_replica=num_cpus,
+                gpu_type=gpu)
+
+            input_size = get_input_size(config.name)
+            init_results, steady_results = run_profiler(
+                config, 2000, "../../release/src/inferline_client/profiler", input_size,
+                init_delay=1000)
+            fname = "spinsleep-cpp-gcp-results-batch-{batch}-{gpu}".format(batch=batch_size, gpu=gpu)
+            results_dir = "{model}_smp_gcp_cpp_profiling_spinsleep".format(model=model)
+            driver_utils.save_results_cpp_client([config, ],
+                                                 init_results,
+                                                 steady_results,
+                                                 results_dir,
+                                                 prefix=fname)
 
     # num_cpus = 2
     # model = ALEXNET

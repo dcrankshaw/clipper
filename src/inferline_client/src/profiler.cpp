@@ -1,10 +1,14 @@
 #include <atomic>
+#include <cmath>
 #include <chrono>
-#include <clipper/clock.hpp>
-#include <clipper/metrics.hpp>
-#include <cxxopts.hpp>
 #include <random>
 #include <string>
+
+#include <cxxopts.hpp>
+
+#include <clipper/clock.hpp>
+#include <clipper/metrics.hpp>
+
 #include "predictor.hpp"
 #include "zmq_client.hpp"
 
@@ -91,7 +95,57 @@ std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
   return inputs;
 }
 
+// void spin_sleep(int duration_micros) {
+//   auto start_time = std::chrono::system_clock::now();
+//   long cur_delay_micros = 0;
+//   while (cur_delay_micros < duration_micros) {
+//     auto cur_delay = std::chrono::system_clock::now() - start_time;
+//     cur_delay_micros =
+//         std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
+//   }
+// }
+//
+// void timer_test(int sleep_time, int num_trials) {
+//
+//   struct timespec req = {0};
+//   req.tv_sec = 0;
+//   req.tv_nsec = sleep_time * 1000;
+//   std::vector<long> times;
+//   for (size_t i = 0; i < num_trials; ++i) {
+//     auto start_time = std::chrono::system_clock::now();
+//     // nanosleep(&req, (struct timespec *)NULL);
+//     spin_sleep(sleep_time);
+//     auto latency = std::chrono::system_clock::now() - start_time;
+//     long latency_micros =
+//       std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+//     times.push_back(latency_micros);
+//   }
+//   long sum = 0;
+//   for (int i = 0; i < times.size(); ++i) {
+//     sum += times[i];
+//   }
+//   double mean = ((double) sum) / ((double) times.size());
+//   double sum_of_diffs = 0.0;
+//   for (int i = 0; i < times.size(); ++i) {
+//     double diff = ((double) times[i]) - mean;
+//     sum_of_diffs += diff * diff;
+//   }
+//   double stdev = std::sqrt(1.0 / ((double) times.size() - 1.0) * sum_of_diffs);
+//   std::cout << "Sleep time: " << std::to_string(sleep_time) << ": " << std::to_string(mean)
+//     << " +- " << std::to_string(stdev) << ". Diff: " << std::to_string(mean - sleep_time) << std::endl;
+//
+// }
+
 int main(int argc, char* argv[]) {
+  // size_t num_trials = 2000;
+  // std::vector<int> sleep_times = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 15000,
+  //   20000, 30000, 40000, 50000, 75000, 100000};
+  // for (int i = 0; i < sleep_times.size(); ++i) {
+  //   timer_test(sleep_times[i], num_trials);
+  // }
+  // return 0;
+  // ///////////////////////////////////////////////////////////
+
   cxxopts::Options options("profiler", "InferLine profiler");
   // clang-format off
   options.add_options()

@@ -8,6 +8,8 @@ namespace zmq_client {
 
 using namespace clipper;
 
+void spin_sleep(int duration_micros);
+
 class Driver {
  public:
   Driver(std::function<void(FrontendRPCClient&, ClientFeatureVector,

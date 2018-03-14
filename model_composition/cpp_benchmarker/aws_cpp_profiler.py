@@ -354,7 +354,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 loaded_metrics = load_metrics(client_path, clipper_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
-                    return (client_metrics, clipper_metrics, summary_results)
+                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
@@ -363,14 +363,14 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
     delay_micros = 1000
     run(delay_micros, 10, "warmup")
-    _, _, init_results = run(delay_micros, 10, "init")
-    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results][1:])
+    init_results = run(delay_micros, 10, "init")
+    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
     steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
     logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
         delay=steady_state_delay, thru=mean_thruput))
     steady_results = run(steady_state_delay, 20, "steady_state")
     cl.stop_all()
-    return steady_results
+    return init_results, steady_results
 
 
 if __name__ == "__main__":
@@ -387,15 +387,14 @@ if __name__ == "__main__":
             )
 
             input_size = get_input_size(config.name)
-            client_mets, clipper_mets, summary_mets = run_profiler(
+            init_results, summary_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler",
                 input_size, "9,25,10,26")
             fname = "cpp-aws-results-v100-batch-{batch}".format(batch=batch_size)
             results_dir = "{}_smp_aws_cpp_profiling".format(model)
             driver_utils.save_results_cpp_client([config, ],
-                                                 client_mets,
-                                                 clipper_mets,
-                                                 summary_mets,
+                                                 init_results,
+                                                 summary_results,
                                                  results_dir,
                                                  prefix=fname)
     sys.exit(0)
