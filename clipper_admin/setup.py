@@ -32,4 +32,5 @@ setup(
     extras_require={
         'PySpark': ['pyspark'],
         'TensorFlow': ['tensorflow'],
+        'gpu_support': ['gpustat']
     })

@@ -50,15 +50,17 @@ class KubernetesContainerManager(ContainerManager):
             The Redis port. If ``redis_ip`` is set to None, Clipper will start Redis on this port.
             If ``redis_ip`` is provided, Clipper will connect to Redis on this port.
         useInternalIP : bool, optional
-            Use Internal IP of the K8S nodes . If ``useInternalIP`` is set to False, Clipper will throw an exception, if none of the nodes have ExternalDNS .
-            If ``useInternalIP`` is set to true, Clipper will use the Internal IP of the K8S node if no ExternalDNS exists for any of the nodes.
+            Use Internal IP of the K8S nodes . If ``useInternalIP`` is set to False, Clipper will
+            throw an exception, if none of the nodes have ExternalDNS.
+            If ``useInternalIP`` is set to true, Clipper will use the Internal IP of the K8S node
+            if no ExternalDNS exists for any of the nodes.
 
         Note
         ----
         Clipper stores all persistent configuration state (such as registered application and model
         information) in Redis. If you want Clipper to be durable and able to recover from failures,
-        we recommend configuring your own persistent and replicated Redis cluster rather than letting
-        Clipper launch one for you.
+        we recommend configuring your own persistent and replicated Redis cluster rather than
+        letting Clipper launch one for you.
         """
 
         self.kubernetes_api_ip = kubernetes_api_ip
@@ -192,7 +194,7 @@ class KubernetesContainerManager(ContainerManager):
                 "Could not connect to Clipper Kubernetes cluster. "
                 "Reason: {}".format(e))
 
-    def deploy_model(self, name, version, input_type, image, num_replicas=1):
+    def deploy_model(self, name, version, input_type, image, num_replicas=1, use_gpu=False):
         with _pass_conflicts():
             deployment_name = get_model_deployment_name(name, version)
             body = {
@@ -245,12 +247,16 @@ class KubernetesContainerManager(ContainerManager):
                     }
                 }
             }
+            if use_gpu:
+                (body['spec']['template']['spec']['containers']['resources']
+                    ['limits']['nvidia.com/gpu']) = 1
+
             self._k8s_beta.create_namespaced_deployment(
                 body=body, namespace='default')
 
             while self._k8s_beta.read_namespaced_deployment_status(
                 name=deployment_name, namespace='default').status.available_replicas \
-                   != num_replicas:
+                    != num_replicas:
                 time.sleep(3)
 
     def get_num_replicas(self, name, version):
@@ -260,21 +266,72 @@ class KubernetesContainerManager(ContainerManager):
 
         return response.spec.replicas
 
-    def set_num_replicas(self, name, version, input_type, image, num_replicas):
+    def set_num_replicas(self, name, version, input_type, image, num_replicas, use_gpu):
         # NOTE: assumes `metadata.name` can identify the model deployment.
         deployment_name = get_model_deployment_name(name, version)
 
-        self._k8s_beta.patch_namespaced_deployment_scale(
-            name=deployment_name,
-            namespace='default',
-            body={
-                'spec': {
-                    'replicas': num_replicas,
-                }
-            })
+        # check if this model is currently using a GPU
+        cur_deployment = self._k8s_beta.read_namespaced_deployment_status(
+            name=deployment_name, namespace='default')
+        gpu_field_present = 'nvidia.com/gpu' in \
+            cur_deployment.spec.template.spec.containers.resources.limits
+        if gpu_field_present:
+            if use_gpu:
+                num_gpus = 1
+            else:
+                num_gpus = 0
+            self._k8s_beta.patch_namespaced_deployment_scale(
+                name=deployment_name,
+                namespace='default',
+                body={
+                    'spec': {
+                        'replicas': num_replicas,
+                        'template': {
+                            'spec': {
+                                'containers': {
+                                    'resources': {
+                                        'limits': {
+                                            'nvidia.com/gpu': num_gpus}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
 
+        else:
+            if use_gpu:
+                num_gpus = 1
+                self._k8s_beta.patch_namespaced_deployment_scale(
+                    name=deployment_name,
+                    namespace='default',
+                    body={
+                        'spec': {
+                            'replicas': num_replicas,
+                            'template': {
+                                'spec': {
+                                    'containers': {
+                                        'resources': {
+                                            'limits': {
+                                                'nvidia.com/gpu': num_gpus}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    })
 
-        while self._k8s_beta.read_namespaced_deployment_status(
+            else:
+                self._k8s_beta.patch_namespaced_deployment_scale(
+                    name=deployment_name,
+                    namespace='default',
+                    body={
+                        'spec': {
+                            'replicas': num_replicas
+                        }
+                    })
+
+        while self._k8s_beta.read_namespaced_deployment(
             name=deployment_name, namespace='default').status.available_replicas \
                 != num_replicas:
             time.sleep(3)

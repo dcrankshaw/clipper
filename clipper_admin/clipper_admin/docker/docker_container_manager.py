@@ -13,9 +13,19 @@ from ..container_manager import (
     CLIPPER_INTERNAL_METRIC_PORT)
 from ..exceptions import ClipperException
 from requests.exceptions import ConnectionError
-from .docker_metric_utils import *
+from .docker_metric_utils import (setup_metric_config, run_metric_image,
+                                  add_to_metric_config, delete_from_metric_config,
+                                  run_query_frontend_metric_image)
+import sys
+if sys.version_info[0] < 3:
+    import subprocess32 as subprocess
+else:
+    import subprocess
+
 
 logger = logging.getLogger(__name__)
+
+CLIPPER_GPU_LABEL = "ai.clipper.gpu.label"
 
 
 class DockerContainerManager(ContainerManager):
@@ -49,7 +59,8 @@ class DockerContainerManager(ContainerManager):
             The Redis port. If ``redis_ip`` is set to None, Clipper will start Redis on this port.
             If ``redis_ip`` is provided, Clipper will connect to Redis on this port.
         docker_network : str, optional
-            The docker network to attach the containers to. You can read more about Docker networking in the
+            The docker network to attach the containers to. You can read more
+            about Docker networking in the
             `Docker User Guide <https://docs.docker.com/engine/userguide/networking/>`_.
         extra_container_kwargs : dict
             Any additional keyword arguments to pass to the call to
@@ -95,7 +106,7 @@ class DockerContainerManager(ContainerManager):
         try:
             self.docker_client.networks.create(
                 self.docker_network, check_duplicate=True)
-        except docker.errors.APIError as e:
+        except docker.errors.APIError:
             logger.debug(
                 "{nw} network already exists".format(nw=self.docker_network))
         except ConnectionError:
@@ -130,7 +141,8 @@ class DockerContainerManager(ContainerManager):
             labels=mgmt_labels,
             **self.extra_container_kwargs)
 
-        query_cmd = "--redis_ip={redis_ip} --redis_port={redis_port} --prediction_cache_size={cache_size}".format(
+        query_cmd = ("--redis_ip={redis_ip} --redis_port={redis_port} "
+                     "--prediction_cache_size={cache_size}").format(
             redis_ip=self.redis_ip,
             redis_port=self.redis_port,
             cache_size=cache_size)
@@ -167,7 +179,7 @@ class DockerContainerManager(ContainerManager):
         # No extra connection steps to take on connection
         return
 
-    def deploy_model(self, name, version, input_type, image, num_replicas=1):
+    def deploy_model(self, name, version, input_type, image, num_replicas=1, use_gpu=False):
         # Parameters
         # ----------
         # image : str
@@ -175,7 +187,7 @@ class DockerContainerManager(ContainerManager):
         #     registry, the registry name must be prepended to the image. For example,
         #     "localhost:5000/my_model_name:my_model_version" or
         #     "quay.io/my_namespace/my_model_name:my_model_version"
-        self.set_num_replicas(name, version, input_type, image, num_replicas)
+        self.set_num_replicas(name, version, input_type, image, num_replicas, use_gpu)
 
     def _get_replicas(self, name, version):
         containers = self.docker_client.containers.list(
@@ -190,7 +202,29 @@ class DockerContainerManager(ContainerManager):
     def get_num_replicas(self, name, version):
         return len(self._get_replicas(name, version))
 
-    def _add_replica(self, name, version, input_type, image):
+    def _get_used_gpus(self):
+        """
+        Returns a list with the indexes of all the currently allocated
+        GPUs on this machine. Note that we can only detect GPUs allocated
+        to Clipper model containers, not those allocated to external processes.
+
+        """
+        containers = self.docker_client.containers.list(
+            filters={
+                "label": CLIPPER_GPU_LABEL
+            })
+        allocated_gpus = []
+        for c in containers:
+            allocated_gpus.append(int(c.labels[CLIPPER_GPU_LABEL]))
+        return allocated_gpus
+
+    def _get_total_gpus(self):
+        # Only import gpustat here, so that we don't break anything for non-GPU users
+        from gpustat.core import GPUStatCollection
+        gpu_stats = GPUStatCollection.new_query()
+        return len(gpu_stats.gpus)
+
+    def _add_replica(self, name, version, input_type, image, use_gpu):
 
         containers = self.docker_client.containers.list(
             filters={
@@ -216,12 +250,35 @@ class DockerContainerManager(ContainerManager):
 
         model_container_name = model_container_label + '-{}'.format(
             random.randint(0, 100000))
-        self.docker_client.containers.run(
-            image,
-            name=model_container_name,
-            environment=env_vars,
-            labels=labels,
-            **self.extra_container_kwargs)
+        if use_gpu:
+            cmd = ["nvidia-docker", "run", "-d", "--network=%s" % self.docker_network]
+            used_gpus = set(self._get_used_gpus())
+            total_gpus = set(range(self._get_total_gpus()))
+            available_gpus = total_gpus - used_gpus
+            env = os.environ.copy()
+            if len(available_gpus) > 0:
+                assigned_gpu_num = available_gpus.pop()
+                labels[CLIPPER_GPU_LABEL] = assigned_gpu_num
+                env["NV_GPU"] = str(assigned_gpu_num)
+            else:
+                env_vars["CUDA_VISIBLE_DEVICES"] = ""
+            for k, v in labels.iteritems():
+                cmd.append("-l")
+                cmd.append("%s=%s" % (k, v))
+            for k, v in env_vars.iteritems():
+                cmd.append("-e")
+                cmd.append("%s=%s" % (k, v))
+            cmd.append("--name")
+            cmd.append(model_container_name)
+            cmd.append(image)
+            subprocess.check_call(cmd, env=env)
+        else:
+            self.docker_client.containers.run(
+                image,
+                name=model_container_name,
+                environment=env_vars,
+                labels=labels,
+                **self.extra_container_kwargs)
 
         # Metric Section
         add_to_metric_config(model_container_name,
@@ -230,7 +287,7 @@ class DockerContainerManager(ContainerManager):
         # Return model_container_name so we can check if it's up and running later
         return model_container_name
 
-    def set_num_replicas(self, name, version, input_type, image, num_replicas):
+    def set_num_replicas(self, name, version, input_type, image, num_replicas, use_gpu):
         current_replicas = self._get_replicas(name, version)
         if len(current_replicas) < num_replicas:
             num_missing = num_replicas - len(current_replicas)
@@ -245,7 +302,7 @@ class DockerContainerManager(ContainerManager):
             model_container_names = []
             for _ in range(num_missing):
                 container_name = self._add_replica(name, version, input_type,
-                                                   image)
+                                                   image, use_gpu)
                 model_container_names.append(container_name)
 
             for name in model_container_names:

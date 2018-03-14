@@ -108,7 +108,7 @@ class ClipperConnection(object):
                         host=self.cm.get_query_addr())
                     requests.get(url, timeout=5)
                     break
-                except RequestException as e:
+                except RequestException:
                     logger.info("Clipper still initializing.")
                     time.sleep(1)
             logger.info("Clipper is running")
@@ -247,8 +247,8 @@ class ClipperConnection(object):
 
         This method does two things.
 
-        1. Builds a new Docker image from the provided base image with the local directory specified by
-        ``model_data_path`` copied into the image by calling
+        1. Builds a new Docker image from the provided base image with the local directory
+        specified by ``model_data_path`` copied into the image by calling
         :py:meth:`clipper_admin.ClipperConnection.build_model`.
 
         2. Registers and deploys a model with the specified metadata using the newly built
@@ -267,8 +267,8 @@ class ClipperConnection(object):
             `User Guide <http://clipper.ai/user_guide/#input-types>`_ for more details
             on picking the right input type for your application.
         model_data_path : str
-            A path to a local directory. The contents of this directory will be recursively copied into the
-            Docker container.
+            A path to a local directory. The contents of this directory will be recursively copied
+            into the Docker container.
         base_image : str
             The base Docker image to build the new model image from. This
             image should contain all code necessary to run a Clipper model
@@ -288,8 +288,8 @@ class ClipperConnection(object):
             The user-defined query batch size for the model. Replicas of the model will attempt
             to process at most `batch_size` queries simultaneously. They may process smaller
             batches if `batch_size` queries are not immediately available.
-            If the default value of -1 is used, Clipper will adaptively calculate the batch size for individual
-            replicas of this model.
+            If the default value of -1 is used, Clipper will adaptively calculate the batch size for
+            individual replicas of this model.
         pkgs_to_install : list (of strings), optional
             A list of the names of packages to install, using pip, in the container.
             The names must be strings.
@@ -315,16 +315,16 @@ class ClipperConnection(object):
                     pkgs_to_install=None):
         """Build a new model container Docker image with the provided data"
 
-        This method builds a new Docker image from the provided base image with the local directory specified by
-        ``model_data_path`` copied into the image. The Dockerfile that gets generated to build the image
-        is equivalent to the following::
+        This method builds a new Docker image from the provided base image with the local directory
+        specified by ``model_data_path`` copied into the image. The Dockerfile that gets generated
+        to build the image is equivalent to the following::
 
             FROM <base_image>
             COPY <model_data_path> /model/
 
-        The newly built image is then pushed to the specified container registry. If no container registry
-        is specified, the image will be pushed to the default DockerHub registry. Clipper will tag the
-        newly built image with the tag [<registry>]/<name>:<version>.
+        The newly built image is then pushed to the specified container registry. If no container
+        registry is specified, the image will be pushed to the default DockerHub registry. Clipper
+        will tag the newly built image with the tag [<registry>]/<name>:<version>.
 
         This method can be called without being connected to a Clipper cluster.
 
@@ -336,8 +336,8 @@ class ClipperConnection(object):
             The version to assign this model. Versions must be unique on a per-model
             basis, but may be re-used across different models.
         model_data_path : str
-            A path to a local directory. The contents of this directory will be recursively copied into the
-            Docker container.
+            A path to a local directory. The contents of this directory will be recursively copied
+            into the Docker container.
         base_image : str
             The base Docker image to build the new model image from. This
             image should contain all code necessary to run a Clipper model
@@ -419,7 +419,8 @@ class ClipperConnection(object):
                      image,
                      labels=None,
                      num_replicas=1,
-                     batch_size=-1):
+                     batch_size=-1,
+                     use_gpu=False):
         """Deploys the model in the provided Docker image to Clipper.
 
         Deploying a model to Clipper does a few things.
@@ -430,12 +431,14 @@ class ClipperConnection(object):
         depends on your choice of ``ContainerManager`` implementation.
 
         2. It registers the model and version with Clipper and sets the current version of the
-        model to this version by internally calling :py:meth:`clipper_admin.ClipperConnection.register_model`.
+        model to this version by internally calling
+        :py:meth:`clipper_admin.ClipperConnection.register_model`.
 
         Notes
         -----
-        If you want to deploy a model in some other way (e.g. a model that cannot run in a Docker container for
-        some reason), you can start the model manually or with an external tool and call ``register_model`` directly.
+        If you want to deploy a model in some other way (e.g. a model that cannot run in a Docker
+        container for some reason), you can start the model manually or with an external tool and
+        call ``register_model`` directly.
 
         Parameters
         ----------
@@ -462,13 +465,18 @@ class ClipperConnection(object):
         num_replicas : int, optional
             The number of replicas of the model to create. The number of replicas
             for a model can be changed at any time with
-            :py:meth:`clipper.ClipperConnection.set_num_replicas`.
+            :py:meth:`clipper_admin.ClipperConnection.set_num_replicas`.
         batch_size : int, optional
             The user-defined query batch size for the model. Replicas of the model will attempt
             to process at most `batch_size` queries simultaneously. They may process smaller
             batches if `batch_size` queries are not immediately available.
-            If the default value of -1 is used, Clipper will adaptively calculate the batch size for individual
-            replicas of this model.
+            If the default value of -1 is used, Clipper will adaptively calculate the batch size for
+            individual replicas of this model.
+        use_gpu : bool, optional
+            Attempt to assign replicas created by this method call to GPUs. GPUs are assigned on a
+            best-effort basis. If there are not enough GPUs available, Clipper will start the
+            remaining replicas without a GPU. This behavior was chosen to keep the functionality
+            consistent between Kubernetes and local Docker mode.
 
         Raises
         ------
@@ -491,7 +499,8 @@ class ClipperConnection(object):
             version=version,
             input_type=input_type,
             image=image,
-            num_replicas=num_replicas)
+            num_replicas=num_replicas,
+            use_gpu=use_gpu)
         self.register_model(
             name,
             version,
@@ -542,8 +551,8 @@ class ClipperConnection(object):
             The user-defined query batch size for the model. Replicas of the model will attempt
             to process at most `batch_size` queries simultaneously. They may process smaller
             batches if `batch_size` queries are not immediately available.
-            If the default value of -1 is used, Clipper will adaptively calculate the batch size for individual
-            replicas of this model.
+            If the default value of -1 is used, Clipper will adaptively calculate the batch size for
+            individual replicas of this model.
 
         Raises
         ------
@@ -645,7 +654,7 @@ class ClipperConnection(object):
             version = str(version)
         return self.cm.get_num_replicas(name, version)
 
-    def set_num_replicas(self, name, num_replicas, version=None):
+    def set_num_replicas(self, name, num_replicas, version=None, use_gpu=False):
         """Sets the total number of active replicas for a model.
 
         If there are more than the current number of replicas
@@ -657,10 +666,17 @@ class ClipperConnection(object):
         name : str
             The name of the model
         version : str, optional
-            The version of the model. If no version is provided,
-            the currently deployed version will be used.
+            The version of the model. If no version is provided, the currently deployed version
+            will be used.
         num_replicas : int, optional
             The desired number of replicas.
+        use_gpu : bool, optional
+            Attempt to assign any new replicas created by this method call to GPUs. When scaling up,
+            this will have no effect on any existing replicas. GPUs are assigned on a best-effort
+            basis.  If there are not enough GPUs available, Clipper will start the remaining
+            replicas without a GPU. This behavior was chosen to keep the functionality consistent
+            between Kubernetes and local Docker mode.
+
 
         Raises
         ------
@@ -1201,19 +1217,21 @@ class ClipperConnection(object):
         """Stops all processes that were started via Clipper admin commands.
 
         This includes the query and management frontend Docker containers and all model containers.
-        If you started Redis independently, this will not affect Redis. It can also be called without calling
-        ``connect`` first.
+        If you started Redis independently, this will not affect Redis. It can also be called
+        without calling ``connect`` first.
         """
         self.cm.stop_all()
         logger.info("Stopped all Clipper cluster and all model containers")
 
     def test_predict_function(self, query, func, input_type):
-        """Tests that the user's function has the correct signature and can be properly saved and loaded.
+        """Tests that the user's function has the correct signature and can be properly saved and
+        loaded.
 
-        The function should take a dict request object like the query frontend expects JSON, 
+        The function should take a dict request object like the query frontend expects JSON,
         the predict function, and the input type for the model.
 
-        For example, the function can be called like: clipper_conn.test_predict_function({"input": [1.0, 2.0, 3.0]}, predict_func, "doubles")
+        For example, the function can be called like:
+            ``clipper_conn.test_predict_function({"input": [1.0, 2.0]}, predict_func, "doubles")``
 
         Parameters
         ----------
@@ -1237,7 +1255,7 @@ class ClipperConnection(object):
             flattened_data = [
                 item for sublist in query_data for item in sublist
             ]
-        except TypeError as e:
+        except TypeError:
             return "Invalid input type or JSON key"
 
         numpy_data = None
@@ -1277,7 +1295,7 @@ class ClipperConnection(object):
 
         try:
             assert reloaded_func
-        except AssertionError as e:
+        except AssertionError:
             logger.error("Function does not properly serialize and reload")
             return "Function does not properly serialize and reload"
 
