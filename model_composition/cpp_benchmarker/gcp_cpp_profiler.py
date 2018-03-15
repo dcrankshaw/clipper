@@ -249,18 +249,27 @@ def load_metrics(client_path, clipper_path):
             clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
         try:
             clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
             return None
     return client_metrics, clipper_metrics
 
 
-def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000):
+def check_queue_size(config, summary_results):
+    queue_sizes = [r["queue_sizes"][config.name] for r in summary_results[1:]]
+    max_allowable_queue_size = max(config.batch_size * 2, 4)
+    # Check queue size of last trial
+    return (queue_sizes[-1] <= max_allowable_queue_size,
+            queue_sizes[-1],
+            max_allowable_queue_size)
+
+
+def run_profiler(config, trial_length, driver_path, input_size, init_throughput=1000.0):
     clipper_address = setup_clipper_gcp([config, ])
     cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
     cl.connect()
@@ -270,17 +279,20 @@ def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000)
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(delay_micros, num_trials, name):
+    def run(target_throughput, num_trials, name, arrival_process):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        log_path = os.path.join(log_dir, "{n}-delay-{d}".format(n=name, d=delay_micros))
+        log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
+                                                              t=target_throughput,
+                                                              p=arrival_process))
         cmd = [os.path.abspath(driver_path),
                "--name={}".format(config.name),
                "--input_type={}".format(config.input_type),
                "--input_size={}".format(input_size),
-               "--request_delay_micros={}".format(delay_micros),
+               "--target_throughput={}".format(target_throughput),
+               "--request_distribution={}".format(arrival_process),
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
@@ -321,7 +333,8 @@ def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000)
                     if new_recorded_trials > recorded_trials:
                         recorded_trials = new_recorded_trials
                         summary_results.append(print_stats(client_metrics[-1],
-                                                           clipper_metrics[-1]))
+                                                           clipper_metrics[-1],
+                                                           verbose=True))
 
             # prof_stdout = proc.stdout.read().strip()
             # if len(prof_stdout) > 0:
@@ -340,17 +353,36 @@ def run_profiler(config, trial_length, driver_path, input_size, init_delay=1000)
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    delay_micros = init_delay
-    run(delay_micros, 20, "warmup")
-    init_results = run(delay_micros, 15, "init")
+    run(init_throughput, 15, "warmup", "constant")
+    # logger.info("Testing queue size on warmup: {}".format(check_queue_size(
+    #     config, warmup_result.summary_metrics)))
+    init_results = run(init_throughput, 15, "init", "constant")
     mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
-    steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
-    logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
-        delay=steady_state_delay, thru=mean_thruput))
-    steady_results = run(steady_state_delay, 30, "steady_state")
+    # steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
+    # logger.info(("Setting delay to {delay} (mean throughput was: {thru}). DRY RUN, DELAY "
+    #              "UNCHANGED.").format(delay=steady_state_delay, thru=mean_thruput))
+    # steady_results = run(steady_state_delay, 30, "steady_state")
+    logger.info("Steady state throughput: {}".format(mean_thruput))
+    while True:
+        steady_results = run(mean_thruput, 8, "steady_state", "poisson")
+        queue_converged, last_size, max_size = check_queue_size(
+            config, steady_results.summary_metrics)
+        if queue_converged:
+            break
+        else:
+            if last_size / max_size > 4:
+                mean_thruput = mean_thruput * 0.9
+            elif last_size / max_size > 2:
+                mean_thruput = mean_thruput * 0.95
+            else:
+                mean_thruput -= 1.0
+            logger.info("Queues too large. Last queue size: {}, max: {}".format(
+                last_size, max_size))
+    logger.info("Found steady state thruput: {}".format(mean_thruput))
+    steady_results = run(mean_thruput, 15, "steady_state", "poisson")
+
     cl.stop_all()
     return init_results, steady_results
-
 
 
 if __name__ == "__main__":
@@ -359,12 +391,10 @@ if __name__ == "__main__":
     num_cpus = 2
     gpu = "p100"
     model = RES50
-    for gpu in ["p100", "k80"]:
-        for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
-            if gpu == "k80" and batch_size > 32:
-                continue
+    for batch_size in [1, 2, 4, 8]:
+        for model in [RES50, INCEPTION_FEATS, TF_RESNET]:
 
-            GCP_CLUSTER_NAME = "smp-cascade-{}".format(model)
+            GCP_CLUSTER_NAME = "debug-small-batch-{}".format(model)
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
@@ -375,37 +405,14 @@ if __name__ == "__main__":
             input_size = get_input_size(config.name)
             init_results, steady_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler", input_size,
-                init_delay=1000)
-            fname = "spinsleep-cpp-gcp-results-batch-{batch}-{gpu}".format(batch=batch_size, gpu=gpu)
-            results_dir = "{model}_smp_gcp_cpp_profiling_spinsleep".format(model=model)
+                init_throughput=1000.0)
+            fname = "queue_convergence-cpp-gcp-results-{model}-batch-{batch}-{gpu}".format(
+                model=model, batch=batch_size, gpu=gpu)
+            # results_dir = "{model}_smp_gcp_cpp_profiling_spinsleep".format(model=model)
+            results_dir = "DEBUG_profiler_small_batch_sizes-queue-conv".format(model=model)
             driver_utils.save_results_cpp_client([config, ],
                                                  init_results,
                                                  steady_results,
                                                  results_dir,
                                                  prefix=fname)
-
-    # num_cpus = 2
-    # model = ALEXNET
-    # for gpu in ["p100", "k80"]:
-    #     GCP_CLUSTER_NAME = "smp-cascade-{}".format(model)
-    #     for batch_size in [1, 2, 4, 8, 16, 24, 32]:
-    #         config = get_heavy_node_config(
-    #             model_name=model,
-    #             batch_size=batch_size,
-    #             num_replicas=1,
-    #             cpus_per_replica=num_cpus,
-    #             gpu_type=gpu)
-    #
-    #         input_size = get_input_size(config.name)
-    #         client_mets, clipper_mets, summary_mets = run_profiler(
-    #             config, 2000, "../../release/src/inferline_client/profiler",
-    #             input_size, init_delay=500)
-    #         fname = "cpp-results-batch-{batch}-{gpu}".format(batch=batch_size, gpu=gpu)
-    #         results_dir = "pytorch_{model}_smp_gcp_cpp_profiling".format(model=model)
-    #         driver_utils.save_results_cpp_client([config, ],
-    #                                              client_mets,
-    #                                              clipper_mets,
-    #                                              summary_mets,
-    #                                              results_dir,
-    #                                              prefix=fname)
     sys.exit(0)

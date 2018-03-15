@@ -15,9 +15,9 @@ class Driver {
   Driver(std::function<void(FrontendRPCClient&, ClientFeatureVector,
                             std::atomic<int>&)>
              predict_func,
-         std::vector<ClientFeatureVector> inputs, int request_delay_micros,
-         int trial_length, int num_trials, std::string log_file,
-         std::string clipper_address);
+         std::vector<ClientFeatureVector> inputs, float target_throughput,
+         std::string distribution, int trial_length, int num_trials,
+         std::string log_file, std::string clipper_address);
 
   void start();
 
@@ -27,7 +27,8 @@ class Driver {
                      std::atomic<int>&)>
       predict_func_;
   std::vector<ClientFeatureVector> inputs_;
-  int request_delay_micros_;
+  float target_throughput_;
+  std::string distribution_;
   int trial_length_;
   int num_trials_;
   std::string log_file_;

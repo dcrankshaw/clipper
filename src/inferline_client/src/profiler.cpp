@@ -155,8 +155,12 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>()->default_value("float"))
       ("input_size", "length of each input",
        cxxopts::value<int>())
-      ("request_delay_micros", "Request delay in integer microseconds",
-       cxxopts::value<int>())
+      // ("request_delay_micros", "Request delay in integer microseconds",
+      //  cxxopts::value<int>())
+      ("target_throughput", "Mean throughput to target in qps",
+       cxxopts::value<float>())
+      ("request_distribution", "Distribution to sample request delay from. Can be 'constant' or 'poisson'",
+       cxxopts::value<std::string>())
       ("trial_length", "Number of queries per trial",
        cxxopts::value<int>())
       ("num_trials", "Number of trials",
@@ -168,6 +172,11 @@ int main(int argc, char* argv[]) {
        ;
   // clang-format on
   options.parse(argc, argv);
+  std::string distribution = options["request_distribution"].as<std::string>();
+  if (!(distribution == "poisson" || distribution == "constant")) {
+    std::cerr << "Invalid distribution: " << distribution << std::endl;
+    return 1;
+  }
 
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
@@ -183,7 +192,8 @@ int main(int argc, char* argv[]) {
       predict(client, name, input, metrics, prediction_counter);
     };
     Driver driver(predict_func, std::move(inputs),
-                  options["request_delay_micros"].as<int>(),
+                  options["target_throughput"].as<float>(),
+                  distribution,
                   options["trial_length"].as<int>(),
                   options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),

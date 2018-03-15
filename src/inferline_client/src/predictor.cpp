@@ -2,6 +2,8 @@
 #include <fstream>
 #include <iostream>
 #include <time.h>
+#include <cmath>
+#include <random>
 
 // #include "httplib.h"
 // #define HTTP_IMPLEMENTATION
@@ -19,12 +21,13 @@ constexpr int RECV_PORT = 4455;
 Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
                                   std::atomic<int> &)>
                    predict_func,
-               std::vector<ClientFeatureVector> inputs,
-               int request_delay_micros, int trial_length, int num_trials,
+               std::vector<ClientFeatureVector> inputs, float target_throughput,
+               std::string distribution, int trial_length, int num_trials,
                std::string log_file, std::string clipper_address)
     : predict_func_(predict_func),
       inputs_(inputs),
-      request_delay_micros_(request_delay_micros),
+      target_throughput_(target_throughput),
+      distribution_(distribution),
       trial_length_(trial_length),
       num_trials_(num_trials),
       log_file_(log_file),
@@ -35,7 +38,7 @@ Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
   client_.start(clipper_address, SEND_PORT, RECV_PORT);
 }
 
-void spin_sleep(int duration_micros) {
+void spin_sleep(long duration_micros) {
   auto start_time = std::chrono::system_clock::now();
   long cur_delay_micros = 0;
   while (cur_delay_micros < duration_micros) {
@@ -46,26 +49,41 @@ void spin_sleep(int duration_micros) {
 }
 
 void Driver::start() {
+  if (!(distribution_ == "poisson" || distribution_ == "constant")) {
+    std::cerr << "Invalid distribution: " << distribution_ << std::endl;
+    return;
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::exponential_distribution<> exp_dist(target_throughput_);
+  long constant_request_delay_micros = std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
+
   auto monitor_thread = std::thread([this]() { monitor_results(); });
-  // auto last_send_time = std::chrono::system_clock::now();
-  // long cur_delay_micros = 0;
-
-  struct timespec req = {0};
-  req.tv_sec = 0;
-  req.tv_nsec = request_delay_micros_ * 1000;
-
   while (!done_) {
     for (ClientFeatureVector f : inputs_) {
       if (done_) {
         break;
       }
       predict_func_(client_, f, prediction_counter_);
-      spin_sleep(request_delay_micros_);
-      // nanosleep(&req, (struct timespec *)NULL);
-      // std::this_thread::sleep_for(
-      //     std::chrono::microseconds(request_delay_micros_));
+      
+      if (distribution_ == "poisson") {
+        float delay_secs = exp_dist(gen);
+        long delay_micros = lround(delay_secs * 1000.0 * 1000.0);
+        spin_sleep(delay_micros);
+      } else if (distribution_ == "constant") {
+        spin_sleep(constant_request_delay_micros);
+        // struct timespec req = {0};
+        // req.tv_sec = 0;
+        // req.tv_nsec = request_delay_micros_ * 1000;
+        // nanosleep(&req, (struct timespec *)NULL);
+        // std::this_thread::sleep_for(
+        //     std::chrono::microseconds(request_delay_micros_));
+      }
     }
   }
+
+
   client_.stop();
   monitor_thread.join();
 }
