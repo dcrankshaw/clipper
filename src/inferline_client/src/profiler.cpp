@@ -1,6 +1,6 @@
 #include <atomic>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <random>
 #include <string>
 
@@ -52,8 +52,9 @@ void predict(FrontendRPCClient& client, std::string name,
              ClientFeatureVector input, ProfilerMetrics metrics,
              std::atomic<int>& prediction_counter) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, &prediction_counter,
-                                    start_time](ClientFeatureVector output) {
+  client.send_request(name, input, [metrics, &prediction_counter, start_time](
+                                       ClientFeatureVector output,
+                                       QueryLineage lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str = std::string(
           reinterpret_cast<char*>(output.get_data()), output.size_typed_);
@@ -69,6 +70,8 @@ void predict(FrontendRPCClient& client, std::string name,
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
+
+    // TODO: Do something with lineage
 
   });
 }
@@ -130,15 +133,19 @@ std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
 //     double diff = ((double) times[i]) - mean;
 //     sum_of_diffs += diff * diff;
 //   }
-//   double stdev = std::sqrt(1.0 / ((double) times.size() - 1.0) * sum_of_diffs);
-//   std::cout << "Sleep time: " << std::to_string(sleep_time) << ": " << std::to_string(mean)
-//     << " +- " << std::to_string(stdev) << ". Diff: " << std::to_string(mean - sleep_time) << std::endl;
+//   double stdev = std::sqrt(1.0 / ((double) times.size() - 1.0) *
+//   sum_of_diffs);
+//   std::cout << "Sleep time: " << std::to_string(sleep_time) << ": " <<
+//   std::to_string(mean)
+//     << " +- " << std::to_string(stdev) << ". Diff: " << std::to_string(mean -
+//     sleep_time) << std::endl;
 //
 // }
 
 int main(int argc, char* argv[]) {
   // size_t num_trials = 2000;
-  // std::vector<int> sleep_times = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 15000,
+  // std::vector<int> sleep_times = {1000, 2000, 3000, 4000, 5000, 6000, 7000,
+  // 8000, 9000, 10000, 15000,
   //   20000, 30000, 40000, 50000, 75000, 100000};
   // for (int i = 0; i < sleep_times.size(); ++i) {
   //   timer_test(sleep_times[i], num_trials);
@@ -192,8 +199,7 @@ int main(int argc, char* argv[]) {
       predict(client, name, input, metrics, prediction_counter);
     };
     Driver driver(predict_func, std::move(inputs),
-                  options["target_throughput"].as<float>(),
-                  distribution,
+                  options["target_throughput"].as<float>(), distribution,
                   options["trial_length"].as<int>(),
                   options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),

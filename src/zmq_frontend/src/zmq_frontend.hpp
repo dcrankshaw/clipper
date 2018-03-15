@@ -36,8 +36,10 @@ class AppMetrics {
                 "app:" + app_name + ":prediction_latency", "microseconds",
                 4096)),
         // latency_list_(
-        //     clipper::metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
-        //         "app:" + app_name + ":prediction_latencies", "microseconds")),
+        //     clipper::metrics::MetricsRegistry::get_metrics().create_data_list<long
+        //     long>(
+        //         "app:" + app_name + ":prediction_latencies",
+        //         "microseconds")),
         throughput_(
             clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                 "app:" + app_name + ":prediction_throughput")),
@@ -251,14 +253,20 @@ class ServerImpl {
       long query_id = query_counter_.fetch_add(1);
       std::chrono::time_point<std::chrono::system_clock> create_time =
           std::chrono::system_clock::now();
+      std::shared_ptr<QueryLineage> lineage = std::get<3>(request);
 
       task_executor_.schedule_prediction(
           PredictTask{std::get<0>(request), versioned_models.front(), 1.0,
-                      query_id, latency_slo_micros},
-          [this, app_metrics, request_id, client_id,
-           create_time](Output output) mutable {
+                      query_id, latency_slo_micros, lineage},
+          [this, app_metrics, request_id, client_id, create_time](
+              Output output, std::shared_ptr<QueryLineage> lineage) mutable {
             std::chrono::time_point<std::chrono::system_clock> end =
                 std::chrono::system_clock::now();
+            lineage->add_timestamp(
+                "clipper::frontend_rpc_send",
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    end.time_since_epoch())
+                    .count());
             long duration_micros =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end - create_time)
@@ -269,8 +277,8 @@ class ServerImpl {
             app_metrics.num_predictions_->increment(1);
             app_metrics.throughput_->mark(1);
 
-            rpc_service_->send_response(
-                std::make_tuple(std::move(output), request_id, client_id));
+            rpc_service_->send_response(std::make_tuple(
+                std::move(output), request_id, client_id, lineage));
           });
     };
 

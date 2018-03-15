@@ -55,6 +55,7 @@ SUPPORTED_OUTPUT_TYPES_MAPPING = {
     str: DATA_TYPE_STRINGS,
 }
 
+EPOCH_TIME = datetime.utcfromtimestamp(0)
 
 def string_to_input_type(input_str):
     input_str = input_str.strip().lower()
@@ -152,7 +153,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             last_loop_start = cur_loop_start
 
             t1 = datetime.now()
-            prediction_request = request_queue.get(block=True)
+            prediction_request, recv_time = request_queue.get(block=True)
             t2 = datetime.now()
             queue_get_times.append((t2 - t1).microseconds)
 
@@ -193,7 +194,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             for output in outputs:
                 response.add_output(output)
 
-            response_queue.put(response)
+            response_queue.put(response, recv_time)
 
             if len(loop_times) > 1000:
                 print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
@@ -306,16 +307,17 @@ class Server(threading.Thread):
 
     def send_response(self):
         if not self.response_queue.empty() or self.full_buffers == 2:
-            response = self.response_queue.get()
+            response, recv_time = self.response_queue.get()
             self.full_buffers -= 1
             # t3 = datetime.now()
-            response.send(self.send_socket, self.connection_id)
+            response.send(self.send_socket, self.connection_id, recv_time)
             sys.stdout.flush()
             sys.stderr.flush()
 
     def recv_request(self):
         self.recv_socket.recv()
-        recv_time = (datetime.now() - self.init_time).total_seconds()
+        absolute_recv_time = datetime.now()
+        recv_time = (absolute_recv_time - self.init_time).total_seconds()
         self.recv_time_log.write("{}\n".format(recv_time))
         msg_type_bytes = self.recv_socket.recv()
         msg_type = struct.unpack("<I", msg_type_bytes)[0]
@@ -366,7 +368,7 @@ class Server(threading.Thread):
             prediction_request = PredictionRequest(
                 msg_id_bytes, inputs)
 
-            self.request_queue.put(prediction_request)
+            self.request_queue.put(prediction_request, absolute_recv_time)
             self.full_buffers += 1
 
     def run(self):
@@ -455,7 +457,8 @@ class PredictionResponse:
                      self.content_end_position + output_len] = output
         self.content_end_position += output_len
 
-    def send(self, socket, connection_id):
+    def send(self, socket, connection_id, recv_time):
+        send_time = datetime.now()
         socket.send("", flags=zmq.SNDMORE)
         socket.send(
             struct.pack("<I", connection_id),
@@ -467,7 +470,13 @@ class PredictionResponse:
         socket.send(struct.pack("<I", self.output_type), flags=zmq.SNDMORE)
         socket.send(
             struct.pack("<I", self.content_end_position), flags=zmq.SNDMORE)
-        socket.send(self.output_buffer[0:self.content_end_position])
+        socket.send(self.output_buffer[0:self.content_end_position], flags=zmq.SNDMORE)
+        recv_time_epoch = (recv_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", recv_time_epoch), flags=zmq.SNDMORE)
+        send_time_epoch = (send_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", send_time_epoch))
+
+
 
     def expand_buffer_if_necessary(self, num_outputs, content_length_bytes):
         new_size_bytes = BYTES_PER_INT + (

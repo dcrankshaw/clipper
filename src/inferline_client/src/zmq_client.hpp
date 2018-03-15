@@ -56,8 +56,9 @@ class FrontendRPCClient {
 
   void start(const std::string address, int send_port, int recv_port);
   void stop();
-  void send_request(std::string app_name, ClientFeatureVector input,
-                    std::function<void(ClientFeatureVector)> &&callback);
+  void send_request(
+      std::string app_name, ClientFeatureVector input,
+      std::function<void(ClientFeatureVector, QueryLineage)> &&callback);
 
  private:
   void manage_send_service(const std::string ip, int port);
@@ -73,7 +74,8 @@ class FrontendRPCClient {
   std::thread rpc_send_thread_;
   std::thread rpc_recv_thread_;
 
-  std::unordered_map<int, std::function<void(ClientFeatureVector)>>
+  std::unordered_map<int,
+                     std::function<void(ClientFeatureVector, QueryLineage)>>
       closure_map_;
   std::mutex closure_map_mutex_;
 
