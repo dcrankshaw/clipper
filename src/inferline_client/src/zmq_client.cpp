@@ -180,7 +180,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
     default: {
       std::stringstream ss;
       ss << "Received a response with an invalid output type: "
-         << get_readable_input_type(output_type);
+         << std::to_string(static_cast<int *>(msg_data_type.data())[0]);
       throw std::runtime_error(ss.str());
     }
   }
@@ -204,9 +204,11 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   std::shared_ptr<QueryLineage> lineage = std::make_shared<QueryLineage>(request_id);
   for (int i = 0; i < lineage_length; ++i) {
     zmq::message_t msg_description;
+    socket.recv(&msg_description, 0);
     std::string description(static_cast<char *>(msg_description.data()),
                             msg_description.size());
     zmq::message_t msg_timestamp;
+    socket.recv(&msg_timestamp, 0);
     long long timestamp = static_cast<long long *>(msg_timestamp.data())[0];
     lineage->add_timestamp(description, timestamp);
   }

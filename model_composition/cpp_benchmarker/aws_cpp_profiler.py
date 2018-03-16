@@ -393,8 +393,8 @@ if __name__ == "__main__":
             init_results, summary_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler",
                 input_size, "9,25,10,26")
-            fname = "cpp-aws-results-v100-batch-{batch}".format(batch=batch_size)
-            results_dir = "{}_smp_aws_cpp_profiling".format(model)
+            fname = "cpp-aws-results-k80-batch-{batch}".format(batch=batch_size)
+            results_dir = "query_lineage_{}_smp_aws_cpp_profiling".format(model)
             driver_utils.save_results_cpp_client([config, ],
                                                  init_results,
                                                  summary_results,
