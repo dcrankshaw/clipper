@@ -194,7 +194,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             for output in outputs:
                 response.add_output(output)
 
-            response_queue.put(response, recv_time)
+            response_queue.put((response, recv_time))
 
             if len(loop_times) > 1000:
                 print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
@@ -368,7 +368,7 @@ class Server(threading.Thread):
             prediction_request = PredictionRequest(
                 msg_id_bytes, inputs)
 
-            self.request_queue.put(prediction_request, absolute_recv_time)
+            self.request_queue.put((prediction_request, absolute_recv_time))
             self.full_buffers += 1
 
     def run(self):
