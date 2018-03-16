@@ -77,7 +77,7 @@ void predict(FrontendRPCClient& client, std::string name,
     int num_entries = lineage->get_timestamps().size();
     int idx = 0;
     for (auto& entry : lineage->get_timestamps()) {
-      query_lineage_file << entry.first << ": " << std::to_string(entry.second);
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
       if (idx < num_entries - 1) {
         query_lineage_file << ", ";
       }

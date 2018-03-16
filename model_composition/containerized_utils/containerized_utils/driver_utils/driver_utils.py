@@ -17,10 +17,11 @@ CONVERGED = "converged"
 UNKNOWN = "unknown"
 
 class Results(object):
-    def __init__(self, client_metrics, clipper_metrics, summary_metrics):
+    def __init__(self, client_metrics, clipper_metrics, summary_metrics, lineage):
         self.client_metrics = client_metrics
         self.clipper_metrics = clipper_metrics
         self.summary_metrics = summary_metrics
+        self.lineage = lineage
 
     def get_dict(self):
         return self.__dict__

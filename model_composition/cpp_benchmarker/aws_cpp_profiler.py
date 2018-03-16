@@ -280,6 +280,12 @@ def load_metrics(client_path, clipper_path):
     return client_metrics, clipper_metrics
 
 
+def load_lineage(lineage_path):
+    with open(lineage_path, "r") as f:
+        parsed = [json.loads(l) for l in f]
+    return parsed
+
+
 def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
     clipper_address = setup_clipper([config, ])
     clipper_address = CLIPPER_ADDRESS
@@ -313,6 +319,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        lineage_path = "{p}-query_lineage.txt".format(p=log_path)
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
@@ -355,9 +362,10 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.info("stderr: {}".format(prof_stderr))
             try:
                 loaded_metrics = load_metrics(client_path, clipper_path)
+                lineage = load_lineage(lineage_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
-                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results)
+                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results, lineage)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
