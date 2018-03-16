@@ -54,7 +54,7 @@ void predict(FrontendRPCClient& client, std::string name,
   auto start_time = std::chrono::system_clock::now();
   client.send_request(name, input, [metrics, &prediction_counter, start_time](
                                        ClientFeatureVector output,
-                                       QueryLineage lineage) {
+                                       std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str = std::string(
           reinterpret_cast<char*>(output.get_data()), output.size_typed_);

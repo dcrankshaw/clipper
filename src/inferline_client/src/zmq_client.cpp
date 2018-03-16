@@ -55,7 +55,7 @@ void FrontendRPCClient::stop() {
 
 void FrontendRPCClient::send_request(
     std::string app_name, ClientFeatureVector input,
-    std::function<void(ClientFeatureVector, QueryLineage)> &&callback) {
+    std::function<void(ClientFeatureVector, std::shared_ptr<QueryLineage>)> &&callback) {
   std::unique_lock<std::mutex> closure_map_lock(closure_map_mutex_);
   int cur_request_id = request_id_.fetch_add(1);
   closure_map_.emplace(cur_request_id, callback);
@@ -201,14 +201,14 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
 
   socket.recv(&msg_lineage_length, 0);
   int lineage_length = static_cast<int *>(msg_lineage_length.data())[0];
-  QueryLineage lineage(request_id);
+  std::shared_ptr<QueryLineage> lineage = std::make_shared<QueryLineage>(request_id);
   for (int i = 0; i < lineage_length; ++i) {
     zmq::message_t msg_description;
     std::string description(static_cast<char *>(msg_description.data()),
                             msg_description.size());
     zmq::message_t msg_timestamp;
     long long timestamp = static_cast<long long *>(msg_timestamp.data())[0];
-    lineage.add_timestamp(description, timestamp);
+    lineage->add_timestamp(description, timestamp);
   }
 
   std::unique_lock<std::mutex> closure_map_lock(closure_map_mutex_);
@@ -222,7 +222,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
     auto closure = search->second;
     closure_map_.erase(search);
     closure_map_lock.unlock();
-    closure_threadpool_.submit(closure, std::move(output), std::move(lineage));
+    closure_threadpool_.submit(closure, std::move(output), lineage);
   }
 }
 

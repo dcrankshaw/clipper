@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <mutex>
 
 #include <boost/functional/hash.hpp>
 #include <boost/optional.hpp>

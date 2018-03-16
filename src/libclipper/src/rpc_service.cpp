@@ -147,7 +147,7 @@ int RPCService::send_message(std::vector<RPCRequestItem> items,
 }
 
 int RPCService::send_model_message(std::string model_name,
-                                   std::vector<zmq::message_t> msg,
+                                   std::vector<RPCRequestItem> items,
                                    const int zmq_connection_id) {
   // Duplicated code in order to avoid potential race conditions
   if (!active_) {
@@ -162,7 +162,7 @@ int RPCService::send_model_message(std::string model_name,
       std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch())
           .count();
-  RPCRequest request(zmq_connection_id, id, std::move(msg),
+  RPCRequest request(zmq_connection_id, id, std::move(items),
                      current_time_micros);
   // auto model_metrics_search = model_processing_latencies_.find(model_name);
   // if (model_metrics_search == model_processing_latencies_.end()) {
@@ -237,7 +237,7 @@ void RPCService::send_messages(socket_t &socket, int max_num_messages) {
       boost::optional<std::shared_ptr<QueryLineage>> lineage = cur_item.first;
       if (lineage) {
         auto cur_time = std::chrono::system_clock::now();
-        lineage->add_timestamp(
+        lineage.get()->add_timestamp(
             "clipper::sent_rpc",
             std::chrono::duration_cast<std::chrono::microseconds>(
                 cur_time.time_since_epoch())
@@ -310,6 +310,8 @@ void RPCService::receive_message(socket_t &socket) {
 
   auto clipper_recv_time = std::chrono::system_clock::now();
 
+
+
   log_info(LOGGING_TAG_RPC, "response received");
   int id = static_cast<int *>(msg_id.data())[0];
   RPCResponse response(id, content_data_type, msg_content_buffer);
@@ -346,8 +348,10 @@ void RPCService::receive_message(socket_t &socket) {
   VersionedModelId vm = container_info.first;
   int replica_id = container_info.second;
   TaskExecutionThreadPool::submit_job(vm, replica_id, new_response_callback_,
-                                      response, container_recv, container_send,
-                                      clipper_recv);
+      response, container_recv, container_send,
+      std::chrono::duration_cast<std::chrono::microseconds>(
+        clipper_recv_time.time_since_epoch())
+      .count());
   TaskExecutionThreadPool::submit_job(vm, replica_id, container_ready_callback_,
                                       vm, replica_id);
 

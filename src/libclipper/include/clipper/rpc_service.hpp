@@ -78,11 +78,11 @@ class RPCService {
    */
   void stop();
 
-  int send_message(std::vector<zmq::message_t> msg,
+  int send_message(std::vector<RPCRequestItem> msg,
                    const int zmq_connection_id);
 
   int send_model_message(std::string model_name,
-                         std::vector<zmq::message_t> msg,
+                         std::vector<RPCRequestItem> msg,
                          const int zmq_connection_id);
 
  private:
