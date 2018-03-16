@@ -291,18 +291,21 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(delay_micros, num_trials, name):
+    def run(target_throughput, num_trials, name, arrival_process):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        log_path = os.path.join(log_dir, "{n}-delay-{d}".format(n=name, d=delay_micros))
+        log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
+                                                              t=target_throughput,
+                                                              p=arrival_process))
         cmd = ["numactl", "-C", profiler_cores_str,
                os.path.abspath(driver_path),
                "--name={}".format(config.name),
                "--input_type={}".format(config.input_type),
                "--input_size={}".format(input_size),
-               "--request_delay_micros={}".format(delay_micros),
+               "--target_throughput={}".format(target_throughput),
+               "--request_distribution={}".format(arrival_process),
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
@@ -361,14 +364,14 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    delay_micros = 1000
-    run(delay_micros, 10, "warmup")
-    init_results = run(delay_micros, 10, "init")
+    init_throughput = 1000
+    run(init_throughput, 10, "warmup", "constant")
+    init_results = run(init_throughput, 10, "init", "constant")
     mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
-    steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
-    logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
-        delay=steady_state_delay, thru=mean_thruput))
-    steady_results = run(steady_state_delay, 20, "steady_state")
+    # steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
+    # logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
+    #     delay=steady_state_delay, thru=mean_thruput))
+    steady_results = run(mean_thruput, 15, "steady_state", "poisson")
     cl.stop_all()
     return init_results, steady_results
 
