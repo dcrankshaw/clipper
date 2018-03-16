@@ -3,6 +3,8 @@
 #include <cmath>
 #include <random>
 #include <string>
+#include <fstream>
+#include <iostream>
 
 #include <cxxopts.hpp>
 
@@ -50,9 +52,9 @@ class ProfilerMetrics {
 
 void predict(FrontendRPCClient& client, std::string name,
              ClientFeatureVector input, ProfilerMetrics metrics,
-             std::atomic<int>& prediction_counter) {
+             std::atomic<int>& prediction_counter, std::ofstream& query_lineage_file) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, &prediction_counter, start_time](
+  client.send_request(name, input, [metrics, &prediction_counter, start_time, &query_lineage_file](
                                        ClientFeatureVector output,
                                        std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -71,8 +73,17 @@ void predict(FrontendRPCClient& client, std::string name,
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
 
-    // TODO: Do something with lineage
-
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << entry.first << ": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
   });
 }
 
@@ -193,10 +204,13 @@ int main(int argc, char* argv[]) {
         generate_float_inputs(options["input_size"].as<int>());
     std::string name = options["name"].as<std::string>();
     ProfilerMetrics metrics{name};
-    auto predict_func = [metrics, name](FrontendRPCClient& client,
+
+    std::ofstream query_lineage_file;
+    query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
+    auto predict_func = [metrics, name, &query_lineage_file](FrontendRPCClient& client,
                                         ClientFeatureVector input,
                                         std::atomic<int>& prediction_counter) {
-      predict(client, name, input, metrics, prediction_counter);
+      predict(client, name, input, metrics, prediction_counter, query_lineage_file);
     };
     Driver driver(predict_func, std::move(inputs),
                   options["target_throughput"].as<float>(), distribution,
@@ -207,6 +221,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting driver" << std::endl;
     driver.start();
     std::cout << "Driver completed" << std::endl;
+    query_lineage_file.close();
     return 0;
   } else {
     std::cerr << "Invalid input type "

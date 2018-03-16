@@ -244,15 +244,15 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
-    # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
-    #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
-    #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
-    #              "\nqueue sizes: {queue_sizes}, "
-    #              "batch sizes: {batch_sizes}").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-                 "mean lat: {client_mean_lats} "
-                 "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
-                 "counts: {client_counts}\n").format(**results_dict))
+    logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+                 "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+                 "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+                 "\nqueue sizes: {queue_sizes}, "
+                 "batch sizes: {batch_sizes}\n").format(**results_dict))
+    # logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
+    #              "mean lat: {client_mean_lats} "
+    #              "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
+    #              "counts: {client_counts}\n").format(**results_dict))
     return results_dict
 
 
@@ -376,14 +376,14 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
 
     for model in [TF_RESNET, ]:
-        for batch_size in [1, 2, 4, 8, 16, 24, 32, 48, 64]:
+        for batch_size in [4, 8, 16, 24, 32, 48, 64]:
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
                 num_replicas=1,
                 cpus_per_replica=1,
-                allocated_cpus=range(2,3),
-                allocated_gpus=range(0,1)
+                allocated_cpus=range(4, 5),
+                allocated_gpus=range(0, 1)
             )
 
             input_size = get_input_size(config.name)
