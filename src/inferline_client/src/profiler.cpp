@@ -52,9 +52,12 @@ class ProfilerMetrics {
 
 void predict(FrontendRPCClient& client, std::string name,
              ClientFeatureVector input, ProfilerMetrics metrics,
-             std::atomic<int>& prediction_counter, std::ofstream& query_lineage_file) {
+             std::atomic<int>& prediction_counter,
+             std::ofstream& query_lineage_file,
+             std::mutex& query_file_mutex) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, &prediction_counter, start_time, &query_lineage_file](
+  client.send_request(name, input, [metrics, &prediction_counter, start_time,
+      &query_lineage_file, &query_file_mutex](
                                        ClientFeatureVector output,
                                        std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -73,6 +76,7 @@ void predict(FrontendRPCClient& client, std::string name,
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
 
+    std::unique_lock<std::mutex> lock;
     query_lineage_file << "{";
     int num_entries = lineage->get_timestamps().size();
     int idx = 0;
@@ -206,11 +210,13 @@ int main(int argc, char* argv[]) {
     ProfilerMetrics metrics{name};
 
     std::ofstream query_lineage_file;
+    std::mutex query_file_mutex;
     query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
-    auto predict_func = [metrics, name, &query_lineage_file](FrontendRPCClient& client,
+    auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](FrontendRPCClient& client,
                                         ClientFeatureVector input,
                                         std::atomic<int>& prediction_counter) {
-      predict(client, name, input, metrics, prediction_counter, query_lineage_file);
+      predict(client, name, input, metrics, prediction_counter,
+          query_lineage_file, query_file_mutex);
     };
     Driver driver(predict_func, std::move(inputs),
                   options["target_throughput"].as<float>(), distribution,

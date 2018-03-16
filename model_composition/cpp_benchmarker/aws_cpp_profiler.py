@@ -373,21 +373,21 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 1000
-    run(init_throughput, 10, "warmup", "constant")
+    run(init_throughput, 5, "warmup", "constant")
     init_results = run(init_throughput, 10, "init", "constant")
     mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
     # steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
     # logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
     #     delay=steady_state_delay, thru=mean_thruput))
-    steady_results = run(mean_thruput, 15, "steady_state", "poisson")
+    steady_results = run(mean_thruput, 10, "steady_state", "poisson")
     cl.stop_all()
     return init_results, steady_results
 
 
 if __name__ == "__main__":
 
-    for model in [TF_RESNET, ]:
-        for batch_size in [4, 8, 16, 24, 32, 48, 64]:
+    for batch_size in [8, 16, 24, 32, 48, 64, 1, 2]:
+        for model in [TF_RESNET, TF_KERNEL_SVM]:
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
