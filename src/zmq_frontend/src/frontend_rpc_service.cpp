@@ -274,6 +274,12 @@ void FrontendRPCService::send_responses(zmq::socket_t &socket,
     Output &output = std::get<0>(response);
     int request_id = std::get<1>(response);
     int client_id = std::get<2>(response);
+    auto cur_time = std::chrono::system_clock::now();
+    std::get<3>(response)->add_timestamp("clipper::frontend_rpc_response_send",
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    cur_time.time_since_epoch())
+                    .count());
+
 
     std::lock_guard<std::mutex> routing_lock(client_routing_mutex_);
     auto routing_id_search = client_routing_map_.find(client_id);

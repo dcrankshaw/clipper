@@ -374,10 +374,10 @@ class TaskExecutor {
                 parse_input_type(container_info["input_type"]));
 
             TaskExecutionThreadPool::create_queue(vm, replica_id);
-            TaskExecutionThreadPool::submit_job(
-                vm, replica_id, [this, vm, replica_id]() {
-                  on_container_ready(vm, replica_id);
-                });
+            // TaskExecutionThreadPool::submit_job(
+            //     vm, replica_id, [this, vm, replica_id]() {
+            //       on_container_ready(vm, replica_id);
+            //     });
             TaskExecutionThreadPool::submit_job(
                 vm, replica_id, [this, vm, replica_id]() {
                   on_container_ready(vm, replica_id);

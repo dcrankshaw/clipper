@@ -263,7 +263,7 @@ class ServerImpl {
             std::chrono::time_point<std::chrono::system_clock> end =
                 std::chrono::system_clock::now();
             lineage->add_timestamp(
-                "clipper::frontend_rpc_send",
+                "clipper::zmq_frontend_response_callback",
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end.time_since_epoch())
                     .count());

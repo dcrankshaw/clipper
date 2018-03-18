@@ -386,7 +386,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for batch_size in [8, 16, 24, 32, 48, 64, 1, 2]:
+    for batch_size in [4, 8, 16, 24, 32, 48, 64, 1, 2]:
         for model in [TF_RESNET, TF_KERNEL_SVM]:
             config = get_heavy_node_config(
                 model_name=model,
@@ -400,9 +400,10 @@ if __name__ == "__main__":
             input_size = get_input_size(config.name)
             init_results, summary_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26")
-            fname = "cpp-aws-results-k80-batch-{batch}".format(batch=batch_size)
-            results_dir = "query_lineage_{}_smp_aws_cpp_profiling".format(model)
+                input_size, "9,25,10,26,11,27,12,28")
+            fname = "cpp-aws-results-k80-{model}-batch-{batch}".format(model=model,
+                                                                       batch=batch_size)
+            results_dir = "query_lineage_debugging_no_double_buffer".format(model)
             driver_utils.save_results_cpp_client([config, ],
                                                  init_results,
                                                  summary_results,

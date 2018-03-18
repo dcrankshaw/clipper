@@ -67,7 +67,8 @@ void predict(FrontendRPCClient& client, std::string name,
         return;
       }
     }
-    auto latency = std::chrono::system_clock::now() - start_time;
+    auto cur_time = std::chrono::system_clock::now();
+    auto latency = cur_time - start_time;
     long latency_micros =
         std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latency_->insert(static_cast<int64_t>(latency_micros));
@@ -75,6 +76,15 @@ void predict(FrontendRPCClient& client, std::string name,
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
+    lineage->add_timestamp("driver::send", 
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              start_time.time_since_epoch())
+              .count());
+
+    lineage->add_timestamp("driver::recv", 
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              cur_time.time_since_epoch())
+              .count());
 
     std::unique_lock<std::mutex> lock;
     query_lineage_file << "{";
