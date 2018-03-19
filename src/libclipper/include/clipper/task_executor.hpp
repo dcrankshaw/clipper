@@ -112,7 +112,7 @@ class QueryCache {
   size_t page_buffer_index_ = 0;
   std::shared_ptr<metrics::Counter> lookups_counter_;
   std::shared_ptr<metrics::RatioCounter> hit_ratio_;
-  CallbackThreadPool callback_threadpool_;
+  // CallbackThreadPool callback_threadpool_;
 };
 
 struct DeadlineCompare {
@@ -610,10 +610,11 @@ class TaskExecutor {
                                               container_send);
         completed_msg.lineage_->add_timestamp("clipper::rpc_recv",
                                               clipper_recv);
-        completed_msg.lineage_->add_timestamp("clipper::task_executor_recv",
-          std::chrono::duration_cast<std::chrono::microseconds>(
-              on_response_recv_timestamp.time_since_epoch())
-              .count());
+        completed_msg.lineage_->add_timestamp(
+            "clipper::task_executor_recv",
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                on_response_recv_timestamp.time_since_epoch())
+                .count());
         cache_->put(
             completed_msg.model_, completed_msg.query_id_,
             Output{parsed_response.outputs_[batch_num], {completed_msg.model_}},

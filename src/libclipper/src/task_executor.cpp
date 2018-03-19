@@ -17,7 +17,8 @@ namespace clipper {
 CacheEntry::CacheEntry() {}
 
 QueryCache::QueryCache(size_t size_bytes)
-    : max_size_bytes_(size_bytes), callback_threadpool_("query_cache", 16) {}
+    // : max_size_bytes_(size_bytes), callback_threadpool_("query_cache", 16) {}
+    : max_size_bytes_(size_bytes) {}
 
 bool QueryCache::fetch(
     const VersionedModelId &model, const QueryId query_id,
@@ -34,8 +35,9 @@ bool QueryCache::fetch(
       // the cache value directly would destroy it. Therefore, we use
       // copy assignment to `value` and move the copied object instead
       Output value = search->second.value_;
-      callback_threadpool_.submit(callback, std::move(value),
-                                  search->second.lineage_);
+      // callback_threadpool_.submit(callback, std::move(value),
+      //                             search->second.lineage_);
+      callback(std::move(value), search->second.lineage_);
       return true;
     } else {
       // value not in cache yet
@@ -68,8 +70,10 @@ void QueryCache::put(const VersionedModelId &model, const QueryId query_id,
       size_bytes_ += output.y_hat_->size();
       evict_entries(size_bytes_ - max_size_bytes_);
       l.unlock();
+
       for (auto &c : callbacks) {
-        callback_threadpool_.submit(c, output, lineage);
+        c(output, lineage);
+        // callback_threadpool_.submit(c, output, lineage);
       }
     }
   } else {
