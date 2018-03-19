@@ -26,6 +26,8 @@ INCEPTION_FEATS = "inception"
 TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
+TF_RESNET_VAR = "tf-resnet-feats-var"
+TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
 
 
 def get_heavy_node_config(model_name,
@@ -33,7 +35,8 @@ def get_heavy_node_config(model_name,
                           num_replicas,
                           cpus_per_replica,
                           allocated_cpus,
-                          allocated_gpus):
+                          allocated_gpus,
+                          input_size=None):
 
     if model_name == ALEXNET:
         image = "gcr.io/clipper-model-comp/pytorch-alexnet:bench"
@@ -103,6 +106,36 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
 
+    elif model_name == TF_RESNET_VAR:
+        image = "gcr.io/clipper-model-comp/tf-resnet-feats-variable-input:bench"
+        assert input_size is not None
+        return driver_utils.HeavyNodeConfig(name=TF_RESNET_VAR,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            input_size=input_size)
+
+    elif model_name == TF_RESNET_SLEEP:
+        image = "gcr.io/clipper-model-comp/tf-resnet-feats-sleep:bench"
+        assert input_size is not None
+        return driver_utils.HeavyNodeConfig(name=TF_RESNET_SLEEP,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            input_size=input_size)
+
     elif model_name == TF_LOG_REG:
         image = "gcr.io/clipper-model-comp/tf-log-reg:bench"
         return driver_utils.HeavyNodeConfig(name=TF_LOG_REG,
@@ -130,13 +163,15 @@ def get_heavy_node_config(model_name,
                                             no_diverge=True)
 
 
-def get_input_size(name):
-    if name in [TF_LOG_REG, TF_KERNEL_SVM]:
+def get_input_size(config):
+    if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:
         return 2048
-    elif name in [ALEXNET, RES50, RES152, INCEPTION_FEATS]:
+    elif config.name in [ALEXNET, RES50, RES152, INCEPTION_FEATS]:
         return 299*299*3
-    elif name in [TF_RESNET, ]:
+    elif config.name in [TF_RESNET, ]:
         return 224*224*3
+    elif config.name in [TF_RESNET_VAR, TF_RESNET_SLEEP]:
+        return config.input_size
 
 
 def setup_clipper(configs):
@@ -365,7 +400,10 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 lineage = load_lineage(lineage_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
-                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results, lineage)
+                    return driver_utils.Results(client_metrics,
+                                                clipper_metrics,
+                                                summary_results,
+                                                lineage)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
@@ -373,8 +411,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 1000
-    run(init_throughput, 5, "warmup", "constant")
-    init_results = run(init_throughput, 10, "init", "constant")
+    run(init_throughput, 3, "warmup", "constant")
+    init_results = run(init_throughput, 8, "init", "constant")
     mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
     # steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
     # logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
@@ -386,24 +424,26 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for batch_size in [4, 8, 16, 24, 32, 48, 64, 1, 2]:
-        for model in [TF_RESNET, TF_KERNEL_SVM]:
+    model = TF_RESNET_SLEEP
+    for batch_size in [4, 8]:
+        for input_size in [4, 8, 2000, 10000, 50000, 100000, 250000]:
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
                 num_replicas=1,
                 cpus_per_replica=1,
                 allocated_cpus=range(4, 5),
-                allocated_gpus=range(0, 1)
+                allocated_gpus=range(0, 1),
+                input_size=input_size
             )
 
-            input_size = get_input_size(config.name)
+            input_size = get_input_size(config)
             init_results, summary_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler",
                 input_size, "9,25,10,26,11,27,12,28")
-            fname = "cpp-aws-results-k80-{model}-batch-{batch}".format(model=model,
-                                                                       batch=batch_size)
-            results_dir = "query_lineage_debugging_no_double_buffer".format(model)
+            fname = "cpp-aws-results-k80-{model}-batch-{batch}-input-{i}".format(
+                model=model, batch=batch_size, i=input_size)
+            results_dir = "query_lineage_tf_resnet_sleep_var".format(model)
             driver_utils.save_results_cpp_client([config, ],
                                                  init_results,
                                                  summary_results,

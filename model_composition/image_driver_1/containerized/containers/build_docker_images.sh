@@ -30,6 +30,14 @@ time docker build -t model-comp/tf-resnet-feats -f TfResNetDockerfile ./
 docker tag model-comp/tf-resnet-feats $gcpprefix/tf-resnet-feats:$tag
 # gcloud docker -- push $gcpprefix/tf-resnet-feats:$tag
 
+time docker build -t model-comp/tf-resnet-feats-variable-input -f TfResNetVariableInputSizeDockerfile ./
+docker tag model-comp/tf-resnet-feats-variable-input $gcpprefix/tf-resnet-feats-variable-input:$tag
+# gcloud docker -- push $gcpprefix/tf-resnet-feats-variable-input:$tag
+
+time docker build -t model-comp/tf-resnet-feats-sleep -f TfResNetSleepDockerfile ./
+docker tag model-comp/tf-resnet-feats-sleep $gcpprefix/tf-resnet-feats-sleep:$tag
+# gcloud docker -- push $gcpprefix/tf-resnet-feats-sleep:$tag
+
 time docker build -t model-comp/tf-log-reg -f TfLogisticRegressionDockerfile ./
 docker tag model-comp/tf-log-reg $gcpprefix/tf-log-reg:$tag
 # gcloud docker -- push $gcpprefix/tf-log-reg:$tag
