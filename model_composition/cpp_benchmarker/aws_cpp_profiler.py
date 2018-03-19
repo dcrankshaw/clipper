@@ -425,28 +425,30 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
 
     model = TF_RESNET_SLEEP
+    input_size = 2048
     for batch_size in [4, 8]:
-        for input_size in [4, 8, 2000, 10000, 50000, 100000, 250000]:
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=1,
-                allocated_cpus=range(4, 5),
-                allocated_gpus=range(0, 1),
-                input_size=input_size
-            )
+        # for input_size in [4, 8, 2000, 10000, 50000, 100000, 250000]:
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=range(4, 5),
+            allocated_gpus=range(0, 1),
+            input_size=input_size
+        )
 
-            input_size = get_input_size(config)
-            init_results, summary_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26,11,27,12,28")
-            fname = "cpp-aws-results-k80-{model}-batch-{batch}-input-{i}".format(
-                model=model, batch=batch_size, i=input_size)
-            results_dir = "query_lineage_tf_resnet_sleep_var".format(model)
-            driver_utils.save_results_cpp_client([config, ],
-                                                 init_results,
-                                                 summary_results,
-                                                 results_dir,
-                                                 prefix=fname)
+        input_size = get_input_size(config)
+        init_results, summary_results = run_profiler(
+            config, 2000, "../../release/src/inferline_client/profiler",
+            input_size, "9,25,10,26,11,27,12,28")
+        fname = "cpp-aws-results-k80-{model}-batch-{batch}-input-{i}".format(
+            model=model, batch=batch_size, i=input_size)
+        results_dir = "query_lineage_tf_resnet_sleep_15ms".format(model)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            init_results,
+            summary_results,
+            results_dir,
+            prefix=fname)
     sys.exit(0)
