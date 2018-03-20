@@ -11,7 +11,7 @@
 #include <clipper/clock.hpp>
 #include <clipper/metrics.hpp>
 
-#include "predictor.hpp"
+#include "driver.hpp"
 #include "zmq_client.hpp"
 
 using namespace clipper;
@@ -191,12 +191,15 @@ int main(int argc, char* argv[]) {
       //  cxxopts::value<int>())
       ("target_throughput", "Mean throughput to target in qps",
        cxxopts::value<float>())
-      ("request_distribution", "Distribution to sample request delay from. Can be 'constant' or 'poisson'",
+      ("request_distribution", "Distribution to sample request delay from. "
+       "Can be 'constant', 'poisson', or 'batch'. 'batch' sends a single batch at a time.",
        cxxopts::value<std::string>())
       ("trial_length", "Number of queries per trial",
        cxxopts::value<int>())
       ("num_trials", "Number of trials",
        cxxopts::value<int>())
+      ("batch_size", "Batch size",
+       cxxopts::value<int>()->default_value(-1))
       ("log_file", "location of log file",
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
@@ -205,7 +208,7 @@ int main(int argc, char* argv[]) {
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant")) {
+  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -229,11 +232,13 @@ int main(int argc, char* argv[]) {
           query_lineage_file, query_file_mutex);
     };
     Driver driver(predict_func, std::move(inputs),
-                  options["target_throughput"].as<float>(), distribution,
+                  options["target_throughput"].as<float>(),
+                  distribution,
                   options["trial_length"].as<int>(),
                   options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),
-                  options["clipper_address"].as<std::string>());
+                  options["clipper_address"].as<std::string>(),
+                  options["batch_size"].as<int>());
     std::cout << "Starting driver" << std::endl;
     driver.start();
     std::cout << "Driver completed" << std::endl;

@@ -36,6 +36,7 @@ class Driver {
   std::atomic_bool done_;
   std::atomic<int> prediction_counter_;
   std::string clipper_address_;
+  int batch_size_;
 };
 
 }  // namespace zmq_client

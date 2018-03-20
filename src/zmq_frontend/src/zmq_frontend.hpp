@@ -301,6 +301,10 @@ class ServerImpl {
     task_executor_.drain_queues();
   }
 
+  void set_full_batches() {
+    task_executor_.set_full_batches();
+  }
+
  private:
   std::shared_ptr<FrontendRPCService> rpc_service_;
   TaskExecutor task_executor_;

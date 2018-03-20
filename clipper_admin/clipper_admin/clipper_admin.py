@@ -1008,6 +1008,25 @@ class ClipperConnection(object):
             logger.error(msg)
             raise ClipperException(msg)
 
+    def set_full_batches(self):
+        """Tells Clipper to always use full batch sizes, even if that requires waiting.
+
+        Raises
+        ------
+        :py:exc:`clipper.UnconnectedException`
+        :py:exc:`clipper.ClipperException`
+        """
+        if not self.connected:
+            raise UnconnectedException()
+        url = "http://{host}/set_full_batches".format(host=self.cm.get_query_addr())
+        r = requests.get(url)
+        logger.debug(r.text)
+        if r.status_code != requests.codes.ok:
+            msg = "Received error status code: {code} and message: {msg}".format(
+                code=r.status_code, msg=r.text)
+            logger.error(msg)
+            raise ClipperException(msg)
+
     def set_model_version(self, name, version, num_replicas=None):
         """Changes the current model version to "model_version".
 

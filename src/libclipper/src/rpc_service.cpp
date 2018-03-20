@@ -258,7 +258,7 @@ void RPCService::send_messages(socket_t &socket, int max_num_messages) {
     auto outbound_timestamp = std::chrono::system_clock::now();
     msg_id_timestamp_map_.emplace(msg_id, std::move(outbound_timestamp));
 
-    long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
+    // long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
     // model_send_times_->insert(curr_system_time);
   }
 }
@@ -327,16 +327,16 @@ void RPCService::receive_message(socket_t &socket) {
     throw std::runtime_error(ss.str());
   }
 
-  auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
+  // auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
   std::string model_name = msg_id_models_map_.find(id)->second;
   // auto model_latencies_list =
   // model_processing_latencies_.find(model_name)->second;
 
-  auto inbound_timestamp = std::chrono::system_clock::now();
-  long model_processing_latency =
-      std::chrono::duration_cast<std::chrono::milliseconds>(inbound_timestamp -
-                                                            outbound_timestamp)
-          .count();
+  // auto inbound_timestamp = std::chrono::system_clock::now();
+  // long model_processing_latency =
+  //     std::chrono::duration_cast<std::chrono::milliseconds>(inbound_timestamp -
+  //                                                           outbound_timestamp)
+  //         .count();
 
   // model_latencies_list->insert(model_processing_latency);
   msg_id_timestamp_map_.erase(id);

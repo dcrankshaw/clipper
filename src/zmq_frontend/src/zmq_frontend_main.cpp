@@ -11,6 +11,7 @@ using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
 const std::string GET_METRICS = "^/metrics$";
 const std::string DRAIN_QUEUES = "^/drain_queues$";
+const std::string FULL_BATCHES = "^/set_full_batches$";
 
 void respond_http(std::string content, std::string message,
                   std::shared_ptr<HttpServer::Response> response) {
@@ -67,6 +68,14 @@ int main(int argc, char* argv[]) {
                              std::shared_ptr<HttpServer::Request> /*request*/) {
         zmq_server.drain_queues();
         std::cout << "Drained queues" << std::endl;
+        respond_http("DONE", "200 OK", response);
+      });
+
+  metrics_server.add_endpoint(
+      FULL_BATCHES, "GET", [&zmq_server](std::shared_ptr<HttpServer::Response> response,
+                             std::shared_ptr<HttpServer::Request> /*request*/) {
+        zmq_server.set_full_batches();
+        std::cout << "Set full batches" << std::endl;
         respond_http("DONE", "200 OK", response);
       });
 
