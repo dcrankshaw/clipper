@@ -1,10 +1,10 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <random>
-#include <string>
 #include <fstream>
 #include <iostream>
+#include <random>
+#include <string>
 
 #include <cxxopts.hpp>
 
@@ -53,11 +53,10 @@ class ProfilerMetrics {
 void predict(FrontendRPCClient& client, std::string name,
              ClientFeatureVector input, ProfilerMetrics metrics,
              std::atomic<int>& prediction_counter,
-             std::ofstream& query_lineage_file,
-             std::mutex& query_file_mutex) {
+             std::ofstream& query_lineage_file, std::mutex& query_file_mutex) {
   auto start_time = std::chrono::system_clock::now();
   client.send_request(name, input, [metrics, &prediction_counter, start_time,
-      &query_lineage_file, &query_file_mutex](
+                                    &query_lineage_file, &query_file_mutex](
                                        ClientFeatureVector output,
                                        std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -76,22 +75,25 @@ void predict(FrontendRPCClient& client, std::string name,
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
-    lineage->add_timestamp("driver::send", 
-          std::chrono::duration_cast<std::chrono::microseconds>(
-              start_time.time_since_epoch())
-              .count());
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            start_time.time_since_epoch())
+            .count());
 
-    lineage->add_timestamp("driver::recv", 
-          std::chrono::duration_cast<std::chrono::microseconds>(
-              cur_time.time_since_epoch())
-              .count());
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            cur_time.time_since_epoch())
+            .count());
 
     std::unique_lock<std::mutex> lock;
     query_lineage_file << "{";
     int num_entries = lineage->get_timestamps().size();
     int idx = 0;
     for (auto& entry : lineage->get_timestamps()) {
-      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      query_lineage_file << "\"" << entry.first
+                         << "\": " << std::to_string(entry.second);
       if (idx < num_entries - 1) {
         query_lineage_file << ", ";
       }
@@ -199,7 +201,7 @@ int main(int argc, char* argv[]) {
       ("num_trials", "Number of trials",
        cxxopts::value<int>())
       ("batch_size", "Batch size",
-       cxxopts::value<int>()->default_value(-1))
+       cxxopts::value<int>()->default_value("-1"))
       ("log_file", "location of log file",
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
@@ -208,7 +210,8 @@ int main(int argc, char* argv[]) {
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
+  if (!(distribution == "poisson" || distribution == "constant" ||
+        distribution == "batch")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -224,16 +227,16 @@ int main(int argc, char* argv[]) {
 
     std::ofstream query_lineage_file;
     std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
-    auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](FrontendRPCClient& client,
-                                        ClientFeatureVector input,
-                                        std::atomic<int>& prediction_counter) {
+    query_lineage_file.open(options["log_file"].as<std::string>() +
+                            "-query_lineage.txt");
+    auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](
+        FrontendRPCClient& client, ClientFeatureVector input,
+        std::atomic<int>& prediction_counter) {
       predict(client, name, input, metrics, prediction_counter,
-          query_lineage_file, query_file_mutex);
+              query_lineage_file, query_file_mutex);
     };
     Driver driver(predict_func, std::move(inputs),
-                  options["target_throughput"].as<float>(),
-                  distribution,
+                  options["target_throughput"].as<float>(), distribution,
                   options["trial_length"].as<int>(),
                   options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),

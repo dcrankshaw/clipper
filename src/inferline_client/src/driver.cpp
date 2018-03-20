@@ -1,8 +1,8 @@
+#include <time.h>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <time.h>
-#include <cmath>
 #include <random>
 
 // #include "httplib.h"
@@ -46,24 +46,26 @@ void spin_sleep(long duration_micros) {
   while (cur_delay_micros < duration_micros) {
     auto cur_delay = std::chrono::system_clock::now() - start_time;
     cur_delay_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_delay)
+            .count();
   }
 }
 
 void Driver::start() {
-  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
+  if (!(distribution_ == "poisson" || distribution_ == "constant" ||
+        distribution_ == "batch")) {
     std::cerr << "Invalid distribution: " << distribution_ << std::endl;
     return;
   }
 
-
   std::random_device rd;
   std::mt19937 gen(rd());
   std::exponential_distribution<> exp_dist(target_throughput_);
-  long constant_request_delay_micros = std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
+  long constant_request_delay_micros =
+      std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
 
   auto monitor_thread = std::thread([this]() { monitor_results(); });
-  if (distribution == "batch") {
+  if (distribution_ == "batch") {
     int cur_idx = 0;
     while (!done_) {
       // Get the current pred counter
@@ -77,7 +79,8 @@ void Driver::start() {
         }
       }
       // spin until the batch completes
-      while (prediction_counter_ < cur_pred_counter + batch_size_) {}
+      while (prediction_counter_ < cur_pred_counter + batch_size_) {
+      }
     }
   } else {
     while (!done_) {
@@ -86,7 +89,7 @@ void Driver::start() {
           break;
         }
         predict_func_(client_, f, prediction_counter_);
-        
+
         if (distribution_ == "poisson") {
           float delay_secs = exp_dist(gen);
           long delay_micros = lround(delay_secs * 1000.0 * 1000.0);

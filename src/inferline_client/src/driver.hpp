@@ -17,7 +17,7 @@ class Driver {
              predict_func,
          std::vector<ClientFeatureVector> inputs, float target_throughput,
          std::string distribution, int trial_length, int num_trials,
-         std::string log_file, std::string clipper_address);
+         std::string log_file, std::string clipper_address, int batch_size);
 
   void start();
 
