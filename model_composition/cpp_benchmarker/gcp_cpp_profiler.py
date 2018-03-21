@@ -1,7 +1,7 @@
 import subprocess32 as subprocess
 import os
 import sys
-import numpy as np
+# import numpy as np
 import time
 import logging
 import json
@@ -266,13 +266,13 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def check_queue_size(config, summary_results):
-    queue_sizes = [r["queue_sizes"][config.name] for r in summary_results[1:]]
-    max_allowable_queue_size = max(config.batch_size * 2, 4)
-    # Check queue size of last trial
-    return (queue_sizes[-1] <= max_allowable_queue_size,
-            queue_sizes[-1],
-            max_allowable_queue_size)
+# def check_queue_size(config, summary_results):
+#     queue_sizes = [r["queue_sizes"][config.name] for r in summary_results[1:]]
+#     max_allowable_queue_size = max(config.batch_size * 2, 4)
+#     # Check queue size of last trial
+#     return (queue_sizes[-1] <= max_allowable_queue_size,
+#             queue_sizes[-1],
+#             max_allowable_queue_size)
 
 
 def run_profiler(config, trial_length, driver_path, input_size, init_throughput=1000.0):
@@ -285,7 +285,7 @@ def run_profiler(config, trial_length, driver_path, input_size, init_throughput=
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process):
+    def run(target_throughput, num_trials, name, arrival_process, batch_size=None):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
@@ -303,6 +303,9 @@ def run_profiler(config, trial_length, driver_path, input_size, init_throughput=
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
                "--clipper_address={}".format(clipper_address)]
+        if batch_size is not None:
+            cmd.append("--batch_size={}".format(batch_size))
+
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
@@ -328,7 +331,7 @@ def run_profiler(config, trial_length, driver_path, input_size, init_throughput=
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
                 else:
-                    logger.info("Couldn't load metrics")
+                    # logger.info("Couldn't load metrics")
                     continue
                 client_trials = len(client_metrics)
                 clipper_trials = len(clipper_metrics)
@@ -354,39 +357,25 @@ def run_profiler(config, trial_length, driver_path, input_size, init_throughput=
                 lineage = load_lineage(lineage_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
-                    return driver_utils.Results(client_metrics, clipper_metrics, summary_results, lineage)
+                    return driver_utils.Results(client_metrics,
+                                                clipper_metrics,
+                                                summary_results,
+                                                lineage)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    run(init_throughput, 15, "warmup", "constant")
-    # logger.info("Testing queue size on warmup: {}".format(check_queue_size(
-    #     config, warmup_result.summary_metrics)))
-    init_results = run(init_throughput, 15, "init", "constant")
-    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
-    logger.info("Steady state throughput: {}".format(mean_thruput))
-    # while True:
-    #     steady_results = run(mean_thruput, 8, "steady_state", "poisson")
-    #     queue_converged, last_size, max_size = check_queue_size(
-    #         config, steady_results.summary_metrics)
-    #     if queue_converged:
-    #         break
-    #     else:
-    #         if last_size / max_size > 4:
-    #             mean_thruput = mean_thruput * 0.9
-    #         elif last_size / max_size > 2:
-    #             mean_thruput = mean_thruput * 0.95
-    #         else:
-    #             mean_thruput -= 1.0
-    #         logger.info("Queues too large. Last queue size: {}, max: {}".format(
-    #             last_size, max_size))
-    # logger.info("Found steady state thruput: {}".format(mean_thruput))
-    steady_results = run(mean_thruput, 15, "steady_state", "poisson")
-
+    init_throughput = 1000
+    run(init_throughput, 12, "warmup", "constant")
+    throughput_results = run(init_throughput, 10, "throughput", "constant")
+    cl.drain_queues()
+    cl.set_full_batches()
+    time.sleep(1)
+    latency_results = run(0, 10, "latency", "batch", batch_size=config.batch_size)
     cl.stop_all()
-    return init_results, steady_results
+    return throughput_results, latency_results
 
 
 if __name__ == "__main__":
@@ -394,28 +383,28 @@ if __name__ == "__main__":
     global GCP_CLUSTER_NAME
     num_cpus = 2
     gpu = "p100"
-    for batch_size in [4, 8, 16]:
-        for model in [TF_RESNET, TF_KERNEL_SVM]:
+    for gpu in ["p100", "k80"]:
+        for model in [INCEPTION_FEATS, TF_RESNET, RES50, RES152, ALEXNET]:
+            for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32, 40, 48, 64, 96]:
+                if gpu == "k80" and batch_size > 32:
+                    continue
+                GCP_CLUSTER_NAME = "over-under-prof-{}".format(model)
+                config = get_heavy_node_config(
+                    model_name=model,
+                    batch_size=batch_size,
+                    num_replicas=1,
+                    cpus_per_replica=num_cpus,
+                    gpu_type=gpu)
 
-            GCP_CLUSTER_NAME = "query-lineage-{}".format(model)
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=num_cpus,
-                gpu_type=gpu)
-
-            input_size = get_input_size(config.name)
-            init_results, steady_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler", input_size,
-                init_throughput=1000.0)
-            fname = "query-lineage-cpp-gcp-results-{model}-batch-{batch}-{gpu}".format(
-                model=model, batch=batch_size, gpu=gpu)
-            # results_dir = "{model}_smp_gcp_cpp_profiling_spinsleep".format(model=model)
-            results_dir = "query-lineage-debug".format(model=model)
-            driver_utils.save_results_cpp_client([config, ],
-                                                 init_results,
-                                                 steady_results,
-                                                 results_dir,
-                                                 prefix=fname)
+                input_size = get_input_size(config.name)
+                throughput_results, latency_results = run_profiler(
+                    config, 2000, "../../release/src/inferline_client/profiler", input_size)
+                fname = "under_over-cpp-gcp-results-{gpu}-{model}-batch-{batch}".format(
+                    model=model, batch=batch_size, gpu=gpu)
+                results_dir = "under_over_{model}-snp".format(model=model)
+                driver_utils.save_results_cpp_client([config, ],
+                                                     throughput_results,
+                                                     latency_results,
+                                                     results_dir,
+                                                     prefix=fname)
     sys.exit(0)
