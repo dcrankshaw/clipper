@@ -425,10 +425,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    for model in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]:
+    for model in [RES50, RES152, ALEXNET]:
         for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32]:
-            if model == TF_RESNET and batch_size < 24:
-                continue
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
