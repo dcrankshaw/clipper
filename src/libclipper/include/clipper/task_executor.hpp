@@ -190,9 +190,10 @@ class ModelQueue {
     std::vector<PredictTask> batch;
 
     if (full_batch) {
-      queue_not_empty_condition_.wait(lock,
+      queue_not_empty_condition_.wait_for(lock,
+          std::chrono::milliseconds(100),
           [this, max_batch_size]() { return queue_.size() >= max_batch_size; });
-      while (batch.size() < (size_t)max_batch_size) {
+      while (batch.size() < (size_t)max_batch_size && queue_.size() > 0) {
         auto &task = queue_.top().second;
         batch.push_back(task);
         auto cur_time = std::chrono::system_clock::now();

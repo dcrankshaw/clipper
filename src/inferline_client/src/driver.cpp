@@ -57,16 +57,16 @@ void Driver::start() {
     std::cerr << "Invalid distribution: " << distribution_ << std::endl;
     return;
   }
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::exponential_distribution<> exp_dist(target_throughput_);
-  long constant_request_delay_micros =
-      std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
-
   auto monitor_thread = std::thread([this]() { monitor_results(); });
   if (distribution_ == "batch") {
+    std::cout << "starting batch arrival process with batch size " << std::to_string(batch_size_) << std::endl;
     int cur_idx = 0;
+
+    // Send a query to flush the system
+    predict_func_(client_, inputs_[cur_idx], prediction_counter_);
+    cur_idx += 1;
+    spin_sleep(1000*1000L);
+
     while (!done_) {
       // Get the current pred counter
       int cur_pred_counter = prediction_counter_;
@@ -84,6 +84,11 @@ void Driver::start() {
     }
   } else {
     while (!done_) {
+      std::random_device rd;
+      std::mt19937 gen(rd());
+      std::exponential_distribution<> exp_dist(target_throughput_);
+      long constant_request_delay_micros =
+          std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
       for (ClientFeatureVector f : inputs_) {
         if (done_) {
           break;
@@ -118,8 +123,7 @@ void Driver::monitor_results() {
 
   while (!done_) {
     int current_count = prediction_counter_;
-    if (current_count > trial_length_) {
-      prediction_counter_ = 0;
+    if (current_count > trial_length_ * (num_completed_trials + 1)) {
       num_completed_trials += 1;
       std::cout << "Trial " << std::to_string(num_completed_trials)
                 << " completed" << std::endl;

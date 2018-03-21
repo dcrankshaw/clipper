@@ -16,6 +16,7 @@ DECREASING = "decreasing"
 CONVERGED = "converged"
 UNKNOWN = "unknown"
 
+
 class Results(object):
     def __init__(self, client_metrics, clipper_metrics, summary_metrics, lineage):
         self.client_metrics = client_metrics
@@ -25,6 +26,7 @@ class Results(object):
 
     def get_dict(self):
         return self.__dict__
+
 
 class HeavyNodeConfig(object):
     def __init__(self,
@@ -172,8 +174,8 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
 
 
 def save_results_cpp_client(configs,
-                            init_results,
-                            steady_results,
+                            throughput_results,
+                            latency_results,
                             results_dir,
                             prefix="results",
                             container_metrics=None):
@@ -202,8 +204,8 @@ def save_results_cpp_client(configs,
 
     results_obj = {
         "node_configs": [c.__dict__ for c in configs],
-        "init_results": init_results.get_dict(),
-        "steady_results": steady_results.get_dict(),
+        "throughput_results": throughput_results.get_dict(),
+        "latency_results": latency_results.get_dict(),
     }
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics

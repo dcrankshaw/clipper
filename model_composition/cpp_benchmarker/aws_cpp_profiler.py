@@ -1,7 +1,7 @@
 import subprocess32 as subprocess
 import os
 import sys
-import numpy as np
+# import numpy as np
 import time
 import logging
 import json
@@ -143,7 +143,7 @@ def get_heavy_node_config(model_name,
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
+                                            gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
@@ -156,7 +156,7 @@ def get_heavy_node_config(model_name,
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
+                                            gpus=[],
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
@@ -279,15 +279,14 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
-    logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
-                 "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
-                 "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
-                 "\nqueue sizes: {queue_sizes}, "
-                 "batch sizes: {batch_sizes}\n").format(**results_dict))
-    # logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-    #              "mean lat: {client_mean_lats} "
-    #              "\nqueues: {queue_sizes}, batches: {batch_sizes}, "
-    #              "counts: {client_counts}\n").format(**results_dict))
+    # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+    #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+    #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+    #              "\nqueue sizes: {queue_sizes}, "
+    #              "batch sizes: {batch_sizes}\n").format(**results_dict))
+    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
+                 "mean lat: {client_mean_lats} "
+                 "\nbatches: {batch_sizes}, queues: {queue_sizes}\n").format(**results_dict))
     return results_dict
 
 
@@ -332,7 +331,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process):
+    def run(target_throughput, num_trials, name, arrival_process, batch_size=None):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
@@ -351,6 +350,9 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
                "--clipper_address={}".format(clipper_address)]
+        if batch_size is not None:
+            cmd.append("--batch_size={}".format(batch_size))
+
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
@@ -412,45 +414,41 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
     init_throughput = 1000
     run(init_throughput, 3, "warmup", "constant")
-    init_results = run(init_throughput, 8, "init", "constant")
-    mean_thruput = np.mean([r["client_thrus"][config.name] for r in init_results.summary_metrics][1:])
-    # steady_state_delay = int(round(1.0 / mean_thruput * 1000.0 * 1000.0))
-    # logger.info("Setting delay to {delay} (mean throughput was: {thru})".format(
-    #     delay=steady_state_delay, thru=mean_thruput))
+    throughput_results = run(init_throughput, 8, "throughput", "constant")
     cl.drain_queues()
-    steady_results = run(mean_thruput, 10, "steady_state", "poisson")
+    cl.set_full_batches()
+    time.sleep(1)
+    latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
     cl.stop_all()
-    return init_results, steady_results
+    return throughput_results, latency_results
 
 
 if __name__ == "__main__":
 
-    # model = TF_RESNET_SLEEP
-    # input_size = 2048
-    model = TF_RESNET
-    for batch_size in [8, 4, 16, 32]:
-        # for input_size in [4, 8, 2000, 10000, 50000, 100000, 250000]:
-        config = get_heavy_node_config(
-            model_name=model,
-            batch_size=batch_size,
-            num_replicas=1,
-            cpus_per_replica=1,
-            allocated_cpus=range(4, 5),
-            allocated_gpus=range(0, 1),
-            # input_size=input_size
-        )
+    for model in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]:
+        for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32]:
+            if model == TF_RESNET and batch_size < 24:
+                continue
+            config = get_heavy_node_config(
+                model_name=model,
+                batch_size=batch_size,
+                num_replicas=1,
+                cpus_per_replica=1,
+                allocated_cpus=range(4, 5),
+                allocated_gpus=range(0, 1),
+            )
 
-        input_size = get_input_size(config)
-        init_results, summary_results = run_profiler(
-            config, 2000, "../../release/src/inferline_client/profiler",
-            input_size, "9,25,10,26,11,27,12,28")
-        fname = "cpp-aws-results-k80-{model}-batch-{batch}-input-{i}".format(
-            model=model, batch=batch_size, i=input_size)
-        results_dir = "query_lineage_tf_resnet_removed_query_cache".format(model)
-        driver_utils.save_results_cpp_client(
-            [config, ],
-            init_results,
-            summary_results,
-            results_dir,
-            prefix=fname)
+            input_size = get_input_size(config)
+            throughput_results, latency_results = run_profiler(
+                config, 2000, "../../release/src/inferline_client/profiler",
+                input_size, "9,25,10,26,11,27,12,28")
+            fname = "under_over-cpp-aws-results-k80-{model}-batch-{batch}".format(
+                model=model, batch=batch_size)
+            results_dir = "under_over_{model}-snp".format(model=model)
+            driver_utils.save_results_cpp_client(
+                [config, ],
+                throughput_results,
+                latency_results,
+                results_dir,
+                prefix=fname)
     sys.exit(0)
