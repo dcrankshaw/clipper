@@ -21,18 +21,14 @@ class ProfilerMetrics {
  public:
   explicit ProfilerMetrics(std::string name)
       : name_(name),
-        latency_(
-            clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-                name_ + ":prediction_latency", "microseconds", 32768)),
-        latency_list_(clipper::metrics::MetricsRegistry::get_metrics()
-                          .create_data_list<long long>(
-                              name_ + ":prediction_latencies", "microseconds")),
-        throughput_(
-            clipper::metrics::MetricsRegistry::get_metrics().create_meter(
-                name_ + ":prediction_throughput")),
-        num_predictions_(
-            clipper::metrics::MetricsRegistry::get_metrics().create_counter(
-                name_ + ":num_predictions")) {}
+        latency_(clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
+            name_ + ":prediction_latency", "microseconds", 32768)),
+        latency_list_(clipper::metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
+            name_ + ":prediction_latencies", "microseconds")),
+        throughput_(clipper::metrics::MetricsRegistry::get_metrics().create_meter(
+            name_ + ":prediction_throughput")),
+        num_predictions_(clipper::metrics::MetricsRegistry::get_metrics().create_counter(
+            name_ + ":num_predictions")) {}
 
   ~ProfilerMetrics() = default;
 
@@ -50,26 +46,23 @@ class ProfilerMetrics {
   std::shared_ptr<clipper::metrics::Counter> num_predictions_;
 };
 
-void predict(FrontendRPCClient& client, std::string name,
-             ClientFeatureVector input, ProfilerMetrics metrics,
-             std::atomic<int>& prediction_counter,
+void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector input,
+             ProfilerMetrics metrics, std::atomic<int>& prediction_counter,
              std::ofstream& query_lineage_file, std::mutex& query_file_mutex) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, &prediction_counter, start_time,
-                                    &query_lineage_file, &query_file_mutex](
-                                       ClientFeatureVector output,
-                                       std::shared_ptr<QueryLineage> lineage) {
+  client.send_request(name, input, [metrics, &prediction_counter, start_time, &query_lineage_file,
+                                    &query_file_mutex](ClientFeatureVector output,
+                                                       std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
-      std::string output_str = std::string(
-          reinterpret_cast<char*>(output.get_data()), output.size_typed_);
+      std::string output_str =
+          std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
       if (output_str == "TIMEOUT") {
         return;
       }
     }
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - start_time;
-    long latency_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latency_->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.throughput_->mark(1);
@@ -77,23 +70,19 @@ void predict(FrontendRPCClient& client, std::string name,
     prediction_counter += 1;
     lineage->add_timestamp(
         "driver::send",
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            start_time.time_since_epoch())
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
             .count());
 
     lineage->add_timestamp(
         "driver::recv",
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            cur_time.time_since_epoch())
-            .count());
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
 
-    std::unique_lock<std::mutex> lock;
+    std::unique_lock<std::mutex> lock(query_file_mutex);
     query_lineage_file << "{";
     int num_entries = lineage->get_timestamps().size();
     int idx = 0;
     for (auto& entry : lineage->get_timestamps()) {
-      query_lineage_file << "\"" << entry.first
-                         << "\": " << std::to_string(entry.second);
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
       if (idx < num_entries - 1) {
         query_lineage_file << ", ";
       }
@@ -105,22 +94,17 @@ void predict(FrontendRPCClient& client, std::string name,
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
   int num_points = 1000;
-  std::random_device
-      rd;  // Will be used to obtain a seed for the random number engine
-  std::mt19937 generator(
-      rd());  // Standard mersenne_twister_engine seeded with rd()
+  std::random_device rd;         // Will be used to obtain a seed for the random number engine
+  std::mt19937 generator(rd());  // Standard mersenne_twister_engine seeded with rd()
   std::uniform_real_distribution<> distribution(0.0, 1.0);
   std::vector<ClientFeatureVector> inputs;
   for (int i = 0; i < num_points; ++i) {
-    float* input_buffer =
-        reinterpret_cast<float*>(malloc(input_length * sizeof(float)));
+    float* input_buffer = reinterpret_cast<float*>(malloc(input_length * sizeof(float)));
     for (int j = 0; j < input_length; ++j) {
       input_buffer[j] = distribution(generator);
     }
-    std::shared_ptr<void> input_ptr(reinterpret_cast<void*>(input_buffer),
-                                    free);
-    inputs.emplace_back(input_ptr, input_length, input_length * sizeof(float),
-                        DataType::Floats);
+    std::shared_ptr<void> input_ptr(reinterpret_cast<void*>(input_buffer), free);
+    inputs.emplace_back(input_ptr, input_length, input_length * sizeof(float), DataType::Floats);
   }
   return inputs;
 }
@@ -210,8 +194,7 @@ int main(int argc, char* argv[]) {
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant" ||
-        distribution == "batch")) {
+  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -227,29 +210,24 @@ int main(int argc, char* argv[]) {
 
     std::ofstream query_lineage_file;
     std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() +
-                            "-query_lineage.txt");
+    query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
     auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](
         FrontendRPCClient& client, ClientFeatureVector input,
         std::atomic<int>& prediction_counter) {
-      predict(client, name, input, metrics, prediction_counter,
-              query_lineage_file, query_file_mutex);
+      predict(client, name, input, metrics, prediction_counter, query_lineage_file,
+              query_file_mutex);
     };
-    Driver driver(predict_func, std::move(inputs),
-                  options["target_throughput"].as<float>(), distribution,
-                  options["trial_length"].as<int>(),
-                  options["num_trials"].as<int>(),
+    Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
+                  distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),
-                  options["clipper_address"].as<std::string>(),
-                  options["batch_size"].as<int>());
+                  options["clipper_address"].as<std::string>(), options["batch_size"].as<int>());
     std::cout << "Starting driver" << std::endl;
     driver.start();
     std::cout << "Driver completed" << std::endl;
     query_lineage_file.close();
     return 0;
   } else {
-    std::cerr << "Invalid input type "
-              << options["input_type"].as<std::string>() << std::endl;
+    std::cerr << "Invalid input type " << options["input_type"].as<std::string>() << std::endl;
     return 1;
   }
 }

@@ -215,12 +215,12 @@ def load_metrics(client_path, clipper_path):
             clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
         try:
             clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
             return None
     return client_metrics, clipper_metrics
@@ -262,6 +262,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        lineage_paths = {name: "{p}-{m}-query_lineage.txt".format(m=name, p=log_path)
+                         for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
@@ -305,12 +307,13 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
             try:
                 loaded_metrics = load_metrics(client_path, clipper_path)
                 # lineage = load_lineage(lineage_path)
+                lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
                     return driver_utils.Results(client_metrics,
                                                 clipper_metrics,
                                                 summary_results,
-                                                None)
+                                                lineages)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
@@ -335,6 +338,7 @@ if __name__ == "__main__":
 
     def get_cpus(num):
         return [model_cpus.pop() for _ in range(num)]
+
     def get_gpus(num):
         return [model_gpus.pop() for _ in range(num)]
 
