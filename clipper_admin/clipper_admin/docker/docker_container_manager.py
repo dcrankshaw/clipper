@@ -284,7 +284,7 @@ class DockerContainerManager(ContainerManager):
                         alloc_cpus=len(allocated_cpus)))
             for i in range(num_missing):
                 if len(available_gpus) > 0:
-                    gpu_num = available_gpus.pop()
+                    gpu_num = available_gpus.pop(0)
                     use_nvidia_docker = True
                 else:
                     gpu_num = None
@@ -295,6 +295,9 @@ class DockerContainerManager(ContainerManager):
 
                 self._add_replica(name, version, input_type, image, gpu_num=gpu_num,
                                   cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
+            for i in range(num_missing*cpus_per_replica):
+                cpus.pop(0)
+
         elif len(current_replicas) > num_replicas:
             num_extra = len(current_replicas) - num_replicas
             logger.info(

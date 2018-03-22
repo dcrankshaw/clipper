@@ -203,12 +203,15 @@ def save_results_cpp_client(configs,
     #         c["all_lats"] = all_lats_strs
 
     results_obj = {
-        "node_configs": [c.__dict__ for c in configs],
-        "throughput_results": throughput_results.get_dict(),
-        "latency_results": latency_results.get_dict(),
+        "node_configs": [c.__dict__ for c in configs]
     }
+    if throughput_results is not None:
+        results_obj["throughput_results"] = throughput_results.get_dict()
+    if latency_results is not None:
+        results_obj["latency_results"] = latency_results.get_dict(),
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
+
     results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
         prefix=prefix, ts=datetime.datetime.now()))
     with open(results_file, "w") as f:
