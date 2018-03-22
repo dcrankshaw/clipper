@@ -26,10 +26,6 @@ static const std::string LANG_DETECT_IMAGE_NAME = "model-comp/tf-lang-detect";
 static const std::string NMT_IMAGE_NAME = "model-comp/tf-nmt";
 static const std::string LSTM_IMAGE_NAME = "model-comp/tf-lstm";
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "lang_detect_workload";
-static const std::string NMT_WORKLOAD_RELATIVE_PATH = "nmt_workload";
-static const std::string LSTM_WORKLOAD_RELATIVE_PATH = "lstm_workload";
-
 std::vector<std::string> MODEL_NAMES{LANG_DETECT_MODEL_APP_NAME, LSTM_MODEL_APP_NAME,
                                      NMT_MODEL_APP_NAME};
 
@@ -51,12 +47,11 @@ class ModelMetrics {
         model_num_predictions_(clipper::metrics::MetricsRegistry::get_metrics().create_counter(
             model_name + ":num_predictions")) {}
 
- private:
   std::shared_ptr<clipper::metrics::Histogram> model_latency_;
   std::shared_ptr<clipper::metrics::DataList<long long>> model_latency_list_;
   std::shared_ptr<clipper::metrics::Meter> model_throughput_;
   std::shared_ptr<clipper::metrics::Counter> model_num_predictions_;
-}
+};
 
 class ImageDriverTwoMetrics {
  public:
@@ -70,9 +65,9 @@ class ImageDriverTwoMetrics {
             "e2e:prediction_throughput")),
         e2e_num_predictions_(clipper::metrics::MetricsRegistry::get_metrics().create_counter(
             "e2e:num_predictions")) {
-    for (const auto& model_name : MODEL_NAMES) {
-      ModelMetrics metrics(model_name);
-      model_metrics_.emplace(model_name, model_metrics);
+    for (const std::string& model_name : MODEL_NAMES) {
+      std::shared_ptr<ModelMetrics> metrics_item = std::make_shared<ModelMetrics>(model_name);
+      model_metrics_.emplace(model_name, std::move(metrics_item));
     }
   }
 
@@ -85,7 +80,7 @@ class ImageDriverTwoMetrics {
   ImageDriverTwoMetrics(ImageDriverTwoMetrics&&) = default;
   ImageDriverTwoMetrics& operator=(ImageDriverTwoMetrics&&) = default;
 
-  ModelMetrics& get_model_metrics(const std::string model_name) {
+  std::shared_ptr<ModelMetrics> get_model_metrics(const std::string model_name) const {
     return model_metrics_.find(model_name)->second;
   }
 
@@ -95,7 +90,7 @@ class ImageDriverTwoMetrics {
   std::shared_ptr<clipper::metrics::Meter> e2e_throughput_;
   std::shared_ptr<clipper::metrics::Counter> e2e_num_predictions_;
 
-  std::unordered_map<std::string, ModelMetrics> model_metrics_;
+  std::unordered_map<std::string, std::shared_ptr<ModelMetrics>> model_metrics_;
 };
 
 void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
@@ -115,7 +110,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
     prediction_counter += 1;
   };
 
-  auto lstm_callback = [&client, metrics, branches_completed, completion_callback](
+  auto lstm_callback = [&client, metrics, completion_callback](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
@@ -132,18 +127,19 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
 
-    ModelMetrics& lstm_metrics = metrics.get_model_metrics(LSTM_MODEL_APP_NAME);
+    auto lstm_metrics = metrics.get_model_metrics(LSTM_MODEL_APP_NAME);
 
-    lstm_metrics.model_latency->insert(static_cast<int64_t>(latency_micros));
-    lstm_metrics.model_latency_list_->insert(static_cast<int64_t>(latency_micros));
-    lstm_metrics.model_throughput_->mark(1);
-    lstm_metrics.model_num_predictions_->increment(1);
+    lstm_metrics->model_latency_->insert(static_cast<int64_t>(latency_micros));
+    lstm_metrics->model_latency_list_->insert(static_cast<int64_t>(latency_micros));
+    lstm_metrics->model_throughput_->mark(1);
+    lstm_metrics->model_num_predictions_->increment(1);
 
     completion_callback();
   };
 
-  auto nmt_callback = [&client, metrics, start_time, log_reg_callback](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+  auto nmt_callback = [&client, metrics, start_time, lstm_callback](
+      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
+      std::chrono::system_clock::time_point start_time) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
@@ -163,35 +159,37 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
 
-    ModelMetrics& nmt_metrics = metrics.get_model_metrics(NMT_MODEL_APP_NAME);
+    auto nmt_metrics = metrics.get_model_metrics(NMT_MODEL_APP_NAME);
 
-    nmt_metrics.model_latency_->insert(static_cast<int64_t>(latency_micros));
-    nmt_metrics.model_latency_list_->insert(static_cast<int64_t>(latency_micros));
-    nmt_metrics.model_throughput_->mark(1);
-    nmt_metrics.model_num_predictions_->increment(1);
+    nmt_metrics->model_latency_->insert(static_cast<int64_t>(latency_micros));
+    nmt_metrics->model_latency_list_->insert(static_cast<int64_t>(latency_micros));
+    nmt_metrics->model_throughput_->mark(1);
+    nmt_metrics->model_num_predictions_->increment(1);
   };
 
-  auto lang_detect_callback = [&client, metrics, start_time, ksvm_callback, input,
-                               completion_callback](ClientFeatureVector output,
-                                                    std::shared_ptr<QueryLineage> lineage) {
-    if (output.type_ != datatype::strings) {
+  auto lang_detect_callback = [&client, metrics, start_time, text_input, nmt_callback,
+                               lstm_callback, completion_callback](
+      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+    if (output.type_ != DataType::Strings) {
       throw std::runtime_error("Received output of wrong datatype from LANG DETECT query");
     }
 
     auto cur_time = std::chrono::system_clock::now();
+    auto latency = cur_time - start_time;
+    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
 
     std::string output_str =
         std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
     if (output_str == "TIMEOUT") {
       return;
-    } else if (ouput_str == LANG_CLASSIFICATION_GERMAN) {
-      client.send_request(NMT_MODEL_APP_NAME, input,
+    } else if (output_str == LANG_CLASSIFICATION_GERMAN) {
+      client.send_request(NMT_MODEL_APP_NAME, text_input,
                           [cur_time, nmt_callback](ClientFeatureVector output,
                                                    std::shared_ptr<QueryLineage> lineage) {
                             nmt_callback(output, lineage, cur_time);
                           });
     } else if (output_str == LANG_CLASSIFICATION_ENGLISH) {
-      client.send_request(LSTM_MODEL_APP_NAME, input,
+      client.send_request(LSTM_MODEL_APP_NAME, text_input,
                           [cur_time, lstm_callback](ClientFeatureVector output,
                                                     std::shared_ptr<QueryLineage> lineage) {
                             lstm_callback(output, lineage, cur_time);
@@ -201,24 +199,15 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
       completion_callback();
     }
 
-    client.send_request(TF_KERNEL_SVM, output,
-                        [cur_time, ksvm_callback](ClientFeatureVector output,
-                                                  std::shared_ptr<QueryLineage> lineage) {
-                          ksvm_callback(output, lineage, cur_time);
-                        });
-    auto latency = cur_time - start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+    auto lang_detect_metrics = metrics.get_model_metrics(LANG_DETECT_MODEL_APP_NAME);
 
-    ModelMetrics& lang_detect_metrics = metrics.get_model_metrics(LANG_DETECT_MODEL_APP_NAME);
-
-    lang_detect_metrics.model_latency_->insert(static_cast<int64_t>(latency_micros));
-    lang_detect_metrics.model_latency_list_->insert(static_cast<int64_t>(latency_micros));
-    lang_detect_metricsmetrics.model_throughput_->mark(1);
-    lang_detect_metrics.model_num_predictions_->increment(1);
+    lang_detect_metrics->model_latency_->insert(static_cast<int64_t>(latency_micros));
+    lang_detect_metrics->model_latency_list_->insert(static_cast<int64_t>(latency_micros));
+    lang_detect_metrics->model_throughput_->mark(1);
+    lang_detect_metrics->model_num_predictions_->increment(1);
   };
 
-  client.send_request(INCEPTION_FEATS, input, inception_callback);
-  client.send_request(TF_RESNET, resnet_input, resnet_callback);
+  client.send_request(LANG_DETECT_MODEL_APP_NAME, text_input, lang_detect_callback);
 }
 
 std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
@@ -231,16 +220,17 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
   std::ifstream text_file(LANG_DETECT_WORKLOAD_RELATIVE_PATH);
 
   std::string line;
-  while (std::getline(infile, line)) {
+  while (std::getline(text_file, line)) {
     size_t input_size_bytes = line.size() * sizeof(char);
     size_t desired_input_length_bytes = desired_input_length * sizeof(char);
     size_t cp_unit_size = std::min(input_size_bytes, desired_input_length_bytes);
 
-    std::shared_ptr<void> input_data(malloc(desired_input_length_bytes));
+    std::shared_ptr<void> input_data(malloc(desired_input_length_bytes), free);
+    char* raw_input_data = static_cast<char*>(input_data.get());
     size_t curr_cp_idx = 0;
     size_t curr_size = 0;
     while (curr_size < desired_input_length) {
-      memcpy(input_data.get() + curr_cp_idx, line.data(), cp_unit_size);
+      memcpy(raw_input_data + curr_cp_idx, line.data(), cp_unit_size);
       curr_size += cp_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
@@ -252,10 +242,10 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
   selected_inputs.reserve(num_inputs);
 
   for (size_t i = 0; i < num_inputs; i++) {
-    idx = static_cast<size_t>(distribution(generator) * num_inputs);
+    size_t idx = static_cast<size_t>(distribution(generator) * num_inputs);
     selected_inputs.push_back(all_inputs[idx]);
   }
-  selected_inputs;
+  return selected_inputs;
 }
 
 int main(int argc, char* argv[]) {
@@ -292,21 +282,20 @@ int main(int argc, char* argv[]) {
   std::vector<ClientFeatureVector> inputs = generate_text_inputs(num_inputs, input_length);
   ImageDriverTwoMetrics metrics;
 
-  std::vector<std::string> models = {TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG};
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
   std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
   std::unordered_map<std::string, std::mutex> lineage_mutex_map;
   std::unordered_map<std::string, std::mutex&> lineage_mutex_map_refs;
 
-  for (auto model : models) {
+  for (const std::string& model : MODEL_NAMES) {
     std::ofstream query_lineage_file;
     std::mutex query_file_mutex;
     query_lineage_file.open(options["log_file"].as<std::string>() + "-" + model +
                             "-query_lineage.txt");
     lineage_file_map.emplace(model, std::ofstream{});
-    lineage_file_map_refs.insert(model, lineage_file_map[model]);
+    lineage_file_map_refs.emplace(model, lineage_file_map[model]);
     lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
-    lineage_mutex_map_refs.insert(model, lineage_mutex_map[model]);
+    lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
   }
 
   auto predict_func = [metrics, &lineage_file_map_refs, &lineage_mutex_map_refs](
@@ -321,7 +310,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;
-  for (auto model : models) {
+  for (auto model : MODEL_NAMES) {
     lineage_file_map[model].close();
   }
   return 0;
