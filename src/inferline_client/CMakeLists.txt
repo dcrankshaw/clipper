@@ -28,7 +28,7 @@ target_link_libraries(image_driver_one
         base64json
 )
 
-add_executable(text_driver_one,
+add_executable(text_driver_one
         src/text_driver_one.cpp
         src/driver.cpp
         src/zmq_client.cpp)
