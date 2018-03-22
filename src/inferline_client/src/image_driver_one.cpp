@@ -108,7 +108,9 @@ class ImageDriverOneMetrics {
 };
 
 void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOneMetrics metrics,
-             std::atomic<int>& prediction_counter) {
+    std::atomic<int>& prediction_counter,
+    std::unordered_map<std::string, std::ofstream&> &lineage_file_map,
+    std::unordered_map<std::string, std::mutex&> &lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
   size_t resnet_input_length = 224 * 224 * 3;
   ClientFeatureVector resnet_input(input.data_, resnet_input_length,
@@ -270,10 +272,27 @@ int main(int argc, char* argv[]) {
   clock::ClipperClock::get_clock().get_uptime();
   std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
   ImageDriverOneMetrics metrics;
+  
+  std::vector<std::string> models = {TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG};
+  std::unordered_map<std::string, std::ofstream> lineage_file_map;
+  std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
+  std::unordered_map<std::string, std::mutex> lineage_mutex_map;
+  std::unordered_map<std::string, std::mutex&> lineage_mutex_map_refs;
 
-  auto predict_func = [metrics](FrontendRPCClient& client, ClientFeatureVector input,
+  for (auto model: models) {
+    std::ofstream query_lineage_file;
+    std::mutex query_file_mutex;
+    query_lineage_file.open(options["log_file"].as<std::string>() + "-" + model +
+                            "-query_lineage.txt");
+    lineage_file_map.emplace(model, std::ofstream{});
+    lineage_file_map_refs.insert(model, lineage_file_map[model]);
+    lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
+    lineage_mutex_map_refs.insert(model, lineage_mutex_map[model]);
+  }
+
+  auto predict_func = [metrics, &lineage_file_map_refs, &lineage_mutex_map_refs](FrontendRPCClient& client, ClientFeatureVector input,
                                 std::atomic<int>& prediction_counter) {
-    predict(client, input, metrics, prediction_counter);
+    predict(client, input, metrics, prediction_counter, lineage_file_map_refs, lineage_mutex_map_refs);
   };
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
@@ -282,5 +301,8 @@ int main(int argc, char* argv[]) {
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;
+  for (auto model: models) {
+    lineage_file_map[model].close();
+  }
   return 0;
 }

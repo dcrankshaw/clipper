@@ -196,9 +196,9 @@ def print_stats(client_metrics, clipper_metrics):
     #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
     #              "\nqueue sizes: {queue_sizes}, "
     #              "batch sizes: {batch_sizes}\n").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-                 "mean lat: {client_mean_lats} "
-                 "\nbatches: {batch_sizes}, queues: {queue_sizes}\n").format(**results_dict))
+    logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
+                 "\nMean lat: {client_mean_lats} "
+                 "\nBatches: {batch_sizes}\nQueues: {queue_sizes}\n").format(**results_dict))
     return results_dict
 
 
@@ -317,20 +317,16 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 26
-    run(init_throughput, 3, "warmup", "constant")
-    throughput_results = run(init_throughput, 8, "throughput", "poisson")
-    # cl.drain_queues()
-    # cl.set_full_batches()
-    # time.sleep(1)
-    # latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
+    init_throughput = 44
+    run(init_throughput, 5, "warmup", "constant")
+    throughput_results = run(init_throughput, 20, "throughput", "poisson")
     cl.stop_all()
     return throughput_results
 
 
 if __name__ == "__main__":
-    resnet_batch_size = 4
-    inception_batch_size = 2
+    resnet_batch_size = 16
+    inception_batch_size = 8
     ksvm_batch_size = 1
     log_reg_batch_size = 1
 
