@@ -27,3 +27,17 @@ target_link_libraries(image_driver_one
         zmqcpp
         base64json
 )
+
+add_executable(image_driver_two
+        src/image_driver_two.cpp
+        src/driver.cpp
+        src/zmq_client.cpp)
+
+target_link_libraries(image_driver_two
+        clipper
+        boost
+        cxxopts
+        httpserver
+        zmqcpp
+        base64json
+)
