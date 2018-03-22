@@ -222,7 +222,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     time.sleep(30)
-    log_dir = "/tmp/image_driver_one_profiler_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
+    log_dir = "/tmp/text_driver_one_profiler_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -354,7 +354,7 @@ if __name__ == "__main__":
     ]
 
     throughput_results = run_profiler(
-        configs, 2000, "../../release/src/inferline_client/image_driver_one", "11,27,12,28")
+        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28")
     fname = "cpp-aws-p2-{ls}-lstm-{nm}-nmt-{ld}-lang_detect".format(
         ls=lstm_replicas,
         nmt=nmt_replicas,

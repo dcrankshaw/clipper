@@ -53,9 +53,9 @@ class ModelMetrics {
   std::shared_ptr<clipper::metrics::Counter> model_num_predictions_;
 };
 
-class ImageDriverTwoMetrics {
+class TextDriverOneMetrics {
  public:
-  explicit ImageDriverTwoMetrics()
+  explicit TextDriverOneMetrics()
       : e2e_latency_(clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
             "e2e:prediction_latency", "microseconds", 32768)),
         e2e_latency_list_(
@@ -71,20 +71,20 @@ class ImageDriverTwoMetrics {
     }
   }
 
-  ~ImageDriverTwoMetrics() = default;
+  ~TextDriverOneMetrics() = default;
 
-  ImageDriverTwoMetrics(const ImageDriverTwoMetrics&) = default;
+  TextDriverOneMetrics(const TextDriverOneMetrics&) = default;
 
-  ImageDriverTwoMetrics& operator=(const ImageDriverTwoMetrics&) = default;
+  TextDriverOneMetrics& operator=(const TextDriverOneMetrics&) = default;
 
-  ImageDriverTwoMetrics(ImageDriverTwoMetrics&&) = default;
-  ImageDriverTwoMetrics& operator=(ImageDriverTwoMetrics&&) = default;
+  TextDriverOneMetrics(TextDriverOneMetrics&&) = default;
+  TextDriverOneMetrics& operator=(TextDriverOneMetrics&&) = default;
 
   std::shared_ptr<ModelMetrics> get_model_metrics(const std::string model_name) const {
     return model_metrics_.find(model_name)->second;
   }
 
-  std::string name_ = "image_driver_two";
+  std::string name_ = "text_driver_one";
   std::shared_ptr<clipper::metrics::Histogram> e2e_latency_;
   std::shared_ptr<clipper::metrics::DataList<long long>> e2e_latency_list_;
   std::shared_ptr<clipper::metrics::Meter> e2e_throughput_;
@@ -94,7 +94,7 @@ class ImageDriverTwoMetrics {
 };
 
 void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
-             ImageDriverTwoMetrics metrics, std::atomic<int>& prediction_counter,
+             TextDriverOneMetrics metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream&>& lineage_file_map,
              std::unordered_map<std::string, std::mutex&>& lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
@@ -249,7 +249,7 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
 }
 
 int main(int argc, char* argv[]) {
-  cxxopts::Options options("image_driver_one", "Image Driver One");
+  cxxopts::Options options("text_driver_one", "Text Driver One");
   // clang-format off
   options.add_options()
       ("target_throughput", "Mean throughput to target in qps",
@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
   size_t num_inputs = 1000;
   size_t input_length = 20;
   std::vector<ClientFeatureVector> inputs = generate_text_inputs(num_inputs, input_length);
-  ImageDriverTwoMetrics metrics;
+  TextDriverOneMetrics metrics;
 
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
   std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
