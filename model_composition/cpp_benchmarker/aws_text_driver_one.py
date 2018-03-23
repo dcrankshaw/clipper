@@ -1,3 +1,4 @@
+import argparse
 import subprocess32 as subprocess
 import os
 import sys
@@ -246,6 +247,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        print("CMD")
+        print(' '.join(cmd))
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
@@ -309,13 +312,17 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
 
 
 if __name__ == "__main__":
-    resnet_batch_size = 16
-    inception_batch_size = 8
-    ksvm_batch_size = 1
-    log_reg_batch_size = 1
+    parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper text driver 1')
+    parser.add_argument('-g', '--num_gpus', type=int, default=4, help="The number of GPUs available for use")
+
+    args = parser.parse_args()
+
+    lstm_batch_size = 16
+    nmt_batch_size = 2
+    lang_detect_batch_size = 16
 
     model_cpus = range(4, 11)
-    model_gpus = range(8)
+    model_gpus = range(args.num_gpus)
 
     def get_cpus(num):
         return [model_cpus.pop() for _ in range(num)]
@@ -329,26 +336,26 @@ if __name__ == "__main__":
     configs = [
         get_heavy_node_config(
                 model_name=LSTM_MODEL_APP_NAME,
-                batch_size=resnet_batch_size,
-                num_replicas=resnet_replicas,
+                batch_size=lstm_batch_size,
+                num_replicas=lstm_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(resnet_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
+                allocated_cpus=get_cpus(lstm_replicas),
+                allocated_gpus=get_gpus(lstm_replicas),
             ),
         get_heavy_node_config(
                 model_name=NMT_MODEL_APP_NAME,
-                batch_size=inception_batch_size,
-                num_replicas=inception_replicas,
+                batch_size=nmt_batch_size,
+                num_replicas=nmt_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(inception_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
+                allocated_cpus=get_cpus(nmt_replicas),
+                allocated_gpus=get_gpus(nmt_replicas),
             ),
         get_heavy_node_config(
                 model_name=LANG_DETECT_MODEL_APP_NAME,
-                batch_size=ksvm_batch_size,
-                num_replicas=ksvm_replicas,
+                batch_size=lang_detect_batch_size,
+                num_replicas=lang_detect_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(ksvm_replicas),
+                allocated_cpus=get_cpus(lang_detect_replicas),
                 allocated_gpus=None,
             )
     ]

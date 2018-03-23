@@ -232,17 +232,18 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
     while (curr_size < desired_input_length) {
       memcpy(raw_input_data + curr_cp_idx, line.data(), cp_unit_size);
       curr_size += cp_unit_size;
+      curr_cp_idx += cp_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
                               DataType::Strings);
-    all_inputs.push_back(std::move(input));
+    all_inputs.push_back(input);
   }
 
   std::vector<ClientFeatureVector> selected_inputs;
   selected_inputs.reserve(num_inputs);
 
   for (size_t i = 0; i < num_inputs; i++) {
-    size_t idx = static_cast<size_t>(distribution(generator) * num_inputs);
+    size_t idx = static_cast<size_t>(distribution(generator) * all_inputs.size());
     selected_inputs.push_back(all_inputs[idx]);
   }
   return selected_inputs;
