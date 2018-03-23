@@ -262,7 +262,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
-        lineage_paths = {name: "{p}-{m}-query_lineage.txt".format(m=name, p=log_path)
+        lineage_paths = {m: "{p}-{m}-query_lineage.txt".format(m=m, p=log_path)
                          for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
@@ -321,8 +321,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                 raise e
 
     init_throughput = 44
-    run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 20, "throughput", "poisson")
+    run(init_throughput, 2, "warmup", "constant")
+    throughput_results = run(init_throughput, 8, "throughput", "poisson")
     cl.stop_all()
     return throughput_results
 
@@ -333,7 +333,8 @@ if __name__ == "__main__":
     ksvm_batch_size = 1
     log_reg_batch_size = 1
 
-    model_cpus = range(4, 11)
+    # model_cpus = range(4, 11)
+    model_cpus = range(4, 9)
     model_gpus = range(8)
 
     def get_cpus(num):
@@ -383,7 +384,9 @@ if __name__ == "__main__":
     ]
 
     throughput_results = run_profiler(
-        configs, 2000, "../../release/src/inferline_client/image_driver_one", "11,27,12,28")
+        configs, 2000, "../../release/src/inferline_client/image_driver_one",
+        # "11,27,12,28")
+        "9,25,10,26,11,27,12,28")
     fname = "cpp-aws-p2-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
         i=inception_replicas,
         r=resnet_replicas,

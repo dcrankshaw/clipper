@@ -266,7 +266,6 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
       idx += 1;
     }
     query_lineage_file << "}" << std::endl;
-
   };
 
   auto resnet_callback = [&client, metrics, start_time, ksvm_callback, &lineage_file_map,
@@ -375,11 +374,9 @@ int main(int argc, char* argv[]) {
   // std::unordered_map<std::string, std::mutex&> lineage_mutex_map_refs;
 
   for (auto model : models) {
-    std::ofstream query_lineage_file;
-    std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() + "-" + model +
-                            "-query_lineage.txt");
     lineage_file_map.emplace(model, std::ofstream{});
+    lineage_file_map[model].open(options["log_file"].as<std::string>() + "-" + model +
+                            "-query_lineage.txt");
     // lineage_file_map_refs.emplace(model, lineage_file_map[model]);
     lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
