@@ -247,8 +247,6 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
-        print("CMD")
-        print(' '.join(cmd))
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
