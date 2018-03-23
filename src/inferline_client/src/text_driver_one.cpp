@@ -150,6 +150,8 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
       throw std::runtime_error("Received output of wrong datatype from NMT query");
     }
 
+    output.type_ = DataType::Bytes;
+
     auto cur_time = std::chrono::system_clock::now();
     client.send_request(LSTM_MODEL_APP_NAME, output,
                         [cur_time, lstm_callback](ClientFeatureVector output,
@@ -236,7 +238,7 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
       curr_cp_idx += cp_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
-                              DataType::Strings);
+                              DataType::Bytes);
     all_inputs.push_back(std::move(input));
   }
 
