@@ -29,7 +29,7 @@ static const std::string LSTM_IMAGE_NAME = "model-comp/tf-lstm";
 std::vector<std::string> MODEL_NAMES{LANG_DETECT_MODEL_APP_NAME, LSTM_MODEL_APP_NAME,
                                      NMT_MODEL_APP_NAME};
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "lang_detect_workload";
+static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/text_driver_one_workload/workload.txt";
 
 static const std::string LANG_CLASSIFICATION_ENGLISH = "en";
 static const std::string LANG_CLASSIFICATION_GERMAN = "de";
@@ -230,13 +230,14 @@ std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
     size_t curr_cp_idx = 0;
     size_t curr_size = 0;
     while (curr_size < desired_input_length) {
-      memcpy(raw_input_data + curr_cp_idx, line.data(), cp_unit_size);
+      size_t curr_unit_size = std::min(cp_unit_size, desired_input_length - curr_size);
+      memcpy(raw_input_data + curr_cp_idx, line.data(), curr_unit_size);
       curr_size += cp_unit_size;
       curr_cp_idx += cp_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
                               DataType::Strings);
-    all_inputs.push_back(input);
+    all_inputs.push_back(std::move(input));
   }
 
   std::vector<ClientFeatureVector> selected_inputs;
