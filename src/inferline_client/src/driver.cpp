@@ -24,7 +24,7 @@ Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
                std::vector<ClientFeatureVector> inputs, float target_throughput,
                std::string distribution, int trial_length, int num_trials,
                std::string log_file, std::string clipper_address,
-               int batch_size)
+               int batch_size, std::vector<float> delay_ms)
     : predict_func_(predict_func),
       inputs_(inputs),
       target_throughput_(target_throughput),
@@ -36,7 +36,8 @@ Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
       done_(false),
       prediction_counter_(0),
       clipper_address_(clipper_address),
-      batch_size_(batch_size) {
+      batch_size_(batch_size),
+      delay_ms_(delay_ms) {
   client_.start(clipper_address, SEND_PORT, RECV_PORT);
 }
 
@@ -53,7 +54,7 @@ void spin_sleep(long duration_micros) {
 
 void Driver::start() {
   if (!(distribution_ == "poisson" || distribution_ == "constant" ||
-        distribution_ == "batch")) {
+        distribution_ == "batch" || distribution_ == "file")) {
     std::cerr << "Invalid distribution: " << distribution_ << std::endl;
     return;
   }
@@ -84,6 +85,7 @@ void Driver::start() {
     }
   } else {
     while (!done_) {
+      int delay_idx = 0;
       std::random_device rd;
       std::mt19937 gen(rd());
       std::exponential_distribution<> exp_dist(target_throughput_);
@@ -101,6 +103,14 @@ void Driver::start() {
           spin_sleep(delay_micros);
         } else if (distribution_ == "constant") {
           spin_sleep(constant_request_delay_micros);
+        } else if (distribution_ == "file") {
+          float cur_sleep = delay_ms_[delay_idx];
+          delay_idx += 1;
+          if (delay_idx >= delay_ms_.size()) {
+            delay_idx = 0;
+          }
+          long delay_micros = lround(cur_sleep * 1000.0);
+          spin_sleep(delay_micros);
         }
       }
     }

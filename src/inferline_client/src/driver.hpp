@@ -17,7 +17,8 @@ class Driver {
              predict_func,
          std::vector<ClientFeatureVector> inputs, float target_throughput,
          std::string distribution, int trial_length, int num_trials,
-         std::string log_file, std::string clipper_address, int batch_size);
+         std::string log_file, std::string clipper_address, int batch_size,
+         std::vector<float> delay_ms);
 
   void start();
 
@@ -37,6 +38,7 @@ class Driver {
   std::atomic<int> prediction_counter_;
   std::string clipper_address_;
   int batch_size_;
+  std::vector<float> delay_ms_;
 };
 
 }  // namespace zmq_client

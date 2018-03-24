@@ -295,8 +295,6 @@ class DockerContainerManager(ContainerManager):
 
                 self._add_replica(name, version, input_type, image, gpu_num=gpu_num,
                                   cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
-            for i in range(num_missing*cpus_per_replica):
-                cpus.pop(0)
 
         elif len(current_replicas) > num_replicas:
             num_extra = len(current_replicas) - num_replicas
