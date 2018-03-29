@@ -226,11 +226,12 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process):
+    def run(target_throughput, num_trials, name, arrival_process, throughput):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
+        arrival_delay_file = os.path.abspath("arrival_deltas_ms.timestamp")
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
@@ -241,7 +242,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address={}".format(clipper_address)]
+               "--clipper_address={}".format(clipper_address),
+               "--request_delay_file={}".format(arrival_delay_file)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
@@ -301,9 +303,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 44
-    run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 20, "throughput", "poisson")
+    run(throughput, 5, "warmup", "constant")
+    throughput_results = run(throughput, 20, "throughput", "poisson")
     cl.stop_all()
     return throughput_results
 
@@ -354,7 +355,7 @@ if __name__ == "__main__":
     ]
 
     throughput_results = run_profiler(
-        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28")
+        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28", 20)
     fname = "cpp-aws-p2-{ls}-lstm-{nm}-nmt-{ld}-lang_detect".format(
         ls=lstm_replicas,
         nmt=nmt_replicas,

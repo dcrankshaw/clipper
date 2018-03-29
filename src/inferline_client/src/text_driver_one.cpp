@@ -255,7 +255,8 @@ int main(int argc, char* argv[]) {
       ("target_throughput", "Mean throughput to target in qps",
        cxxopts::value<float>())
       ("request_distribution", "Distribution to sample request delay from. "
-       "Can be 'constant', 'poisson', or 'batch'. 'batch' sends a single batch at a time.",
+       "Can be 'constant', 'poisson', or 'batch', or 'file'. 'batch' sends a single batch at a time."
+       "'file' uses the delays provided in the request_delay_file argument.",
        cxxopts::value<std::string>())
       ("trial_length", "Number of queries per trial",
        cxxopts::value<int>())
@@ -265,11 +266,14 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
        cxxopts::value<std::string>())
+      ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
+       cxxopts::value<std::string>())
        ;
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
+  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch" ||
+        distribution == "file")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -303,10 +307,23 @@ int main(int argc, char* argv[]) {
     predict(client, input, metrics, prediction_counter, lineage_file_map_refs,
             lineage_mutex_map_refs);
   };
+
+  std::vector<float> delays_ms;
+  if (distribution == "file") {
+    std::ifstream delay_file_stream(options["request_delay_file"].as<std::string>());
+    std::string line;
+    while (std::getline(delay_file_stream, line)) {
+      delays_ms.push_back(std::stof(line));
+    }
+    delay_file_stream.close();
+    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines"
+              << std::endl;
+  }
+
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
-                -1);
+                -1, delay_ms);
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;

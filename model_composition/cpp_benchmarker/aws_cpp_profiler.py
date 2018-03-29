@@ -29,6 +29,9 @@ TF_RESNET = "tf-resnet-feats"
 TF_RESNET_VAR = "tf-resnet-feats-var"
 TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
 
+TF_LANG_DETECT = "tf-lang-detect"
+TF_NMT = "tf-nmt"
+TF_LSTM  = "tf-lstm"
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -161,6 +164,8 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
+
+
 
 
 def get_input_size(config):

@@ -220,7 +220,8 @@ int main(int argc, char* argv[]) {
     Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                   distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                   options["log_file"].as<std::string>(),
-                  options["clipper_address"].as<std::string>(), options["batch_size"].as<int>(), {});
+                  options["clipper_address"].as<std::string>(), options["batch_size"].as<int>(),
+                  {});
     std::cout << "Starting driver" << std::endl;
     driver.start();
     std::cout << "Driver completed" << std::endl;
