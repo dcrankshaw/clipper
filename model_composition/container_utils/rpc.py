@@ -55,6 +55,7 @@ SUPPORTED_OUTPUT_TYPES_MAPPING = {
     str: DATA_TYPE_STRINGS,
 }
 
+EPOCH_TIME = datetime.utcfromtimestamp(0)
 
 def string_to_input_type(input_str):
     input_str = input_str.strip().lower()
@@ -137,69 +138,83 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     queue_get_times = []
     handle_times = []
     handle_start_times = []
+    trial_start = datetime.now()
+    pred_count = 0
 
     last_loop_start = datetime.now()
+    loop_dur_file = "/logs/loop_duration.log"
+    handle_dur_file = "/logs/handle_duration.log"
+    with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+        while True:
+            cur_loop_start = datetime.now()
+            loop_duration = (cur_loop_start - last_loop_start).microseconds
+            loop_times.append(loop_duration)
+            ld.write("{}\n".format(loop_duration))
+            last_loop_start = cur_loop_start
 
-    while True:
-        cur_loop_start = datetime.now()
-        loop_duration = (cur_loop_start - last_loop_start).microseconds
-        loop_times.append(loop_duration)
-        last_loop_start = cur_loop_start
+            t1 = datetime.now()
+            prediction_request, recv_time = request_queue.get(block=True)
+            t2 = datetime.now()
+            queue_get_times.append((t2 - t1).microseconds)
 
-        t1 = datetime.now()
-        prediction_request = request_queue.get(block=True)
-        t2 = datetime.now()
-        queue_get_times.append((t2 - t1).microseconds)
+            handle_start_times.append(time.time()*1000)
+            outputs = predict_fn(prediction_request.inputs)
+            pred_count += len(prediction_request.inputs)
+            t3 = datetime.now()
+            handle_times.append((t3 - t2).microseconds)
+            hd.write("{}\n".format((t3 - t2).microseconds))
+            # Type check the outputs:
+            if not type(outputs) == list:
+                raise PredictionError("Model did not return a list")
+            if len(outputs) != len(prediction_request.inputs):
+                raise PredictionError(
+                    "Expected model to return %d outputs, found %d outputs" %
+                    (len(prediction_request.inputs), len(outputs)))
 
-        handle_start_times.append(time.time()*1000)
-        outputs = predict_fn(prediction_request.inputs)
-        t3 = datetime.now()
-        handle_times.append((t3 - t2).microseconds)
-        # Type check the outputs:
-        if not type(outputs) == list:
-            raise PredictionError("Model did not return a list")
-        if len(outputs) != len(prediction_request.inputs):
-            raise PredictionError(
-                "Expected model to return %d outputs, found %d outputs" %
-                (len(prediction_request.inputs), len(outputs)))
+            outputs_type = type(outputs[0])
+            if outputs_type == np.ndarray:
+                outputs_type = outputs[0].dtype
+            if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
+                raise PredictionError(
+                    "Model outputs list contains outputs of invalid type: {}!".
+                    format(outputs_type))
 
-        outputs_type = type(outputs[0])
-        if outputs_type == np.ndarray:
-            outputs_type = outputs[0].dtype
-        if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
-            raise PredictionError(
-                "Model outputs list contains outputs of invalid type: {}!".
-                format(outputs_type))
+            if outputs_type == str:
+                for i in range(0, len(outputs)):
+                    outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
+            else:
+                for i in range(0, len(outputs)):
+                    outputs[i] = outputs[i].tobytes()
 
-        if outputs_type == str:
-            for i in range(0, len(outputs)):
-                outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
-        else:
-            for i in range(0, len(outputs)):
-                outputs[i] = outputs[i].tobytes()
+            total_length_elements = sum(len(o) for o in outputs)
 
-        total_length_elements = sum(len(o) for o in outputs)
+            response = PredictionResponse(prediction_request.msg_id,
+                                          len(outputs), total_length_elements,
+                                          outputs_type)
+            for output in outputs:
+                response.add_output(output)
 
-        response = PredictionResponse(prediction_request.msg_id,
-                                        len(outputs), total_length_elements,
-                                        outputs_type)
-        for output in outputs:
-            response.add_output(output)
+            response_queue.put((response, recv_time))
 
-        response_queue.put(response)
+            if len(loop_times) > 1000:
+                print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
+                print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
+                print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
+                throughput = float(pred_count) / (datetime.now() - trial_start).total_seconds()
+                print("Throughput: {}".format(throughput))
+                ld.flush()
+                hd.flush()
 
-        if len(loop_times) > 100:
-            print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
-            print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
-            print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
-            loop_times = []
-            queue_get_times = []
-            handle_times = []
+                loop_times = []
+                queue_get_times = []
+                handle_times = []
+                pred_count = 0
+                trial_start = datetime.now()
 
-        # if len(handle_start_times) % 200 == 0:
-        #     print(json.dumps(handle_start_times))
-        sys.stdout.flush()
-        sys.stderr.flush()
+            # if len(handle_start_times) % 200 == 0:
+            #     print(json.dumps(handle_start_times))
+            sys.stdout.flush()
+            sys.stderr.flush()
 
 
 
@@ -215,6 +230,8 @@ class Server(threading.Thread):
         self.full_buffers = 0
         self.request_queue = Queue()
         self.response_queue = Queue()
+        self.recv_time_log = open("/logs/recv_times.log", "w")
+        self.init_time = datetime.now()
 
     def connect(self):
         # 7000
@@ -289,16 +306,20 @@ class Server(threading.Thread):
         return self.event_history.get_events()
 
     def send_response(self):
-        if not self.response_queue.empty() or self.full_buffers == 2:
-            response = self.response_queue.get()
+        # if not self.response_queue.empty() or self.full_buffers == 2:
+        if not self.response_queue.empty() or self.full_buffers == 1:
+            response, recv_time = self.response_queue.get()
             self.full_buffers -= 1
             # t3 = datetime.now()
-            response.send(self.send_socket, self.connection_id)
+            response.send(self.send_socket, self.connection_id, recv_time)
             sys.stdout.flush()
             sys.stderr.flush()
 
     def recv_request(self):
         self.recv_socket.recv()
+        absolute_recv_time = datetime.now()
+        recv_time = (absolute_recv_time - self.init_time).total_seconds()
+        self.recv_time_log.write("{}\n".format(recv_time))
         msg_type_bytes = self.recv_socket.recv()
         msg_type = struct.unpack("<I", msg_type_bytes)[0]
         if msg_type is not MESSAGE_TYPE_CONTAINER_CONTENT:
@@ -348,7 +369,7 @@ class Server(threading.Thread):
             prediction_request = PredictionRequest(
                 msg_id_bytes, inputs)
 
-            self.request_queue.put(prediction_request)
+            self.request_queue.put((prediction_request, absolute_recv_time))
             self.full_buffers += 1
 
     def run(self):
@@ -371,6 +392,7 @@ class Server(threading.Thread):
             self.send_response()
             sys.stdout.flush()
             sys.stderr.flush()
+            self.recv_time_log.flush()
 
 
 
@@ -436,7 +458,8 @@ class PredictionResponse:
                      self.content_end_position + output_len] = output
         self.content_end_position += output_len
 
-    def send(self, socket, connection_id):
+    def send(self, socket, connection_id, recv_time):
+        send_time = datetime.now()
         socket.send("", flags=zmq.SNDMORE)
         socket.send(
             struct.pack("<I", connection_id),
@@ -448,7 +471,13 @@ class PredictionResponse:
         socket.send(struct.pack("<I", self.output_type), flags=zmq.SNDMORE)
         socket.send(
             struct.pack("<I", self.content_end_position), flags=zmq.SNDMORE)
-        socket.send(self.output_buffer[0:self.content_end_position])
+        socket.send(self.output_buffer[0:self.content_end_position], flags=zmq.SNDMORE)
+        recv_time_epoch = (recv_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", recv_time_epoch), flags=zmq.SNDMORE)
+        send_time_epoch = (send_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", send_time_epoch))
+
+
 
     def expand_buffer_if_necessary(self, num_outputs, content_length_bytes):
         new_size_bytes = BYTES_PER_INT + (

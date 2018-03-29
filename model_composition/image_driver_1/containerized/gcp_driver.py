@@ -81,7 +81,6 @@ def setup_clipper(config):
 
 def setup_clipper_gcp(config):
     cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
-    # cl.connect()
     cl.stop_all()
     cl.start_clipper()
     time.sleep(30)
@@ -177,7 +176,7 @@ def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica
                                             gpus=allocated_gpus,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
-                                            use_nvidia_docker=False)       
+                                            use_nvidia_docker=False)
 
 
     elif model_name == LGBM_MODEL_APP_NAME:

@@ -14,7 +14,7 @@ from io import BytesIO
 from PIL import Image
 from containerized_utils.zmq_client import Client
 from containerized_utils import driver_utils
-from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN
+from containerized_utils.driver_utils import INCREASING, DECREASING, CONVERGED_HIGH, CONVERGED, UNKNOWN, CONVERGED_LOW
 from multiprocessing import Process, Queue
 
 logging.basicConfig(
@@ -51,7 +51,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="1-8")
+        query_cpu_str="0,16,1,17,2,18,3,19")
     time.sleep(10)
     for config in configs:
         driver_utils.setup_heavy_node(cl, config, DEFAULT_OUTPUT)
@@ -145,6 +145,17 @@ def get_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_queue_sizes(metrics_json):
+    hists = metrics_json["histograms"]
+    mean_queue_sizes = {}
+    for h in hists:
+        if "queue_size" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[0]
+            mean = h[name]["mean"]
+            mean_queue_sizes[model] = round(float(mean), 2)
+    return mean_queue_sizes
+
 class Predictor(object):
 
     def __init__(self, clipper_metrics, batch_size):
@@ -155,8 +166,9 @@ class Predictor(object):
         self.stats = {
             "thrus": [],
             "p99_lats": [],
+            "mean_lats": [],
             "all_lats": [],
-            "mean_lats": []}
+        }
         self.total_num_complete = 0
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         self.cl.connect()
@@ -165,10 +177,11 @@ class Predictor(object):
         if self.get_clipper_metrics:
             self.stats["all_metrics"] = []
             self.stats["mean_batch_sizes"] = []
+            self.stats["mean_queue_sizes"] = []
 
     def init_stats(self):
         self.latencies = []
-        self.batch_num_complete = 0
+        self.trial_num_complete = 0
         self.cur_req_id = 0
         self.start_time = datetime.now()
 
@@ -177,15 +190,17 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
+        thru = float(self.trial_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["p99_lats"].append(p99)
-        self.stats["all_lats"].append(self.latencies)
         self.stats["mean_lats"].append(mean)
+        self.stats["all_lats"].append(self.latencies)
         if self.get_clipper_metrics:
             metrics = self.cl.inspect_instance()
             batch_sizes = get_batch_sizes(metrics)
+            queue_sizes = get_queue_sizes(metrics)
             self.stats["mean_batch_sizes"].append(batch_sizes)
+            self.stats["mean_queue_sizes"].append(queue_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
                          "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
@@ -206,10 +221,10 @@ class Predictor(object):
             latency = (end_time - begin_time).total_seconds()
             self.latencies.append(latency)
             self.total_num_complete += 1
-            self.batch_num_complete += 1
+            self.trial_num_complete += 1
 
-            trial_length = max(150, 10 * self.batch_size)
-            if self.batch_num_complete % trial_length == 0:
+            trial_length = max(300, 10 * self.batch_size)
+            if self.trial_num_complete % trial_length == 0:
                 self.print_stats()
                 self.init_stats()
 
@@ -266,7 +281,8 @@ class DriverBenchmarker(object):
         self.inputs = [i for _ in range(40) for i in base_inputs]
         self.latency_upper_bound = latency_upper_bound
 
-    def run(self):
+    def run(self, client_num=0):
+        assert client_num == 0
         self.initialize_request_rate()
         self.find_steady_state()
         return
@@ -276,67 +292,121 @@ class DriverBenchmarker(object):
     def initialize_request_rate(self):
         # initialize delay to be very small
         self.delay = 0.001
-        setup_clipper(self.configs)
-        time.sleep(5)
+        self.queries_per_sleep = 1
+        self.clipper_address = setup_clipper(self.configs)
+        self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+        self.cl.connect()
+        time.sleep(30)
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
         idx = 0
-        while len(predictor.stats["thrus"]) < 6:
+
+        # First warm up the model.
+        # NOTE: The length of time the model needs to warm up for
+        # seems to be both framework and hardware dependent. 27 seems to work
+        # well for PyTorch resnet, but we don't need as many warmup
+        # iterations for the JIT-free models in this pipeline
+        while len(predictor.stats["thrus"]) < 8:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
-            time.sleep(self.delay)
             idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
+            idx = idx % len(self.inputs)
+
+        # Now let the queue drain
+        logger.info("Draining queue")
+
+        self.cl.drain_queues()
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
+        time.sleep(10)
+        predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
+        # while predictor.stats["mean_queue_sizes"][-1] > 0:
+        #     sleep_time_secs = 5
+        #     logger.info("Queue has {q_len} queries. Sleeping {sleep}".format(
+        #         q_len=predictor.stats["mean_queue_sizes"][-1],
+        #         sleep=sleep_time_secs))
+        #     time.sleep(sleep_time_secs)
+
+        # Now initialize request rate
+        while len(predictor.stats["thrus"]) < 10:
+            resnet_input, inception_input = self.inputs[idx]
+            predictor.predict(resnet_input, inception_input)
+            idx += 1
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
             idx = idx % len(self.inputs)
 
         max_thruput = np.mean(predictor.stats["thrus"][1:])
         self.delay = 1.0 / max_thruput
+        if self.delay < 0.01:
+            self.queries_per_sleep = 2
+            self.delay = self.delay*2.0 - 0.001
         logger.info("Initializing delay to {}".format(self.delay))
+        predictor.client.stop()
+        logger.info("ZMQ client stopped")
+        del predictor
 
-    def increase_delay(self):
-        if self.delay < 0.005:
-            self.delay += 0.001
-        elif self.delay < 0.01:
-            self.delay += 0.002
+    def increase_delay(self, multiple=1.0):
+        if self.delay < 0.01:
+            self.delay += 0.00005*multiple
+        elif self.delay < 0.02:
+            self.delay += 0.0002*multiple
         else:
-            self.delay += 0.004
-
+            self.delay += 0.001*multiple
 
     def find_steady_state(self):
-        setup_clipper(self.configs)
-        time.sleep(7)
+        # self.cl.cm.reset()
+        self.cl.drain_queues()
+        time.sleep(10)
+        logger.info("Queue is drained")
         predictor = Predictor(clipper_metrics=True, batch_size=self.max_batch_size)
+        time.sleep(10)
+
         idx = 0
         done = False
-        # start checking for steady state after 7 trials
-        last_checked_length = 6
+        # start checking for steady state after 10 trials
+        last_checked_length = 10
         while not done:
             resnet_input, inception_input = self.inputs[idx]
             predictor.predict(resnet_input, inception_input)
-            time.sleep(self.delay)
+            if idx % self.queries_per_sleep == 0:
+                time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
 
             if len(predictor.stats["thrus"]) > last_checked_length:
-                last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs, self.latency_upper_bound)
+                last_checked_length = len(predictor.stats["thrus"]) + 1
+                convergence_state = driver_utils.check_convergence_via_queue(
+                    predictor.stats, self.configs, self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    del predictor
                     return self.find_steady_state()
                 elif convergence_state == CONVERGED:
                     logger.info("Converged with delay of {}".format(self.delay))
                     done = True
                     self.queue.put(predictor.stats)
                     return
-                elif len(predictor.stats) > 100:
+                elif len(predictor.stats) > 40:
                     self.increase_delay()
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
+                    del predictor
                     return self.find_steady_state()
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
+                elif convergence_state == CONVERGED_LOW:
+                    logger.info("Converged LOW with delay of {}".format(self.delay))
+                    logger.info("Consider re-running with smaller request delay augmentations")
+                    done = True
+                    self.queue.put(predictor.stats)
+                    return
                 else:
                     logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
@@ -358,12 +428,7 @@ class RequestDelayConfig:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
-    parser.add_argument('-t', '--num_trials', type=int, default=30, help='The number of trials to complete for the benchmarking process')
-    parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
-    parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
-    parser.add_argument('-rd', '--request_delay', type=float, default=.015, help="The delay, in seconds, between requests")
-    parser.add_argument('-l', '--trial_length', type=int, default=10, help="The length of each trial, in number of requests")
-    parser.add_argument('-n', '--num_clients', type=int, default=1, help='number of clients')
+    parser.add_argument('-g', '--num_gpus', type=int, default=4, help="The number of GPUs available for use")
 
     args = parser.parse_args()
 
@@ -382,7 +447,7 @@ if __name__ == "__main__":
     ## FORMAT IS (INCEPTION, LOG REG, RESNET, KSVM)
     min_lat_batches = (1, 1, 1, 1)
 
-    min_lat_latency_upper_bound = 0.04
+    min_lat_latency_upper_bound = 0.2
 
     # ## THIS IS FOR 500MS
     # ## FORMAT IS (INCEPTION, LOG_REG, RESNET, KSVM)
@@ -428,18 +493,22 @@ if __name__ == "__main__":
     ksvm_batch_idx = 3
 
     for inception_reps, log_reg_reps, resnet_reps, ksvm_reps in min_lat_reps:
-        total_cpus = range(9,29)
+        # Note: These are PHYSICAL CPU numbers
+        total_cpus = range(4,14)
 
         def get_cpus(num_cpus):
             return [total_cpus.pop() for _ in range(num_cpus)]
 
-        total_gpus = range(8)
+        total_gpus = range(args.num_gpus)
 
         def get_gpus(num_gpus):
             return [total_gpus.pop() for _ in range(num_gpus)]
 
-        inception_cpus_per_replica = 2
-        resnet_cpus_per_replica = 3
+        # Note: cpus_per_replica refers to PHYSICAL CPUs per replica
+
+        inception_cpus_per_replica = 1
+        resnet_cpus_per_replica = 1
+
 
         configs = [
             setup_inception(batch_size=min_lat_batches[inception_batch_idx],
@@ -466,7 +535,7 @@ if __name__ == "__main__":
 
         client_num = 0
 
-        benchmarker = DriverBenchmarker(configs, queue, client_num, min_lat_latency_upper_bound)
+        benchmarker = DriverBenchmarker(configs, queue, client_num, min_lat_latency_upper_bound, args.request_delay)
 
         p = Process(target=benchmarker.run)
         p.start()

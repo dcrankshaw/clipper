@@ -111,7 +111,7 @@ class GCPContainerManager(ContainerManager):
             if inst["name"] == "redis-{}".format(self.cluster_name):
                 self.redis_internal_ip = inst["networkInterfaces"][0]["networkIP"]
                 self.redis_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
-                logger.info("Setting redis IP to {}".format(self.redis_internal_ip))
+                # logger.info("Setting redis IP to {}".format(self.redis_internal_ip))
                 break
         if self.redis_internal_ip is None:
             logger.error("No Redis instance found")
@@ -203,7 +203,7 @@ class GCPContainerManager(ContainerManager):
         startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\ndocker run -d "
                           # "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
                           "-p 4455:4455 -p 4456:4456 -p 1337:1337 -p 7000:7000 "
-                          "-p 7010:7010 -p 7011:7011 "
+                          "-p 7010:7010 -p 7011:7011 -m 80g "
                           "{image} --redis_ip={redis_ip} --redis_port={redis_port}").format(
                                   image="gcr.io/clipper-model-comp/zmq_frontend:develop",
                                   redis_ip=self.redis_internal_ip, redis_port=self.redis_port)
@@ -215,7 +215,7 @@ class GCPContainerManager(ContainerManager):
           "name": "clipper-query-{}".format(self.cluster_name),
           "zone": "projects/clipper-model-comp/zones/us-west1-b",
           "minCpuPlatform": "Automatic",
-          "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-4-56320-ext",
+          "machineType": "projects/clipper-model-comp/zones/us-west1-b/machineTypes/custom-4-102400-ext",
           "metadata": {
             "items": [
                 {
@@ -315,7 +315,7 @@ class GCPContainerManager(ContainerManager):
             if inst["name"] == "clipper-query-{}".format(self.cluster_name):
                 self.query_frontend_internal_ip = inst["networkInterfaces"][0]["networkIP"]
                 self.query_frontend_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
-                logger.info("Setting ZMQ frontend internal IP to {}".format(self.query_frontend_internal_ip))
+                # logger.info("Setting ZMQ frontend internal IP to {}".format(self.query_frontend_internal_ip))
             if inst["name"] == "clipper-mgmt-{}".format(self.cluster_name):
                 self.mgmt_frontend_internal_ip = inst["networkInterfaces"][0]["networkIP"]
                 self.mgmt_frontend_external_ip = inst["networkInterfaces"][0]["accessConfigs"][0]["natIP"]
@@ -346,6 +346,16 @@ class GCPContainerManager(ContainerManager):
         else:
             return []
 
+    def get_container_ips(self):
+        replicas = self.compute.instances().list(project=self.project, zone=self.zone,
+                filter="labels.clipper-model eq .*-{cluster}".format(
+                    cluster=self.cluster_name)).execute()
+        ips = []
+        if "items" in replicas:
+            for r in replicas["items"]:
+                ips.append(r["networkInterfaces"][0]["networkIP"])
+        return ips
+
     def get_num_replicas(self, name, version):
         return len(self._get_replicas(name, version))
 
@@ -366,14 +376,15 @@ class GCPContainerManager(ContainerManager):
             docker_cmd = "nvidia-docker"
 
         startup_script = ("#! /bin/bash\ngcloud docker --authorize-only\n{docker_cmd} run -d "
-                          "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
-                          "--log-opt env=CLIPPER_MODEL_NAME "
-                          "--log-opt env=CLIPPER_MODEL_VERSION "
-                          "--log-opt labels=rep_name "
+                          # "--log-driver=gcplogs --log-opt gcp-log-cmd=true "
+                          # "--log-opt env=CLIPPER_MODEL_NAME "
+                          # "--log-opt env=CLIPPER_MODEL_VERSION "
+                          # "--log-opt labels=rep_name "
                           "-e CLIPPER_MODEL_NAME={name} "
                           "-e CLIPPER_MODEL_VERSION={version} "
                           "-e CLIPPER_IP={ip} "
                           "-e CLIPPER_INPUT_TYPE={input_type} "
+                          "-v /tmp:/logs "
                           "-l rep_name={rep_name} "
                           "{image}").format(
                                   docker_cmd=docker_cmd,

@@ -35,6 +35,11 @@ class AppMetrics {
             clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
                 "app:" + app_name + ":prediction_latency", "microseconds",
                 4096)),
+        // latency_list_(
+        //     clipper::metrics::MetricsRegistry::get_metrics().create_data_list<long
+        //     long>(
+        //         "app:" + app_name + ":prediction_latencies",
+        //         "microseconds")),
         throughput_(
             clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                 "app:" + app_name + ":prediction_throughput")),
@@ -56,6 +61,7 @@ class AppMetrics {
 
   std::string app_name_;
   std::shared_ptr<clipper::metrics::Histogram> latency_;
+  // std::shared_ptr<clipper::metrics::DataList<long long>> latency_list_;
   std::shared_ptr<clipper::metrics::Meter> throughput_;
   std::shared_ptr<clipper::metrics::Counter> num_predictions_;
   std::shared_ptr<clipper::metrics::RatioCounter> default_pred_ratio_;
@@ -247,24 +253,32 @@ class ServerImpl {
       long query_id = query_counter_.fetch_add(1);
       std::chrono::time_point<std::chrono::system_clock> create_time =
           std::chrono::system_clock::now();
+      std::shared_ptr<QueryLineage> lineage = std::get<3>(request);
 
       task_executor_.schedule_prediction(
           PredictTask{std::get<0>(request), versioned_models.front(), 1.0,
-                      query_id, latency_slo_micros},
-          [this, app_metrics, request_id, client_id,
-           create_time](Output output) mutable {
+                      query_id, latency_slo_micros, lineage},
+          [this, app_metrics, request_id, client_id, create_time](
+              Output output, std::shared_ptr<QueryLineage> lineage) mutable {
             std::chrono::time_point<std::chrono::system_clock> end =
                 std::chrono::system_clock::now();
+            lineage->add_timestamp(
+                "clipper::zmq_frontend_response_callback",
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    end.time_since_epoch())
+                    .count());
             long duration_micros =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     end - create_time)
                     .count();
 
             app_metrics.latency_->insert(duration_micros);
+            // app_metrics.latency_list_->insert(duration_micros);
             app_metrics.num_predictions_->increment(1);
+            app_metrics.throughput_->mark(1);
 
-            rpc_service_->send_response(
-                std::make_tuple(std::move(output), request_id, client_id));
+            rpc_service_->send_response(std::make_tuple(
+                std::move(output), request_id, client_id, lineage));
           });
     };
 
@@ -280,7 +294,15 @@ class ServerImpl {
   }
 
   void drain_queues() {
+    // Clear metrics as well
+    clipper::metrics::MetricsRegistry& registry =
+        clipper::metrics::MetricsRegistry::get_metrics();
+    registry.report_metrics(true);
     task_executor_.drain_queues();
+  }
+
+  void set_full_batches() {
+    task_executor_.set_full_batches();
   }
 
  private:

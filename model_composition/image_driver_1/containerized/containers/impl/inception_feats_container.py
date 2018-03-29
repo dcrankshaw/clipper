@@ -7,7 +7,6 @@ import base64
 import numpy as np
 import tensorflow as tf
 
-
 class InceptionFeaturizationContainer(rpc.ModelContainerBase):
 
     def __init__(self, inception_model_path, gpu_mem_frac):
@@ -95,10 +94,14 @@ if __name__ == "__main__":
 
     print("CLIPPER IP: {}".format(ip))
 
+    port = 7000
+    if "CLIPPER_PORT" in os.environ:
+        port = int(os.environ["CLIPPER_PORT"])
+    else:
+        print("Connecting to Clipper with default port: 7000")
 
     input_type = "floats"
     container = InceptionFeaturizationContainer(model_graph_path, gpu_mem_frac)
     rpc_service = rpc.RPCService()
-    rpc_service.start(container, ip, model_name, model_version,
-                      input_type)
+    rpc_service.start(container, ip, model_name, model_version, input_type)
 

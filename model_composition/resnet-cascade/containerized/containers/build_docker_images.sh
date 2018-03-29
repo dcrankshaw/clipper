@@ -28,3 +28,6 @@ time docker build -t $prefix/pytorch-res50:$tag -f Res50PyTorchDockerfile ./
 gcloud docker -- push $prefix/pytorch-res50:$tag
 time docker build -t $prefix/pytorch-res152:$tag -f Res152PyTorchDockerfile ./
 gcloud docker -- push $prefix/pytorch-res152:$tag
+
+# time docker build -t $prefix/pytorch-no-rpc:$tag -f PyTorchNoRpcDockerfile ./
+# gcloud docker -- push $prefix/pytorch-no-rpc:$tag

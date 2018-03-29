@@ -87,6 +87,16 @@ class DockerContainerManager(ContainerManager):
 
     def start_clipper(self, query_frontend_image, mgmt_frontend_image,
                       cache_size, redis_cpu_str="0", mgmt_cpu_str="1", query_cpu_str="2-11"):
+        """
+        Parameters
+        ----------
+        redis_cpu_str : str
+            The VIRTUAL CPU(s) to which to assign Clipper's Redis store
+        mgmt_cpu_str : str
+            The VIRTUAL CPU(s) to which to assign Clipper's management frontend
+        query_cpu_str : str
+            The VIRTUAL CPU(s) to which to assign Clipper's query frontend
+        """
         try:
             self.docker_client.networks.create(
                 self.docker_network, check_duplicate=True)
@@ -220,6 +230,9 @@ class DockerContainerManager(ContainerManager):
                 cmd.append("%s=%s" % (k, v))
             if cpu_str:
                 cmd.append("--cpuset-cpus=%s" % cpu_str)
+            # Mount logs dir
+            cmd.append("-v")
+            cmd.append("/home/ubuntu/logs:/logs")
             cmd.append(image)
             logger.info("Docker command: \"%s\"" % cmd)
             subprocess.check_call(cmd, env=env)
@@ -232,6 +245,14 @@ class DockerContainerManager(ContainerManager):
                 **self.extra_container_kwargs)
 
     def set_num_replicas(self, name, version, input_type, image, num_replicas, **kwargs):
+        """
+        optional kwargs
+        ----------
+        allocated_cpus : list
+            The set of PHYSICAL CPUs allocated to replicas of the deployed model
+        cpus_per_replica : int
+            The number of PHYSICAL CPUs allocated to each replica of the model
+        """
         current_replicas = self._get_replicas(name, version)
         if len(current_replicas) < num_replicas:
             num_missing = num_replicas - len(current_replicas)
@@ -263,16 +284,18 @@ class DockerContainerManager(ContainerManager):
                         alloc_cpus=len(allocated_cpus)))
             for i in range(num_missing):
                 if len(available_gpus) > 0:
-                    gpu_num = available_gpus.pop()
+                    gpu_num = available_gpus.pop(0)
                     use_nvidia_docker = True
                 else:
                     gpu_num = None
                 cpus = allocated_cpus[i*cpus_per_replica: (i+1)*cpus_per_replica]
+                cpus = self.get_virtual_cpus(cpus)
                 cpus = [str(c) for c in cpus]
                 cpu_str = ",".join(cpus)
 
                 self._add_replica(name, version, input_type, image, gpu_num=gpu_num,
                                   cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
+
         elif len(current_replicas) > num_replicas:
             num_extra = len(current_replicas) - num_replicas
             logger.info(
@@ -285,6 +308,24 @@ class DockerContainerManager(ContainerManager):
             while len(current_replicas) > num_replicas:
                 cur_container = current_replicas.pop()
                 cur_container.stop()
+
+    def get_virtual_cpus(self, pcpus):
+        """
+        Given a list of physical cpus,
+        obtains a list of corresponding virtual cpus.
+
+        NOTE: This method assumes a p2.8xlarge instance
+        """
+        vcpus_map = {}
+        for i in range(16):
+            vcpus_map[i] = (i, i + 16)
+
+        vcpus = []
+        for pcpu in pcpus:
+            vcpus += list(vcpus_map[pcpu])
+
+        return vcpus
+
 
     def get_logs(self, logging_dir):
         containers = self.docker_client.containers.list(

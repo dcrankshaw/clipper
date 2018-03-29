@@ -10,36 +10,38 @@ unset CDPATH
 # the script.
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+gcpprefix="gcr.io/clipper-model-comp"
+tag="bench"
+
 # Build RPC base images for python/anaconda and deep learning
 # models
 cd $DIR/../../../container_utils/
 time docker build -t model-comp/py-rpc -f RpcDockerfile ./
 time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
-time docker build -t model-comp/tf-rpc:nogpu -f TfRpcNoGpuDockerfile ./
-
-prefix="gcr.io/clipper-model-comp"
-tag="bench"
+time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
 # Build model-specific images
-time docker build -t $prefix/tf-kernel-svm:$tag -f TfKernelSvmDockerfile ./
-gcloud docker -- push $prefix/tf-kernel-svm:$tag
-time docker build -t $prefix/tf-resnet-feats:$tag -f TfResNetDockerfile ./
-gcloud docker -- push $prefix/tf-resnet-feats:$tag
-time docker build -t $prefix/tf-resnet-feats:$tag-nogpu -f TfResNetNoGpuDockerfile ./
-gcloud docker -- push $prefix/tf-resnet-feats:$tag-nogpu
-# time docker build -t model-comp/noop-sleep -f NoopDockerfile ./
-# time docker build -t model-comp/noop-gpu -f NoopGPUDockerfile ./
-time docker build -t $prefix/tf-log-reg:$tag -f TfLogisticRegressionDockerfile ./
-gcloud docker -- push $prefix/tf-log-reg:$tag
-# time docker build -t model-comp/vgg-feats -f VggFeaturizationDockerfile ./
-# time docker build -t model-comp/kpca-svm -f VggKpcaSvmDockerfile ./
-# time docker build -t model-comp/kernel-svm -f VggKernelSvmDockerfile ./
-# time docker build -t model-comp/elastic-net -f VggElasticNetDockerfile ./
-time docker build -t $prefix/inception-feats:$tag -f InceptionFeaturizationDockerfile ./
-gcloud docker -- push $prefix/inception-feats:$tag
-time docker build -t $prefix/inception-feats:$tag-nogpu -f InceptionFeaturizationNoGpuDockerfile ./
-gcloud docker -- push $prefix/inception-feats:$tag-nogpu
-time docker build -t $prefix/noop:$tag -f NoopDockerfile ./
-gcloud docker -- push $prefix/noop:$tag
-# time docker build -t model-comp/lgbm -f LgbmDockerfile ./
+time docker build -t model-comp/tf-kernel-svm -f TfKernelSvmDockerfile ./
+docker tag model-comp/tf-kernel-svm $gcpprefix/tf-kernel-svm:$tag
+gcloud docker -- push $gcpprefix/tf-kernel-svm:$tag
+
+time docker build -t model-comp/tf-resnet-feats -f TfResNetDockerfile ./
+docker tag model-comp/tf-resnet-feats $gcpprefix/tf-resnet-feats:$tag
+gcloud docker -- push $gcpprefix/tf-resnet-feats:$tag
+
+# time docker build -t model-comp/tf-resnet-feats-variable-input -f TfResNetVariableInputSizeDockerfile ./
+# docker tag model-comp/tf-resnet-feats-variable-input $gcpprefix/tf-resnet-feats-variable-input:$tag
+# # gcloud docker -- push $gcpprefix/tf-resnet-feats-variable-input:$tag
+#
+# time docker build -t model-comp/tf-resnet-feats-sleep -f TfResNetSleepDockerfile ./
+# docker tag model-comp/tf-resnet-feats-sleep $gcpprefix/tf-resnet-feats-sleep:$tag
+# # gcloud docker -- push $gcpprefix/tf-resnet-feats-sleep:$tag
+
+time docker build -t model-comp/tf-log-reg -f TfLogisticRegressionDockerfile ./
+docker tag model-comp/tf-log-reg $gcpprefix/tf-log-reg:$tag
+gcloud docker -- push $gcpprefix/tf-log-reg:$tag
+
+time docker build -t model-comp/inception-feats -f InceptionFeaturizationDockerfile ./
+docker tag model-comp/inception-feats $gcpprefix/inception-feats:$tag
+gcloud docker -- push $gcpprefix/inception-feats:$tag

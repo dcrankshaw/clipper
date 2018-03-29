@@ -26,4 +26,4 @@ exit
 time docker build --build-arg CODE_VERSION=$tag -t clipper/management_frontend:$tag -f ManagementFrontendDockerfile ./
 docker tag clipper/management_frontend:$tag $gcpprefix/management_frontend:$tag
 gcloud docker -- push $gcpprefix/management_frontend:$tag
-cd -
+#cd -

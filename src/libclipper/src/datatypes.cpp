@@ -56,6 +56,20 @@ DataType parse_input_type(std::string type_string) {
   }
 }
 
+QueryLineage::QueryLineage(int query_id) : query_id_(query_id) {}
+
+void QueryLineage::add_timestamp(std::string description, long long time) {
+  std::unique_lock<std::mutex> l(timestamps_mutex_);
+  timestamps_.emplace(description, time);
+}
+
+std::unordered_map<std::string, long long> QueryLineage::get_timestamps() {
+  std::unique_lock<std::mutex> l(timestamps_mutex_);
+  return timestamps_;
+}
+
+int QueryLineage::get_query_id() { return query_id_; }
+
 VersionedModelId::VersionedModelId(const std::string name, const std::string id)
     : name_(name), id_(id) {}
 
@@ -377,11 +391,13 @@ rpc::PredictionResponse::deserialize_prediction_response(
 
 PredictTask::PredictTask(InputVector input, VersionedModelId model,
                          float utility, QueryId query_id,
-                         long latency_slo_micros)
+                         long latency_slo_micros,
+                         std::shared_ptr<QueryLineage> lineage)
     : input_(input),
       model_(model),
       utility_(utility),
       query_id_(query_id),
-      latency_slo_micros_(latency_slo_micros) {}
+      latency_slo_micros_(latency_slo_micros),
+      lineage_(lineage) {}
 
 }  // namespace clipper

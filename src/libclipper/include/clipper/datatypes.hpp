@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <mutex>
 
 #include <boost/functional/hash.hpp>
 #include <boost/optional.hpp>
@@ -33,6 +35,30 @@ enum class RequestType {
 
 std::string get_readable_input_type(DataType type);
 DataType parse_input_type(std::string type_string);
+
+class QueryLineage {
+ public:
+  QueryLineage() = default;
+
+  explicit QueryLineage(int query_id);
+
+  void add_timestamp(std::string description, long long time);
+
+  std::unordered_map<std::string, long long> get_timestamps();
+
+  int get_query_id();
+
+  QueryLineage(const QueryLineage &) = default;
+  QueryLineage &operator=(const QueryLineage &) = default;
+
+  QueryLineage(QueryLineage &&) = default;
+  QueryLineage &operator=(QueryLineage &&) = default;
+
+ private:
+  int query_id_;
+  std::unordered_map<std::string, long long> timestamps_;
+  std::mutex timestamps_mutex_;
+};
 
 class VersionedModelId {
  public:
@@ -117,7 +143,8 @@ class PredictTask {
   PredictTask() = default;
 
   PredictTask(InputVector input, VersionedModelId model, float utility,
-              QueryId query_id, long latency_slo_micros);
+              QueryId query_id, long latency_slo_micros,
+              std::shared_ptr<QueryLineage> lineage);
 
   PredictTask(const PredictTask &other) = default;
   PredictTask &operator=(const PredictTask &other) = default;
@@ -131,6 +158,7 @@ class PredictTask {
   QueryId query_id_;
   long latency_slo_micros_;
   std::chrono::time_point<std::chrono::system_clock> recv_time_;
+  std::shared_ptr<QueryLineage> lineage_;
 };
 
 class OutputData {
