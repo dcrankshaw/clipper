@@ -165,8 +165,46 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
 
+    elif model_name == TF_LANG_DETECT:
+        image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
+        return driver_utils.HeavyNodeConfig(name=LANG_DETECT_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=[],
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
+
+    elif model_name == TF_LSTM:
+        image = "gcr.io/clipper-model-comp/tf-lstm:bench"
+        return driver_utils.HeavyNodeConfig(name=LSTM_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
 
+    elif model_name == TF_NMT:
+        image = "gcr.io/clipper-model-comp/tf-nmt:bench"
+        return driver_utils.HeavyNodeConfig(name=NMT_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
+        
 
 def get_input_size(config):
     if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:

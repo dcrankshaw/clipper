@@ -12,6 +12,7 @@
 #include <clipper/metrics.hpp>
 
 #include "driver.hpp"
+#include "inputs.hpp"
 #include "zmq_client.hpp"
 
 using namespace clipper;
@@ -202,33 +203,27 @@ int main(int argc, char* argv[]) {
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
-  if (options["input_type"].as<std::string>() == "floats") {
-    std::vector<ClientFeatureVector> inputs =
-        generate_float_inputs(options["input_size"].as<int>());
-    std::string name = options["name"].as<std::string>();
-    ProfilerMetrics metrics{name};
 
-    std::ofstream query_lineage_file;
-    std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
-    auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](
-        FrontendRPCClient& client, ClientFeatureVector input,
-        std::atomic<int>& prediction_counter) {
-      predict(client, name, input, metrics, prediction_counter, query_lineage_file,
-              query_file_mutex);
-    };
-    Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
-                  distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
-                  options["log_file"].as<std::string>(),
-                  options["clipper_address"].as<std::string>(), options["batch_size"].as<int>(),
-                  {});
-    std::cout << "Starting driver" << std::endl;
-    driver.start();
-    std::cout << "Driver completed" << std::endl;
-    query_lineage_file.close();
-    return 0;
-  } else {
-    std::cerr << "Invalid input type " << options["input_type"].as<std::string>() << std::endl;
-    return 1;
-  }
+  std::string model_name = options["name"].as<std::string>();
+  size_t input_size = options["input_size"].as<size_t>();
+  std::vector<ClientFeatureVector> inputs = generate_inputs(model_name, input_size);
+  ProfilerMetrics metrics{model_name};
+
+  std::ofstream query_lineage_file;
+  std::mutex query_file_mutex;
+  query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
+  auto predict_func = [metrics, model_name, &query_lineage_file, &query_file_mutex](
+      FrontendRPCClient& client, ClientFeatureVector input, std::atomic<int>& prediction_counter) {
+    predict(client, model_name, input, metrics, prediction_counter, query_lineage_file,
+            query_file_mutex);
+  };
+  Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
+                distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
+                options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
+                options["batch_size"].as<int>(), {});
+  std::cout << "Starting driver" << std::endl;
+  driver.start();
+  std::cout << "Driver completed" << std::endl;
+  query_lineage_file.close();
+  return 0;
 }

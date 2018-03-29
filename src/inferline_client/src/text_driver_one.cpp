@@ -13,6 +13,7 @@
 #include <clipper/metrics.hpp>
 
 #include "driver.hpp"
+#include "inputs.hpp"
 #include "zmq_client.hpp"
 
 using namespace clipper;
@@ -210,44 +211,6 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
   client.send_request(LANG_DETECT_MODEL_APP_NAME, text_input, lang_detect_callback);
 }
 
-std::vector<ClientFeatureVector> generate_text_inputs(size_t num_inputs,
-                                                      size_t desired_input_length) {
-  std::random_device rd;         // Will be used to obtain a seed for the random number engine
-  std::mt19937 generator(rd());  // Standard mersenne_twister_engine seeded with rd()
-  std::uniform_real_distribution<> distribution(0.0, 1.0);
-
-  std::vector<ClientFeatureVector> all_inputs;
-  std::ifstream text_file(LANG_DETECT_WORKLOAD_RELATIVE_PATH);
-
-  std::string line;
-  while (std::getline(text_file, line)) {
-    size_t input_size_bytes = line.size() * sizeof(char);
-    size_t desired_input_length_bytes = desired_input_length * sizeof(char);
-    size_t cp_unit_size = std::min(input_size_bytes, desired_input_length_bytes);
-
-    std::shared_ptr<void> input_data(malloc(desired_input_length_bytes), free);
-    char* raw_input_data = static_cast<char*>(input_data.get());
-    size_t curr_cp_idx = 0;
-    size_t curr_size = 0;
-    while (curr_size < desired_input_length) {
-      memcpy(raw_input_data + curr_cp_idx, line.data(), cp_unit_size);
-      curr_size += cp_unit_size;
-    }
-    ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
-                              DataType::Strings);
-    all_inputs.push_back(std::move(input));
-  }
-
-  std::vector<ClientFeatureVector> selected_inputs;
-  selected_inputs.reserve(num_inputs);
-
-  for (size_t i = 0; i < num_inputs; i++) {
-    size_t idx = static_cast<size_t>(distribution(generator) * num_inputs);
-    selected_inputs.push_back(all_inputs[idx]);
-  }
-  return selected_inputs;
-}
-
 int main(int argc, char* argv[]) {
   cxxopts::Options options("text_driver_one", "Text Driver One");
   // clang-format off
@@ -281,9 +244,9 @@ int main(int argc, char* argv[]) {
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
-  size_t num_inputs = 1000;
   size_t input_length = 20;
-  std::vector<ClientFeatureVector> inputs = generate_text_inputs(num_inputs, input_length);
+  std::vector<ClientFeatureVector> inputs =
+      generate_inputs(LANG_DETECT_MODEL_APP_NAME, input_length);
   TextDriverOneMetrics metrics;
 
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
