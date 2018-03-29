@@ -30,7 +30,8 @@ static const std::string LSTM_IMAGE_NAME = "model-comp/tf-lstm";
 std::vector<std::string> MODEL_NAMES{LANG_DETECT_MODEL_APP_NAME, LSTM_MODEL_APP_NAME,
                                      NMT_MODEL_APP_NAME};
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "lang_detect_workload";
+static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH =
+    "../../../model_composition/cpp_benchmarker/text_driver_one_workload/workload.txt";
 
 static const std::string LANG_CLASSIFICATION_ENGLISH = "en";
 static const std::string LANG_CLASSIFICATION_GERMAN = "de";
@@ -150,6 +151,8 @@ void predict(FrontendRPCClient& client, ClientFeatureVector text_input,
     } else {
       throw std::runtime_error("Received output of wrong datatype from NMT query");
     }
+
+    output.type_ = DataType::Bytes;
 
     auto cur_time = std::chrono::system_clock::now();
     client.send_request(LSTM_MODEL_APP_NAME, output,
