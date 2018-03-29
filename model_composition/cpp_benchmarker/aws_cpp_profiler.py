@@ -413,40 +413,44 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 1000
-    run(init_throughput, 3, "warmup", "constant")
-    throughput_results = run(init_throughput, 8, "throughput", "constant")
-    cl.drain_queues()
-    cl.set_full_batches()
-    time.sleep(1)
-    latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
+    # run(init_throughput, 3, "warmup", "constant")
+    run(init_throughput, 2, "warmup", "constant")
+    # throughput_results = run(init_throughput, 8, "throughput", "constant")
+    throughput_results = run(init_throughput, 6, "throughput", "constant")
+    # cl.drain_queues()
+    # cl.set_full_batches()
+    # time.sleep(1)
+    # latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
     cl.stop_all()
-    return throughput_results, latency_results
+    # return throughput_results, latency_results
+    return throughput_results, None
 
 
 if __name__ == "__main__":
 
-    for model in [RES50, RES152, ALEXNET]:
-        for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32]:
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=1,
-                allocated_cpus=range(4, 5),
-                allocated_gpus=range(0, 1),
-            )
+    for gpu in range(0, 8):
+        model = TF_RESNET
+        batch_size = 16
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=[8],
+            allocated_gpus=[gpu],
+        )
 
-            input_size = get_input_size(config)
-            throughput_results, latency_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26,11,27,12,28")
-            fname = "under_over-cpp-aws-results-k80-{model}-batch-{batch}".format(
-                model=model, batch=batch_size)
-            results_dir = "under_over_{model}-snp".format(model=model)
-            driver_utils.save_results_cpp_client(
-                [config, ],
-                throughput_results,
-                latency_results,
-                results_dir,
-                prefix=fname)
+        input_size = get_input_size(config)
+        throughput_results, latency_results = run_profiler(
+            config, 2000, "../../release/src/inferline_client/profiler",
+            input_size, "9,25,10,26,11,27,12,28")
+        fname = "k80-{model}-batch-{batch}-gpu-{gpu}".format(
+            model=model, batch=batch_size, gpu=gpu)
+        results_dir = "{model}-snp-resource-placement-debugging-gpu".format(model=model)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            throughput_results,
+            latency_results,
+            results_dir,
+            prefix=fname)
     sys.exit(0)

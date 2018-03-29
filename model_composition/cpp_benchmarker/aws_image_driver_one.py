@@ -215,12 +215,12 @@ def load_metrics(client_path, clipper_path):
             clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
         try:
             clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
             return None
     return client_metrics, clipper_metrics
@@ -232,7 +232,7 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
+def run_profiler(configs, trial_length, driver_path, profiler_cores_str, throughput):
     clipper_address = setup_clipper(configs)
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -247,6 +247,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
+        arrival_delay_file = os.path.abspath("arrival_deltas_ms.timestamp")
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
@@ -257,11 +258,14 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address={}".format(clipper_address)]
+               "--clipper_address={}".format(clipper_address),
+               "--request_delay_file={}".format(arrival_delay_file)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        lineage_paths = {m: "{p}-{m}-query_lineage.txt".format(m=m, p=log_path)
+                         for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
@@ -305,42 +309,44 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
             try:
                 loaded_metrics = load_metrics(client_path, clipper_path)
                 # lineage = load_lineage(lineage_path)
+                lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
                     return driver_utils.Results(client_metrics,
                                                 clipper_metrics,
                                                 summary_results,
-                                                None)
+                                                lineages)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 44
-    run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 20, "throughput", "poisson")
+    run(throughput, 3, "warmup", "constant")
+    throughput_results = run(throughput, 10, "throughput", "file")
     cl.stop_all()
     return throughput_results
 
 
 if __name__ == "__main__":
-    resnet_batch_size = 16
-    inception_batch_size = 8
-    ksvm_batch_size = 1
+    resnet_batch_size = 96
+    inception_batch_size = 16
+    ksvm_batch_size = 4
     log_reg_batch_size = 1
 
     model_cpus = range(4, 11)
-    model_gpus = range(8)
+    model_gpus = range(4)
+    # model_gpus = range(8)
 
     def get_cpus(num):
         return [model_cpus.pop() for _ in range(num)]
+
     def get_gpus(num):
         return [model_gpus.pop() for _ in range(num)]
 
     resnet_replicas = 1
     inception_replicas = 1
-    ksvm_replicas = 1
+    ksvm_replicas = 3
     log_reg_replicas = 1
 
     configs = [
@@ -379,7 +385,8 @@ if __name__ == "__main__":
     ]
 
     throughput_results = run_profiler(
-        configs, 2000, "../../release/src/inferline_client/image_driver_one", "11,27,12,28")
+        configs, 2000, "../../release/src/inferline_client/image_driver_one",
+        "11,27,12,28", 238)
     fname = "cpp-aws-p2-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
         i=inception_replicas,
         r=resnet_replicas,

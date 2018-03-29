@@ -108,9 +108,9 @@ class ImageDriverOneMetrics {
 };
 
 void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOneMetrics metrics,
-    std::atomic<int>& prediction_counter,
-    std::unordered_map<std::string, std::ofstream&> &lineage_file_map,
-    std::unordered_map<std::string, std::mutex&> &lineage_mutex_map) {
+             std::atomic<int>& prediction_counter,
+             std::unordered_map<std::string, std::ofstream>& lineage_file_map,
+             std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
   size_t resnet_input_length = 224 * 224 * 3;
   ClientFeatureVector resnet_input(input.data_, resnet_input_length,
@@ -128,7 +128,8 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     prediction_counter += 1;
   };
 
-  auto ksvm_callback = [&client, metrics, branches_completed, completion_callback](
+  auto ksvm_callback = [&client, metrics, branches_completed, completion_callback,
+                        &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
@@ -145,13 +146,37 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.ksvm_latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.ksvm_throughput_->mark(1);
     metrics.ksvm_num_predictions_->increment(1);
+
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+            .count());
+
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[TF_KERNEL_SVM]);
+    auto& query_lineage_file = lineage_file_map[TF_KERNEL_SVM];
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
+
     int num_branches_completed = branches_completed->fetch_add(1);
     if (num_branches_completed == 1) {
       completion_callback();
     }
   };
 
-  auto log_reg_callback = [&client, metrics, branches_completed, &completion_callback](
+  auto log_reg_callback = [&client, metrics, branches_completed, &completion_callback,
+                           &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
@@ -168,14 +193,38 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.log_reg_latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.log_reg_throughput_->mark(1);
     metrics.log_reg_num_predictions_->increment(1);
+
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+            .count());
+
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[TF_LOG_REG]);
+    auto& query_lineage_file = lineage_file_map[TF_LOG_REG];
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
+
     int num_branches_completed = branches_completed->fetch_add(1);
     if (num_branches_completed == 1) {
       completion_callback();
     }
   };
 
-  auto inception_callback = [&client, metrics, start_time, log_reg_callback](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+  auto inception_callback = [&client, metrics, start_time, log_reg_callback, &lineage_file_map,
+                             &lineage_mutex_map](ClientFeatureVector output,
+                                                 std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
@@ -195,10 +244,33 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.inception_latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.inception_throughput_->mark(1);
     metrics.inception_num_predictions_->increment(1);
+
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
+            .count());
+
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[INCEPTION_FEATS]);
+    auto& query_lineage_file = lineage_file_map[INCEPTION_FEATS];
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
   };
 
-  auto resnet_callback = [&client, metrics, start_time, ksvm_callback](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+  auto resnet_callback = [&client, metrics, start_time, ksvm_callback, &lineage_file_map,
+                          &lineage_mutex_map](ClientFeatureVector output,
+                                              std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
@@ -218,6 +290,28 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.resnet_latency_list_->insert(static_cast<int64_t>(latency_micros));
     metrics.resnet_throughput_->mark(1);
     metrics.resnet_num_predictions_->increment(1);
+
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
+            .count());
+
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[TF_RESNET]);
+    auto& query_lineage_file = lineage_file_map[TF_RESNET];
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
   };
 
   client.send_request(INCEPTION_FEATS, input, inception_callback);
@@ -248,7 +342,8 @@ int main(int argc, char* argv[]) {
       ("target_throughput", "Mean throughput to target in qps",
        cxxopts::value<float>())
       ("request_distribution", "Distribution to sample request delay from. "
-       "Can be 'constant', 'poisson', or 'batch'. 'batch' sends a single batch at a time.",
+       "Can be 'constant', 'poisson', or 'batch', or 'file'. 'batch' sends a single batch at a time."
+       "'file' uses the delays provided in the request_delay_file argument.",
        cxxopts::value<std::string>())
       ("trial_length", "Number of queries per trial",
        cxxopts::value<int>())
@@ -258,11 +353,14 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
        cxxopts::value<std::string>())
+      ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
+       cxxopts::value<std::string>())
        ;
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch")) {
+  if (!(distribution == "poisson" || distribution == "constant"
+        || distribution == "batch" || distribution == "file")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -272,36 +370,44 @@ int main(int argc, char* argv[]) {
   clock::ClipperClock::get_clock().get_uptime();
   std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
   ImageDriverOneMetrics metrics;
-  
+
   std::vector<std::string> models = {TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG};
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
-  std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
+  // std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
   std::unordered_map<std::string, std::mutex> lineage_mutex_map;
-  std::unordered_map<std::string, std::mutex&> lineage_mutex_map_refs;
+  // std::unordered_map<std::string, std::mutex&> lineage_mutex_map_refs;
 
-  for (auto model: models) {
-    std::ofstream query_lineage_file;
-    std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() + "-" + model +
-                            "-query_lineage.txt");
+  for (auto model : models) {
     lineage_file_map.emplace(model, std::ofstream{});
-    lineage_file_map_refs.insert(model, lineage_file_map[model]);
+    lineage_file_map[model].open(options["log_file"].as<std::string>() + "-" + model +
+                            "-query_lineage.txt");
+    // lineage_file_map_refs.emplace(model, lineage_file_map[model]);
     lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
-    lineage_mutex_map_refs.insert(model, lineage_mutex_map[model]);
+    // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
   }
 
-  auto predict_func = [metrics, &lineage_file_map_refs, &lineage_mutex_map_refs](FrontendRPCClient& client, ClientFeatureVector input,
-                                std::atomic<int>& prediction_counter) {
-    predict(client, input, metrics, prediction_counter, lineage_file_map_refs, lineage_mutex_map_refs);
+  auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
+      FrontendRPCClient& client, ClientFeatureVector input, std::atomic<int>& prediction_counter) {
+    predict(client, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
   };
+  std::vector<float> delays_ms;
+  if (distribution == "file") {
+    std::ifstream delay_file_stream(options["request_delay_file"].as<std::string>());
+    std::string line;
+    while (std::getline(delay_file_stream, line)) {
+      delays_ms.push_back(std::stof(line));
+    }
+    delay_file_stream.close();
+    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines" << std::endl;
+  }
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
-                -1);
+                -1, delays_ms);
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;
-  for (auto model: models) {
+  for (auto model : models) {
     lineage_file_map[model].close();
   }
   return 0;
