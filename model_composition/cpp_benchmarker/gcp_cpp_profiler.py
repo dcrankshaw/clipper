@@ -128,7 +128,7 @@ def setup_clipper_gcp(configs):
     time.sleep(30)
     for c in configs:
         driver_utils.setup_heavy_node_gcp(cl, c, DEFAULT_OUTPUT)
-    time.sleep(10)
+    time.sleep(30)
     clipper_address = cl.cm.query_frontend_internal_ip
     logger.info("Clipper is set up on {}".format(clipper_address))
     return clipper_address
@@ -279,6 +279,7 @@ def run_profiler(config, trial_length, driver_path, input_size, init_throughput=
     clipper_address = setup_clipper_gcp([config, ])
     cl = ClipperConnection(GCPContainerManager(GCP_CLUSTER_NAME))
     cl.connect()
+    logger.info("Check that query frontend is up")
     time.sleep(100)
     log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
                                                                     ts=datetime.now())
@@ -382,12 +383,16 @@ if __name__ == "__main__":
 
     global GCP_CLUSTER_NAME
     num_cpus = 2
-    gpu = "p100"
     for gpu in ["p100", "k80"]:
         for model in [INCEPTION_FEATS, TF_RESNET, RES50, RES152, ALEXNET]:
-            for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32, 40, 48, 64, 96]:
+            for batch_size in [1, 2, 3, 4, 8, 12, 16, 24, 32, 40, 48, 64]:
                 if gpu == "k80" and batch_size > 32:
                     continue
+                if gpu == "p100":
+                    if model in [INCEPTION_FEATS, TF_RESNET, RES50, RES152]:
+                        continue
+                    if model == ALEXNET and batch_size < 32:
+                        continue
                 GCP_CLUSTER_NAME = "over-under-prof-{}".format(model)
                 config = get_heavy_node_config(
                     model_name=model,
