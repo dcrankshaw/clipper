@@ -167,7 +167,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_LANG_DETECT:
         image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
-        return driver_utils.HeavyNodeConfig(name=LANG_DETECT_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=TF_LANG_DETECT,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -180,7 +180,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_LSTM:
         image = "gcr.io/clipper-model-comp/tf-lstm:bench"
-        return driver_utils.HeavyNodeConfig(name=LSTM_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=TF_LSTM,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -194,7 +194,7 @@ def get_heavy_node_config(model_name,
 
     elif model_name == TF_NMT:
         image = "gcr.io/clipper-model-comp/tf-nmt:bench"
-        return driver_utils.HeavyNodeConfig(name=NMT_MODEL_APP_NAME,
+        return driver_utils.HeavyNodeConfig(name=TF_NMT,
                                             input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
@@ -472,8 +472,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
 
     for gpu in range(0, 8):
-        model = TF_RESNET
-        batch_size = 16
+        model = TF_NMT
+        batch_size = 1
         config = get_heavy_node_config(
             model_name=model,
             batch_size=batch_size,
