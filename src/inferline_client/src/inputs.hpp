@@ -1,8 +1,13 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <fstream>
+#include <iostream>
+
+#include "zmq_client.hpp"
 
 using namespace clipper;
+using namespace zmq_client;
 
 static const std::string RES50 = "res50";
 static const std::string RES152 = "res152";

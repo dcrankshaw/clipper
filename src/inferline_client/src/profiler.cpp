@@ -93,23 +93,6 @@ void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector in
   });
 }
 
-std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
-  int num_points = 1000;
-  std::random_device rd;         // Will be used to obtain a seed for the random number engine
-  std::mt19937 generator(rd());  // Standard mersenne_twister_engine seeded with rd()
-  std::uniform_real_distribution<> distribution(0.0, 1.0);
-  std::vector<ClientFeatureVector> inputs;
-  for (int i = 0; i < num_points; ++i) {
-    float* input_buffer = reinterpret_cast<float*>(malloc(input_length * sizeof(float)));
-    for (int j = 0; j < input_length; ++j) {
-      input_buffer[j] = distribution(generator);
-    }
-    std::shared_ptr<void> input_ptr(reinterpret_cast<void*>(input_buffer), free);
-    inputs.emplace_back(input_ptr, input_length, input_length * sizeof(float), DataType::Floats);
-  }
-  return inputs;
-}
-
 // void spin_sleep(int duration_micros) {
 //   auto start_time = std::chrono::system_clock::now();
 //   long cur_delay_micros = 0;
