@@ -18,6 +18,8 @@
 using namespace clipper;
 using namespace zmq_client;
 
+const std::string DEFAULT_WORKLOAD_PATH = "default_path";
+
 class ProfilerMetrics {
  public:
   explicit ProfilerMetrics(std::string name)
@@ -174,6 +176,8 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
        cxxopts::value<std::string>())
+      ("workload_path", "(Optional) path to the input workload",
+       cxxopts::value<std::string>()->default_value(DEFAULT_WORKLOAD_PATH))
        ;
   // clang-format on
   options.parse(argc, argv);
@@ -189,7 +193,14 @@ int main(int argc, char* argv[]) {
 
   std::string model_name = options["name"].as<std::string>();
   size_t input_size = static_cast<size_t>(options["input_size"].as<int>());
-  std::vector<ClientFeatureVector> inputs = generate_inputs(model_name, input_size);
+
+  std::string opts_workload_path = options["workload_path"].as<std::string>();
+  boost::optional<std::string> workload_path;
+  if (opts_workload_path != DEFAULT_WORKLOAD_PATH) {
+    workload_path = boost::optional<std::string>(opts_workload_path);
+  }
+
+  std::vector<ClientFeatureVector> inputs = generate_inputs(model_name, input_size, workload_path);
   ProfilerMetrics metrics{model_name};
 
   std::ofstream query_lineage_file;

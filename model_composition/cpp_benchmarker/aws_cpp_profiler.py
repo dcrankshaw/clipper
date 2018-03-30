@@ -16,6 +16,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+CURR_DIR = os.path.dirname(os.path.realpath(__file__)) 
+
 DEFAULT_OUTPUT = "TIMEOUT"
 CLIPPER_ADDRESS = "localhost"
 
@@ -365,7 +367,7 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
+def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str, workload_path=None):
     clipper_address = setup_clipper([config, ])
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -397,6 +399,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                "--clipper_address={}".format(clipper_address)]
         if batch_size is not None:
             cmd.append("--batch_size={}".format(batch_size))
+        if workload_path is not None:
+            cmd.append("--workload_path={}".format(workload_path))
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
@@ -458,23 +462,23 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 2000 
-    # run(init_throughput, 3, "warmup", "constant")
-    run(init_throughput, 2, "warmup", "constant")
-    # throughput_results = run(init_throughput, 8, "throughput", "constant")
-    throughput_results = run(init_throughput, 6, "throughput", "constant")
+    run(init_throughput, 3, "warmup", "constant")
+    throughput_results = run(init_throughput, 8, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
     latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
     cl.stop_all()
     return throughput_results, latency_results
-    # return throughput_results, None
 
 
 if __name__ == "__main__":
+    workload_path = os.path.join(CURR_DIR, "nmt_workload", "workload.txt");
+
     for gpu in range(0,1):
-        model = TF_LSTM 
-        batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
+        model = TF_NMT 
+        # batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
+        batch_sizes = [64]
         for batch_size in batch_sizes:
             config = get_heavy_node_config(
                 model_name=model,
@@ -488,10 +492,10 @@ if __name__ == "__main__":
             input_size = get_input_size(config)
             throughput_results, latency_results = run_profiler(
                 config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26,11,27,12,28")
+                input_size, "9,25,10,26,11,27,12,28", workload_path=workload_path)
             fname = "k80-{model}-batch-{batch}-gpu-{gpu}".format(
                 model=model, batch=batch_size, gpu=gpu)
-            results_dir = "{model}-snp-resource-placement-debugging-gpu".format(model=model)
+            results_dir = "{model}-SMP-gpu-{gpu}".format(model=model, gpu=gpu)
             driver_utils.save_results_cpp_client(
                 [config, ],
                 throughput_results,
