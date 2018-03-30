@@ -477,8 +477,7 @@ if __name__ == "__main__":
 
     for gpu in range(0,1):
         model = TF_NMT 
-        # batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
-        batch_sizes = [64]
+        batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
         for batch_size in batch_sizes:
             config = get_heavy_node_config(
                 model_name=model,
