@@ -67,7 +67,7 @@ std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workloa
   selected_inputs.reserve(num_inputs);
 
   for (size_t i = 0; i < num_inputs; i++) {
-    size_t idx = static_cast<size_t>(distribution(generator) * num_inputs);
+    size_t idx = static_cast<size_t>(distribution(generator) * all_inputs.size());
     selected_inputs.push_back(all_inputs[idx]);
   }
   return selected_inputs;
