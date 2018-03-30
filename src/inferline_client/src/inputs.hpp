@@ -27,9 +27,9 @@ const std::vector<std::string> FLOAT_VECTOR_MODELS{RES50,         RES152,       
                                                    TF_KERNEL_SVM, INCEPTION_FEATS, TF_LOG_REG,
                                                    TF_RESNET,     TF_RESNET_VAR,   TF_RESNET_SLEEP};
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "lang_detect_workload";
-static const std::string LSTM_WORKLOAD_RELATIVE_PATH = "lstm_workload";
-static const std::string NMT_WORKLOAD_RELATIVE_PATH = "nmt_workload";
+static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/lang_detect_workload/workload.txt";
+static const std::string LSTM_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/lstm_workload/workload.txt";
+static const std::string NMT_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/nmt_workload/workload.txt";
 
 std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workload_path,
                                                       size_t desired_input_length) {
