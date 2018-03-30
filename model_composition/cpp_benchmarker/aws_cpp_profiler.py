@@ -474,7 +474,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
 
     for gpu in range(0, 8):
-        model = TF_NMT
+        model = TF_LANG_DETECT 
         batch_size = 1
         config = get_heavy_node_config(
             model_name=model,

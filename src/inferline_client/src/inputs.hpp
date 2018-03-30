@@ -27,9 +27,10 @@ const std::vector<std::string> FLOAT_VECTOR_MODELS{RES50,         RES152,       
                                                    TF_KERNEL_SVM, INCEPTION_FEATS, TF_LOG_REG,
                                                    TF_RESNET,     TF_RESNET_VAR,   TF_RESNET_SLEEP};
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/lang_detect_workload/workload.txt";
-static const std::string LSTM_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/lstm_workload/workload.txt";
-static const std::string NMT_WORKLOAD_RELATIVE_PATH = "../../../model_composition/cpp_benchmarker/nmt_workload/workload.txt";
+
+static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH = "/home/ubuntu/clipper/model_composition/cpp_benchmarker/lang_detect_workload/workload.txt";
+static const std::string LSTM_WORKLOAD_RELATIVE_PATH = "/home/ubuntu/clipper/model_composition/cpp_benchmarker/lstm_workload/workload.txt";
+static const std::string NMT_WORKLOAD_RELATIVE_PATH = "/home/ubuntu/clipper/model_composition/cpp_benchmarker/nmt_workload/workload.txt";
 
 std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workload_path,
                                                       size_t desired_input_length) {
@@ -55,6 +56,7 @@ std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workloa
       size_t curr_unit_size = std::min(cp_unit_size, desired_input_length - curr_size);
       memcpy(raw_input_data + curr_cp_idx, line.data(), curr_unit_size);
       curr_size += curr_unit_size;
+      curr_cp_idx += curr_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
                               DataType::Bytes);
