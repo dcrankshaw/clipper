@@ -30,9 +30,6 @@ static const std::string LSTM_IMAGE_NAME = "model-comp/tf-lstm";
 std::vector<std::string> MODEL_NAMES{LANG_DETECT_MODEL_APP_NAME, LSTM_MODEL_APP_NAME,
                                      NMT_MODEL_APP_NAME};
 
-static const std::string LANG_DETECT_WORKLOAD_RELATIVE_PATH =
-    "../../../model_composition/cpp_benchmarker/text_driver_one_workload/workload.txt";
-
 static const std::string LANG_CLASSIFICATION_ENGLISH = "en";
 static const std::string LANG_CLASSIFICATION_GERMAN = "de";
 
@@ -234,6 +231,8 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
        cxxopts::value<std::string>())
+      ("workload_path", "Path to the driver input workload",
+       cxxopts::value<std::string>())
        ;
   // clang-format on
   options.parse(argc, argv);
@@ -244,12 +243,14 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  std::string workload_path = options["workload_path"].as<std::string>();
+
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
   size_t input_length = 20;
   std::vector<ClientFeatureVector> inputs =
-      generate_inputs(LANG_DETECT_MODEL_APP_NAME, input_length);
+      generate_inputs(LANG_DETECT_MODEL_APP_NAME, input_length, workload_path);
   TextDriverOneMetrics metrics;
 
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
@@ -289,7 +290,7 @@ int main(int argc, char* argv[]) {
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
-                -1, delay_ms);
+                -1, delays_ms);
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;

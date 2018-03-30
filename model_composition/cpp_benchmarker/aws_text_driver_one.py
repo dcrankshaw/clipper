@@ -17,6 +17,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+CURR_DIR = os.path.dirname(os.path.realpath(__file__)) 
+
 DEFAULT_OUTPUT = "TIMEOUT"
 CLIPPER_ADDRESS = "localhost"
 
@@ -217,7 +219,7 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
+def run_profiler(configs, trial_length, driver_path, profiler_cores_str, target_throughput):
     clipper_address = setup_clipper(configs)
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -227,7 +229,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process, throughput):
+    def run(target_throughput, num_trials, name, arrival_process):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
@@ -236,6 +238,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
+        workload_path = os.path.join(CURR_DIR, "lang_detect_workload", "workload.txt");
         cmd = ["numactl", "-C", profiler_cores_str,
                os.path.abspath(driver_path),
                "--target_throughput={}".format(target_throughput),
@@ -244,7 +247,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
                "--clipper_address={}".format(clipper_address),
-               "--request_delay_file={}".format(arrival_delay_file)]
+               "--request_delay_file={}".format(arrival_delay_file),
+               "--workload_path={}".format(workload_path)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
@@ -304,8 +308,8 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str):
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    run(throughput, 5, "warmup", "constant")
-    throughput_results = run(throughput, 20, "throughput", "poisson")
+    run(target_throughput, 5, "warmup", "constant")
+    throughput_results = run(target_throughput, 20, "throughput", "poisson")
     cl.stop_all()
     return throughput_results
 
@@ -359,8 +363,10 @@ if __name__ == "__main__":
             )
     ]
 
+    target_throughput = 1000
+
     throughput_results = run_profiler(
-        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28", 20)
+        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28", target_throughput)
     fname = "cpp-aws-p2-{ls}-lstm-{nm}-nmt-{ld}-lang_detect".format(
         ls=lstm_replicas,
         nmt=nmt_replicas,
