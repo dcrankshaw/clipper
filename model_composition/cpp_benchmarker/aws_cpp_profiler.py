@@ -457,23 +457,22 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 1000
+    init_throughput = 2000 
     # run(init_throughput, 3, "warmup", "constant")
     run(init_throughput, 2, "warmup", "constant")
     # throughput_results = run(init_throughput, 8, "throughput", "constant")
     throughput_results = run(init_throughput, 6, "throughput", "constant")
-    # cl.drain_queues()
-    # cl.set_full_batches()
-    # time.sleep(1)
-    # latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
+    cl.drain_queues()
+    cl.set_full_batches()
+    time.sleep(1)
+    latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
     cl.stop_all()
-    # return throughput_results, latency_results
-    return throughput_results, None
+    return throughput_results, latency_results
+    # return throughput_results, None
 
 
 if __name__ == "__main__":
-
-    for gpu in range(0, 8):
+    for gpu in range(0,1):
         model = TF_LSTM 
         batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
         for batch_size in batch_sizes:
