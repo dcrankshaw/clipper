@@ -52,11 +52,12 @@ std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workloa
     size_t curr_cp_idx = 0;
     size_t curr_size = 0;
     while (curr_size < desired_input_length) {
-      memcpy(raw_input_data + curr_cp_idx, line.data(), cp_unit_size);
-      curr_size += cp_unit_size;
+      size_t curr_unit_size = std::min(cp_unit_size, desired_input_length - curr_size);
+      memcpy(raw_input_data + curr_cp_idx, line.data(), curr_unit_size);
+      curr_size += curr_unit_size;
     }
     ClientFeatureVector input(input_data, desired_input_length, desired_input_length_bytes,
-                              DataType::Strings);
+                              DataType::Bytes);
     all_inputs.push_back(std::move(input));
   }
 

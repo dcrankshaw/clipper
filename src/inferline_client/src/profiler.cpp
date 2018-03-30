@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
   clock::ClipperClock::get_clock().get_uptime();
 
   std::string model_name = options["name"].as<std::string>();
-  size_t input_size = options["input_size"].as<size_t>();
+  size_t input_size = static_cast<size_t>(options["input_size"].as<int>());
   std::vector<ClientFeatureVector> inputs = generate_inputs(model_name, input_size);
   ProfilerMetrics metrics{model_name};
 

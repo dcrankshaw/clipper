@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <chrono>
 
 // #include "httplib.h"
 // #define HTTP_IMPLEMENTATION
@@ -86,8 +87,9 @@ void Driver::start() {
   } else {
     while (!done_) {
       int delay_idx = 0;
-      std::random_device rd;
-      std::mt19937 gen(rd());
+      long seed = 1000;
+      // long seed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+      std::mt19937 gen(seed);
       std::exponential_distribution<> exp_dist(target_throughput_);
       long constant_request_delay_micros =
           std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);

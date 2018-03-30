@@ -168,7 +168,7 @@ def get_heavy_node_config(model_name,
     elif model_name == TF_LANG_DETECT:
         image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
         return driver_utils.HeavyNodeConfig(name=TF_LANG_DETECT,
-                                            input_type="floats",
+                                            input_type="bytes",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -181,7 +181,7 @@ def get_heavy_node_config(model_name,
     elif model_name == TF_LSTM:
         image = "gcr.io/clipper-model-comp/tf-lstm:bench"
         return driver_utils.HeavyNodeConfig(name=TF_LSTM,
-                                            input_type="floats",
+                                            input_type="bytes",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -195,7 +195,7 @@ def get_heavy_node_config(model_name,
     elif model_name == TF_NMT:
         image = "gcr.io/clipper-model-comp/tf-nmt:bench"
         return driver_utils.HeavyNodeConfig(name=TF_NMT,
-                                            input_type="floats",
+                                            input_type="bytes",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -215,6 +215,8 @@ def get_input_size(config):
         return 224*224*3
     elif config.name in [TF_RESNET_VAR, TF_RESNET_SLEEP]:
         return config.input_size
+    elif config.name in [TF_NMT, TF_LSTM, TF_LANG_DETECT]:
+        return 20
 
 
 def setup_clipper(configs):
