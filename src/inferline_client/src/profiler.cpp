@@ -12,10 +12,13 @@
 #include <clipper/metrics.hpp>
 
 #include "driver.hpp"
+#include "inputs.hpp"
 #include "zmq_client.hpp"
 
 using namespace clipper;
 using namespace zmq_client;
+
+const std::string DEFAULT_WORKLOAD_PATH = "default_path";
 
 class ProfilerMetrics {
  public:
@@ -68,10 +71,9 @@ void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector in
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
-    lineage->add_timestamp(
-        "driver::send",
-        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
-            .count());
+    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
+                                               start_time.time_since_epoch())
+                                               .count());
 
     lineage->add_timestamp(
         "driver::recv",
@@ -90,23 +92,6 @@ void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector in
     }
     query_lineage_file << "}" << std::endl;
   });
-}
-
-std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
-  int num_points = 1000;
-  std::random_device rd;         // Will be used to obtain a seed for the random number engine
-  std::mt19937 generator(rd());  // Standard mersenne_twister_engine seeded with rd()
-  std::uniform_real_distribution<> distribution(0.0, 1.0);
-  std::vector<ClientFeatureVector> inputs;
-  for (int i = 0; i < num_points; ++i) {
-    float* input_buffer = reinterpret_cast<float*>(malloc(input_length * sizeof(float)));
-    for (int j = 0; j < input_length; ++j) {
-      input_buffer[j] = distribution(generator);
-    }
-    std::shared_ptr<void> input_ptr(reinterpret_cast<void*>(input_buffer), free);
-    inputs.emplace_back(input_ptr, input_length, input_length * sizeof(float), DataType::Floats);
-  }
-  return inputs;
 }
 
 // void spin_sleep(int duration_micros) {
@@ -190,6 +175,8 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address", "IP address or hostname of ZMQ frontend",
        cxxopts::value<std::string>())
+      ("workload_path", "(Optional) path to the input workload",
+       cxxopts::value<std::string>()->default_value(DEFAULT_WORKLOAD_PATH))
        ;
   // clang-format on
   options.parse(argc, argv);
@@ -202,32 +189,34 @@ int main(int argc, char* argv[]) {
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
-  if (options["input_type"].as<std::string>() == "floats") {
-    std::vector<ClientFeatureVector> inputs =
-        generate_float_inputs(options["input_size"].as<int>());
-    std::string name = options["name"].as<std::string>();
-    ProfilerMetrics metrics{name};
 
-    std::ofstream query_lineage_file;
-    std::mutex query_file_mutex;
-    query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
-    auto predict_func = [metrics, name, &query_lineage_file, &query_file_mutex](
-        FrontendRPCClient& client, ClientFeatureVector input,
-        std::atomic<int>& prediction_counter) {
-      predict(client, name, input, metrics, prediction_counter, query_lineage_file,
-              query_file_mutex);
-    };
-    Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
-                  distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
-                  options["log_file"].as<std::string>(),
-                  options["clipper_address"].as<std::string>(), options["batch_size"].as<int>(), {});
-    std::cout << "Starting driver" << std::endl;
-    driver.start();
-    std::cout << "Driver completed" << std::endl;
-    query_lineage_file.close();
-    return 0;
-  } else {
-    std::cerr << "Invalid input type " << options["input_type"].as<std::string>() << std::endl;
-    return 1;
+  std::string model_name = options["name"].as<std::string>();
+  size_t input_size = static_cast<size_t>(options["input_size"].as<int>());
+
+  std::string opts_workload_path = options["workload_path"].as<std::string>();
+  boost::optional<std::string> workload_path;
+  if (opts_workload_path != DEFAULT_WORKLOAD_PATH) {
+    workload_path = boost::optional<std::string>(opts_workload_path);
   }
+
+  std::vector<ClientFeatureVector> inputs = generate_inputs(model_name, input_size, workload_path);
+  ProfilerMetrics metrics{model_name};
+
+  std::ofstream query_lineage_file;
+  std::mutex query_file_mutex;
+  query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
+  auto predict_func = [metrics, model_name, &query_lineage_file, &query_file_mutex](
+      FrontendRPCClient& client, ClientFeatureVector input, std::atomic<int>& prediction_counter) {
+    predict(client, model_name, input, metrics, prediction_counter, query_lineage_file,
+            query_file_mutex);
+  };
+  Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
+                distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
+                options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
+                options["batch_size"].as<int>(), {});
+  std::cout << "Starting driver" << std::endl;
+  driver.start();
+  std::cout << "Driver completed" << std::endl;
+  query_lineage_file.close();
+  return 0;
 }

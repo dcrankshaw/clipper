@@ -1,3 +1,4 @@
+import argparse
 import subprocess32 as subprocess
 import os
 import sys
@@ -16,30 +17,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
 CURR_DIR = os.path.dirname(os.path.realpath(__file__)) 
 
-=======
->>>>>>> crankshaw/high-perf-clipper
 DEFAULT_OUTPUT = "TIMEOUT"
 CLIPPER_ADDRESS = "localhost"
 
-RES50 = "res50"
-RES152 = "res152"
-ALEXNET = "alexnet"
-INCEPTION_FEATS = "inception"
-TF_KERNEL_SVM = "tf-kernel-svm"
-TF_LOG_REG = "tf-log-reg"
-TF_RESNET = "tf-resnet-feats"
-TF_RESNET_VAR = "tf-resnet-feats-var"
-TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
-
-<<<<<<< HEAD
-TF_LANG_DETECT = "tf-lang-detect"
-TF_NMT = "tf-nmt"
-TF_LSTM  = "tf-lstm"
-=======
->>>>>>> crankshaw/high-perf-clipper
+LANG_DETECT_MODEL_APP_NAME = "tf-lang-detect"
+NMT_MODEL_APP_NAME = "tf-nmt"
+LSTM_MODEL_APP_NAME = "tf-lstm"
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -49,148 +34,10 @@ def get_heavy_node_config(model_name,
                           allocated_gpus,
                           input_size=None):
 
-    if model_name == ALEXNET:
-        image = "gcr.io/clipper-model-comp/pytorch-alexnet:bench"
-        return driver_utils.HeavyNodeConfig(name="alexnet",
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True,
-                                            )
-
-    elif model_name == RES50:
-        image = "gcr.io/clipper-model-comp/pytorch-res50:bench"
-        return driver_utils.HeavyNodeConfig(name="res50",
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True,
-                                            )
-
-    elif model_name == RES152:
-        image = "gcr.io/clipper-model-comp/pytorch-res152:bench"
-        return driver_utils.HeavyNodeConfig(name="res152",
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True,
-                                            )
-
-    elif model_name == INCEPTION_FEATS:
-        image = "gcr.io/clipper-model-comp/inception-feats:bench"
-        return driver_utils.HeavyNodeConfig(name=INCEPTION_FEATS,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True)
-
-    elif model_name == TF_RESNET:
-        image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_RESNET,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True)
-
-    elif model_name == TF_RESNET_VAR:
-        image = "gcr.io/clipper-model-comp/tf-resnet-feats-variable-input:bench"
-        assert input_size is not None
-        return driver_utils.HeavyNodeConfig(name=TF_RESNET_VAR,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True,
-                                            input_size=input_size)
-
-    elif model_name == TF_RESNET_SLEEP:
-        image = "gcr.io/clipper-model-comp/tf-resnet-feats-sleep:bench"
-        assert input_size is not None
-        return driver_utils.HeavyNodeConfig(name=TF_RESNET_SLEEP,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=allocated_gpus,
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True,
-                                            input_size=input_size)
-
-    elif model_name == TF_LOG_REG:
-        image = "gcr.io/clipper-model-comp/tf-log-reg:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_LOG_REG,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=[],
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True)
-
-    elif model_name == TF_KERNEL_SVM:
-        image = "gcr.io/clipper-model-comp/tf-kernel-svm:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_KERNEL_SVM,
-                                            input_type="floats",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=[],
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True)
-
-<<<<<<< HEAD
-    elif model_name == TF_LANG_DETECT:
-        image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_LANG_DETECT,
-                                            input_type="bytes",
-                                            model_image=image,
-                                            allocated_cpus=allocated_cpus,
-                                            cpus_per_replica=cpus_per_replica,
-                                            gpus=[],
-                                            batch_size=batch_size,
-                                            num_replicas=num_replicas,
-                                            use_nvidia_docker=True,
-                                            no_diverge=True)
-
-    elif model_name == TF_LSTM:
+    if model_name == LSTM_MODEL_APP_NAME:
         image = "gcr.io/clipper-model-comp/tf-lstm:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_LSTM,
-                                            input_type="bytes",
+        return driver_utils.HeavyNodeConfig(name=LSTM_MODEL_APP_NAME,
+                                            input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -200,11 +47,10 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
 
-
-    elif model_name == TF_NMT:
+    elif model_name == NMT_MODEL_APP_NAME:
         image = "gcr.io/clipper-model-comp/tf-nmt:bench"
-        return driver_utils.HeavyNodeConfig(name=TF_NMT,
-                                            input_type="bytes",
+        return driver_utils.HeavyNodeConfig(name=NMT_MODEL_APP_NAME,
+                                            input_type="floats",
                                             model_image=image,
                                             allocated_cpus=allocated_cpus,
                                             cpus_per_replica=cpus_per_replica,
@@ -213,25 +59,19 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
-        
-=======
->>>>>>> crankshaw/high-perf-clipper
 
-def get_input_size(config):
-    if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:
-        return 2048
-    elif config.name in [ALEXNET, RES50, RES152, INCEPTION_FEATS]:
-        return 299*299*3
-    elif config.name in [TF_RESNET, ]:
-        return 224*224*3
-    elif config.name in [TF_RESNET_VAR, TF_RESNET_SLEEP]:
-        return config.input_size
-<<<<<<< HEAD
-    elif config.name in [TF_NMT, TF_LSTM, TF_LANG_DETECT]:
-        return 20
-=======
->>>>>>> crankshaw/high-perf-clipper
-
+    elif model_name == LANG_DETECT_MODEL_APP_NAME:
+        image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
+        return driver_utils.HeavyNodeConfig(name=LANG_DETECT_MODEL_APP_NAME,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=[],
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True)
 
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -343,9 +183,9 @@ def print_stats(client_metrics, clipper_metrics):
     #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
     #              "\nqueue sizes: {queue_sizes}, "
     #              "batch sizes: {batch_sizes}\n").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-                 "mean lat: {client_mean_lats} "
-                 "\nbatches: {batch_sizes}, queues: {queue_sizes}\n").format(**results_dict))
+    logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
+                 "\nMean lat: {client_mean_lats} "
+                 "\nBatches: {batch_sizes}\nQueues: {queue_sizes}\n").format(**results_dict))
     return results_dict
 
 
@@ -379,52 +219,40 @@ def load_lineage(lineage_path):
     return parsed
 
 
-<<<<<<< HEAD
-def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str, workload_path=None):
-=======
-def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
->>>>>>> crankshaw/high-perf-clipper
-    clipper_address = setup_clipper([config, ])
+def run_profiler(configs, trial_length, driver_path, profiler_cores_str, target_throughput):
+    clipper_address = setup_clipper(configs)
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
     time.sleep(30)
-    log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
-                                                                    ts=datetime.now())
+    log_dir = "/tmp/text_driver_one_profiler_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process, batch_size=None):
+    def run(target_throughput, num_trials, name, arrival_process):
         cl.drain_queues()
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
+        arrival_delay_file = os.path.abspath("arrival_deltas_ms.timestamp")
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
+        workload_path = os.path.join(CURR_DIR, "lang_detect_workload", "workload.txt");
         cmd = ["numactl", "-C", profiler_cores_str,
                os.path.abspath(driver_path),
-               "--name={}".format(config.name),
-               "--input_type={}".format(config.input_type),
-               "--input_size={}".format(input_size),
                "--target_throughput={}".format(target_throughput),
                "--request_distribution={}".format(arrival_process),
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address={}".format(clipper_address)]
-        if batch_size is not None:
-            cmd.append("--batch_size={}".format(batch_size))
-<<<<<<< HEAD
-        if workload_path is not None:
-            cmd.append("--workload_path={}".format(workload_path))
-=======
->>>>>>> crankshaw/high-perf-clipper
+               "--clipper_address={}".format(clipper_address),
+               "--request_delay_file={}".format(arrival_delay_file),
+               "--workload_path={}".format(workload_path)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
         clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
-        lineage_path = "{p}-query_lineage.txt".format(p=log_path)
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
             summary_results = []
@@ -467,57 +295,87 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.info("stderr: {}".format(prof_stderr))
             try:
                 loaded_metrics = load_metrics(client_path, clipper_path)
-                lineage = load_lineage(lineage_path)
+                # lineage = load_lineage(lineage_path)
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
                     return driver_utils.Results(client_metrics,
                                                 clipper_metrics,
                                                 summary_results,
-                                                lineage)
+                                                None)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 2000 
-    run(init_throughput, 3, "warmup", "constant")
-    throughput_results = run(init_throughput, 8, "throughput", "constant")
-    cl.drain_queues()
-    cl.set_full_batches()
-    time.sleep(1)
-    latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
+    run(target_throughput, 5, "warmup", "constant")
+    throughput_results = run(target_throughput, 20, "throughput", "poisson")
     cl.stop_all()
-    return throughput_results, latency_results
+    return throughput_results
 
 
 if __name__ == "__main__":
-    workload_path = os.path.join(CURR_DIR, "nmt_workload", "workload.txt");
+    parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper text driver 1')
+    parser.add_argument('-g', '--num_gpus', type=int, default=4, help="The number of GPUs available for use")
 
-    for gpu in range(0,1):
-        model = TF_NMT 
-        batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
-        for batch_size in batch_sizes:
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
+    args = parser.parse_args()
+
+    lstm_batch_size = 16
+    nmt_batch_size = 2
+    lang_detect_batch_size = 16
+
+    model_cpus = range(4, 11)
+    model_gpus = range(args.num_gpus)
+
+    def get_cpus(num):
+        return [model_cpus.pop() for _ in range(num)]
+    def get_gpus(num):
+        return [model_gpus.pop() for _ in range(num)]
+
+    lstm_replicas = 1
+    nmt_replicas = 1
+    lang_detect_replicas = 1
+
+    configs = [
+        get_heavy_node_config(
+                model_name=LSTM_MODEL_APP_NAME,
+                batch_size=lstm_batch_size,
+                num_replicas=lstm_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=[8],
-                allocated_gpus=[gpu],
+                allocated_cpus=get_cpus(lstm_replicas),
+                allocated_gpus=get_gpus(lstm_replicas),
+            ),
+        get_heavy_node_config(
+                model_name=NMT_MODEL_APP_NAME,
+                batch_size=nmt_batch_size,
+                num_replicas=nmt_replicas,
+                cpus_per_replica=1,
+                allocated_cpus=get_cpus(nmt_replicas),
+                allocated_gpus=get_gpus(nmt_replicas),
+            ),
+        get_heavy_node_config(
+                model_name=LANG_DETECT_MODEL_APP_NAME,
+                batch_size=lang_detect_batch_size,
+                num_replicas=lang_detect_replicas,
+                cpus_per_replica=1,
+                allocated_cpus=get_cpus(lang_detect_replicas),
+                allocated_gpus=None,
             )
+    ]
 
-            input_size = get_input_size(config)
-            throughput_results, latency_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26,11,27,12,28", workload_path=workload_path)
-            fname = "k80-{model}-batch-{batch}-gpu-{gpu}".format(
-                model=model, batch=batch_size, gpu=gpu)
-            results_dir = "{model}-SMP-gpu-{gpu}".format(model=model, gpu=gpu)
-            driver_utils.save_results_cpp_client(
-                [config, ],
-                throughput_results,
-                latency_results,
-                results_dir,
-                prefix=fname)
+    target_throughput = 1000
+
+    throughput_results = run_profiler(
+        configs, 2000, "../../release/src/inferline_client/text_driver_one", "11,27,12,28", target_throughput)
+    fname = "cpp-aws-p2-{ls}-lstm-{nm}-nmt-{ld}-lang_detect".format(
+        ls=lstm_replicas,
+        nmt=nmt_replicas,
+        lang_detect=lang_detect_replicas)
+    results_dir = "text_driver_one_e2e"
+    driver_utils.save_results_cpp_client(
+        configs,
+        throughput_results,
+        None,
+        results_dir,
+        prefix=fname)
     sys.exit(0)
