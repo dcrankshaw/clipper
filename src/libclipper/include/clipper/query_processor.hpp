@@ -47,8 +47,7 @@ class QueryProcessor {
   // an instance of that policy. All SelectionPolicy implementations (derived
   // classes) should be stateless so there should be no issues with re-using the
   // same instance for different applications or users.
-  std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>>
-      selection_policies_;
+  std::unordered_map<std::string, std::shared_ptr<SelectionPolicy>> selection_policies_;
   std::shared_ptr<metrics::Meter> request_rate_;
 };
 

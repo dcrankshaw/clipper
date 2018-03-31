@@ -19,19 +19,19 @@ class ClipperClock {
    * this clock was created
    */
   long long get_uptime() {
-    return std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now() - start_time_).count();
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() -
+                                                                 start_time_)
+        .count();
   }
 
  private:
-  ClipperClock()
-      : start_time_(std::chrono::system_clock::now()) {}
+  ClipperClock() : start_time_(std::chrono::system_clock::now()) {}
 
   std::chrono::time_point<std::chrono::system_clock> start_time_;
 };
 
-} // namespace clock
+}  // namespace clock
 
-} // namespace clipper
+}  // namespace clipper
 
-#endif //CLIPPER_CLOCK_HPP
+#endif  // CLIPPER_CLOCK_HPP

@@ -32,12 +32,9 @@ TEST(TaskExecutorTests, TestDeadlineComparisonsWorkCorrectly) {
   Deadline later = current_time + std::chrono::hours(1);
 
   PredictTask task = create_predict_task(1, 10000);
-  std::pair<Deadline, PredictTask> deadline_task_pair_current =
-      std::make_pair(current_time, task);
-  std::pair<Deadline, PredictTask> deadline_task_pair_earlier =
-      std::make_pair(earlier, task);
-  std::pair<Deadline, PredictTask> deadline_task_pair_later =
-      std::make_pair(later, task);
+  std::pair<Deadline, PredictTask> deadline_task_pair_current = std::make_pair(current_time, task);
+  std::pair<Deadline, PredictTask> deadline_task_pair_earlier = std::make_pair(earlier, task);
+  std::pair<Deadline, PredictTask> deadline_task_pair_later = std::make_pair(later, task);
 
   DeadlineCompare deadline_compare;
   bool current_greater_than_earlier =
@@ -73,8 +70,7 @@ TEST(ModelQueueTests, TestGetBatchQueueNotEmpty) {
   model_queue.add_task(task_b);
   model_queue.add_task(task_c);
 
-  std::vector<PredictTask> tasks =
-      model_queue.get_batch([](Deadline) { return 3; });
+  std::vector<PredictTask> tasks = model_queue.get_batch([](Deadline) { return 3; });
 
   // Because we added tasks a through c in alphabetical
   // order with the same latency slos, we expect the model
@@ -95,8 +91,7 @@ TEST(ModelQueueTests, TestGetBatchOrdersByEarliestDeadline) {
   model_queue.add_task(task_b);
   model_queue.add_task(task_c);
 
-  std::vector<PredictTask> tasks =
-      model_queue.get_batch([](Deadline) { return 3; });
+  std::vector<PredictTask> tasks = model_queue.get_batch([](Deadline) { return 3; });
 
   // Because we added tasks a through c in alphabetical
   // order with the same latency slos, we expect the model
@@ -117,15 +112,13 @@ TEST(ModelQueueTests, TestGetBatchRemovesTasksWithElapsedDeadline) {
   model_queue.add_task(task_b);
   model_queue.add_task(task_c);
 
-  std::vector<PredictTask> tasks =
-      model_queue.get_batch([](Deadline) { return 3; });
+  std::vector<PredictTask> tasks = model_queue.get_batch([](Deadline) { return 3; });
 
   ASSERT_EQ(tasks.size(), (size_t)1);
   ASSERT_EQ(tasks[0].query_id_, task_c.query_id_);
 }
 
-TEST(PredictionCacheTests,
-     TestOutputDataSizeDoesNotIncreaseBeyondMaximumCacheSize) {
+TEST(PredictionCacheTests, TestOutputDataSizeDoesNotIncreaseBeyondMaximumCacheSize) {
   std::vector<std::shared_ptr<Input>> inputs;
   std::vector<Output> outputs;
   size_t cache_size = 0;
@@ -144,8 +137,7 @@ TEST(PredictionCacheTests,
     ASSERT_TRUE(output_future.isReady());
     ASSERT_EQ(output_future.get().y_hat_, outputs[i].y_hat_);
   }
-  std::shared_ptr<Input> last_input =
-      std::make_shared<IntVector>(std::vector<int>{5});
+  std::shared_ptr<Input> last_input = std::make_shared<IntVector>(std::vector<int>{5});
   cache.put(model_id, last_input, outputs[0]);
   auto last_output_future = cache.fetch(model_id, last_input);
   ASSERT_TRUE(last_output_future.isReady());
@@ -176,8 +168,7 @@ TEST(PredictionCacheTests,
   std::vector<Output> small_outputs;
   std::vector<std::shared_ptr<Input>> small_inputs;
   for (int i = 0; i < 5; ++i) {
-    std::shared_ptr<Input> input =
-        std::make_shared<IntVector>(std::vector<int>{i});
+    std::shared_ptr<Input> input = std::make_shared<IntVector>(std::vector<int>{i});
     Output output(small_output_text, std::vector<VersionedModelId>{});
     small_inputs.push_back(input);
     small_outputs.push_back(output);
@@ -186,15 +177,13 @@ TEST(PredictionCacheTests,
   std::vector<Output> large_outputs;
   std::vector<std::shared_ptr<Input>> large_inputs;
   for (int i = 0; i < 2; ++i) {
-    std::shared_ptr<Input> input =
-        std::make_shared<IntVector>(std::vector<int>{i, i});
+    std::shared_ptr<Input> input = std::make_shared<IntVector>(std::vector<int>{i, i});
     Output output(large_output_text, std::vector<VersionedModelId>{});
     large_inputs.push_back(input);
     large_outputs.push_back(output);
   }
 
-  PredictionCache cache((3 * small_output_text.size()) +
-                        (2 * large_output_text.size()));
+  PredictionCache cache((3 * small_output_text.size()) + (2 * large_output_text.size()));
   VersionedModelId model_id("TEST", "1");
   cache.put(model_id, large_inputs[0], large_outputs[0]);
   cache.put(model_id, large_inputs[1], large_outputs[1]);
@@ -247,8 +236,7 @@ TEST(PredictionCacheTests,
   // large_outputs[1] at page buffer index 2. The cache should now contain
   // entries corresponding to small outputs at vector indices 0-4, as well as
   // an additional entry corresponding to small_outputs[0] that we just inserted
-  std::shared_ptr<Input> last_small_input =
-      std::make_shared<IntVector>(std::vector<int>{6});
+  std::shared_ptr<Input> last_small_input = std::make_shared<IntVector>(std::vector<int>{6});
   cache.put(model_id, last_small_input, small_outputs[0]);
   ASSERT_FALSE(cache.fetch(model_id, large_inputs[1]).isReady());
   for (int i = 0; i < 5; ++i) {
@@ -266,8 +254,7 @@ TEST(PredictionCacheTests,
   // an additional entries corresponding to: large_outputs[0] that (just
   // inserted)
   // and small_outputs[0] (inserted in the previous step)
-  std::shared_ptr<Input> last_large_input =
-      std::make_shared<IntVector>(std::vector<int>{3, 3});
+  std::shared_ptr<Input> last_large_input = std::make_shared<IntVector>(std::vector<int>{3, 3});
   cache.put(model_id, last_large_input, large_outputs[0]);
   ASSERT_FALSE(cache.fetch(model_id, large_inputs[0]).isReady());
   for (int i = 1; i < 5; ++i) {
@@ -281,8 +268,7 @@ TEST(PredictionCacheTests,
 }
 
 TEST(PredictionCacheTests, TestIncompleteFuturesAreCompletedOnPut) {
-  std::shared_ptr<Input> input =
-      std::make_shared<IntVector>(std::vector<int>{10});
+  std::shared_ptr<Input> input = std::make_shared<IntVector>(std::vector<int>{10});
   std::string output_text("1234");
   Output output(output_text, std::vector<VersionedModelId>{});
 
@@ -321,8 +307,7 @@ TEST(PredictionCacheTests, TestIncompleteFuturesAreCompletedOnPut) {
   output_future = cache3.fetch(model_id, input);
   ASSERT_FALSE(output_future.isReady());
   for (int i = 0; i < 5; ++i) {
-    std::shared_ptr<Input> new_input =
-        std::make_shared<IntVector>(std::vector<int>{i});
+    std::shared_ptr<Input> new_input = std::make_shared<IntVector>(std::vector<int>{i});
     Output new_output("12", std::vector<VersionedModelId>{});
     cache3.put(model_id, new_input, new_output);
   }
@@ -338,8 +323,7 @@ TEST(PredictionCacheTests, TestIncompleteFuturesAreCompletedOnPut) {
 TEST(PredictionCacheTests, TestEntryLargerThanCacheSizeIsEvicted) {
   VersionedModelId model_id("TEST", "1");
   PredictionCache cache(0);
-  std::shared_ptr<Input> input =
-      std::make_shared<IntVector>(std::vector<int>{0});
+  std::shared_ptr<Input> input = std::make_shared<IntVector>(std::vector<int>{0});
   Output output("text", std::vector<VersionedModelId>{});
   cache.put(model_id, input, output);
   ASSERT_FALSE(cache.fetch(model_id, input).isReady());

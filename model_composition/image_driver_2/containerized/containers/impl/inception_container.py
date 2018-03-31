@@ -16,19 +16,23 @@ from datasets import imagenet
 image_size = inception_v3.inception_v3.default_image_size
 slim = tf.contrib.slim
 
-class InceptionClassificationContainer(rpc.ModelContainerBase):
 
+class InceptionClassificationContainer(rpc.ModelContainerBase):
     def __init__(self, checkpoint_path):
-        self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+        self.sess = tf.Session(
+            config=tf.ConfigProto(allow_soft_placement=True))
 
         with tf.device("/gpu:0"):
-            self.inputs = tf.placeholder(tf.float32, (None, image_size, image_size, 3))
+            self.inputs = tf.placeholder(tf.float32,
+                                         (None, image_size, image_size, 3))
             preprocessed_images = tf.map_fn(lambda input_img : inception_preprocessing.preprocess_image(input_img, image_size, image_size, is_training=False), self.inputs)
 
             with slim.arg_scope(inception_v3.inception_v3_arg_scope()):
-                logits, _ = inception_v3.inception_v3(preprocessed_images, num_classes=1001, is_training=False)
+                logits, _ = inception_v3.inception_v3(
+                    preprocessed_images, num_classes=1001, is_training=False)
                 self.all_probabilities = tf.nn.softmax(logits)
-                init_fn = slim.assign_from_checkpoint_fn(checkpoint_path, slim.get_model_variables("InceptionV3"))
+                init_fn = slim.assign_from_checkpoint_fn(
+                    checkpoint_path, slim.get_model_variables("InceptionV3"))
 
                 init_fn(self.sess)
 
@@ -40,16 +44,24 @@ class InceptionClassificationContainer(rpc.ModelContainerBase):
             An image, represented as a flattened 299 x 299 x 3 
             numpy array of floats
         """
-        reshaped_inputs = [input_item.reshape((299, 299, 3)) for input_item in inputs]
-        all_probabilities = self.sess.run([self.all_probabilities], feed_dict={self.inputs: reshaped_inputs})
+        reshaped_inputs = [
+            input_item.reshape((299, 299, 3)) for input_item in inputs
+        ]
+        all_probabilities = self.sess.run(
+            [self.all_probabilities], feed_dict={
+                self.inputs: reshaped_inputs
+            })
 
         outputs = []
         for input_probabilities in all_probabilities[0]:
-            sorted_inds = [i[0] for i in sorted(
-                enumerate(-input_probabilities), key=lambda x:x[1])]
+            sorted_inds = [
+                i[0] for i in sorted(
+                    enumerate(-input_probabilities), key=lambda x: x[1])
+            ]
             outputs.append(str(sorted_inds[0]))
 
         return outputs
+
 
 if __name__ == "__main__":
     print("Starting Inception Classification Container")

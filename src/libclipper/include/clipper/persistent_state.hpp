@@ -34,8 +34,7 @@ class StateKeyHash {
 class StateKeyEqual {
  public:
   bool operator()(StateKey const& t1, StateKey const& t2) const {
-    return (std::get<0>(t1) == std::get<0>(t2)) &&
-           (std::get<1>(t1) == std::get<1>(t2)) &&
+    return (std::get<0>(t1) == std::get<0>(t2)) && (std::get<1>(t1) == std::get<1>(t2)) &&
            (std::get<2>(t1) == std::get<2>(t2));
   }
 };

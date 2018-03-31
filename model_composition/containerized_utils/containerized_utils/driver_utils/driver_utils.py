@@ -18,7 +18,8 @@ UNKNOWN = "unknown"
 
 
 class Results(object):
-    def __init__(self, client_metrics, clipper_metrics, summary_metrics, lineage):
+    def __init__(self, client_metrics, clipper_metrics, summary_metrics,
+                 lineage):
         self.client_metrics = client_metrics
         self.clipper_metrics = clipper_metrics
         self.summary_metrics = summary_metrics
@@ -67,23 +68,26 @@ class HeavyNodeConfig(object):
 
 
 def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
-    clipper_conn.register_application(name=config.name,
-                                      default_output=default_output,
-                                      slo_micros=config.slo,
-                                      input_type=config.input_type)
+    clipper_conn.register_application(
+        name=config.name,
+        default_output=default_output,
+        slo_micros=config.slo,
+        input_type=config.input_type)
 
-    clipper_conn.deploy_model(name=config.name,
-                              version=1,
-                              image=config.model_image,
-                              input_type=config.input_type,
-                              num_replicas=config.num_replicas,
-                              batch_size=config.batch_size,
-                              gpus=config.gpus,
-                              allocated_cpus=config.allocated_cpus,
-                              cpus_per_replica=config.cpus_per_replica,
-                              use_nvidia_docker=config.use_nvidia_docker)
+    clipper_conn.deploy_model(
+        name=config.name,
+        version=1,
+        image=config.model_image,
+        input_type=config.input_type,
+        num_replicas=config.num_replicas,
+        batch_size=config.batch_size,
+        gpus=config.gpus,
+        allocated_cpus=config.allocated_cpus,
+        cpus_per_replica=config.cpus_per_replica,
+        use_nvidia_docker=config.use_nvidia_docker)
 
-    clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
+    clipper_conn.link_model_to_app(
+        app_name=config.name, model_name=config.name)
 
 
 class HeavyNodeConfigGCP(object):
@@ -116,24 +120,30 @@ class HeavyNodeConfigGCP(object):
 
 
 def setup_heavy_node_gcp(clipper_conn, config, default_output="TIMEOUT"):
-    clipper_conn.register_application(name=config.name,
-                                      default_output=default_output,
-                                      slo_micros=config.slo,
-                                      input_type=config.input_type)
+    clipper_conn.register_application(
+        name=config.name,
+        default_output=default_output,
+        slo_micros=config.slo,
+        input_type=config.input_type)
 
-    clipper_conn.deploy_model(name=config.name,
-                              version=1,
-                              image=config.model_image,
-                              input_type=config.input_type,
-                              num_replicas=config.num_replicas,
-                              batch_size=config.batch_size,
-                              gpu_type=config.gpu_type,
-                              num_cpus=config.cpus_per_replica)
+    clipper_conn.deploy_model(
+        name=config.name,
+        version=1,
+        image=config.model_image,
+        input_type=config.input_type,
+        num_replicas=config.num_replicas,
+        batch_size=config.batch_size,
+        gpu_type=config.gpu_type,
+        num_cpus=config.cpus_per_replica)
 
-    clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
+    clipper_conn.link_model_to_app(
+        app_name=config.name, model_name=config.name)
 
 
-def save_results(configs, client_metrics, init_metrics, results_dir,
+def save_results(configs,
+                 client_metrics,
+                 init_metrics,
+                 results_dir,
                  prefix="results",
                  container_metrics=None):
     """
@@ -151,9 +161,10 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
         logger.info("Created experiments directory: %s" % results_dir)
 
     if "all_lats" not in client_metrics[0]:
-        raise Exception("No latencies list found under key \"all_lats\"."
-                        " Please update your driver to include all latencies so we can"
-                        " plot the latency CDF")
+        raise Exception(
+            "No latencies list found under key \"all_lats\"."
+            " Please update your driver to include all latencies so we can"
+            " plot the latency CDF")
     else:
         for c in client_metrics:
             all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
@@ -166,8 +177,9 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
     }
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
-    results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
-        prefix=prefix, ts=datetime.datetime.now()))
+    results_file = os.path.join(results_dir,
+                                "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
+                                    prefix=prefix, ts=datetime.datetime.now()))
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))
@@ -202,9 +214,7 @@ def save_results_cpp_client(configs,
     #         all_lats_strs = [json.dumps(list(l)) for l in c["all_lats"]]
     #         c["all_lats"] = all_lats_strs
 
-    results_obj = {
-        "node_configs": [c.__dict__ for c in configs]
-    }
+    results_obj = {"node_configs": [c.__dict__ for c in configs]}
     if throughput_results is not None:
         results_obj["throughput_results"] = throughput_results.get_dict()
     if latency_results is not None:
@@ -212,8 +222,9 @@ def save_results_cpp_client(configs,
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
 
-    results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
-        prefix=prefix, ts=datetime.datetime.now()))
+    results_file = os.path.join(results_dir,
+                                "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
+                                    prefix=prefix, ts=datetime.datetime.now()))
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))
@@ -235,8 +246,8 @@ def check_convergence_via_queue(stats, configs):
 
     window_size = min(15, len(stats["mean_queue_sizes"]) - 4)
     # Raw is a list of dicts
-    queue_sizes_raw = stats["mean_queue_sizes"][-1*window_size:]
-    batch_sizes_raw = stats["mean_batch_sizes"][-1*window_size:]
+    queue_sizes_raw = stats["mean_queue_sizes"][-1 * window_size:]
+    batch_sizes_raw = stats["mean_batch_sizes"][-1 * window_size:]
     queue_sizes = {}
     batch_sizes = {}
     # Reshape to a dict of lists
@@ -262,12 +273,13 @@ def check_convergence_via_queue(stats, configs):
     found_full_batches = False
     for model_name in desired_batch_sizes.keys():
         mean_of_means_batch_size = np.mean(batch_sizes[model_name])
-        if mean_of_means_batch_size > desired_batch_sizes[model_name]*0.85:
-            logger.info(("{name} is using full-size batches. Desired {desired}, "
-                         "actual: {actual}").format(
-                             name=model_name,
-                             actual=mean_of_means_batch_size,
-                             desired=float(desired_batch_sizes[model_name])))
+        if mean_of_means_batch_size > desired_batch_sizes[model_name] * 0.85:
+            logger.info(
+                ("{name} is using full-size batches. Desired {desired}, "
+                 "actual: {actual}").format(
+                     name=model_name,
+                     actual=mean_of_means_batch_size,
+                     desired=float(desired_batch_sizes[model_name])))
             found_full_batches = True
 
     if not found_full_batches:
@@ -279,12 +291,13 @@ def check_convergence_via_queue(stats, configs):
         mean_queue_size = np.mean(qs)
         std_queue_size = np.std(qs)
         # Check if queue behavior has stabilized
-        if (mean_queue_size < 3.0*desired_batch_sizes[model_name] and
-                std_queue_size < 1.5*desired_batch_sizes[model_name]):
+        if (mean_queue_size < 3.0 * desired_batch_sizes[model_name]
+                and std_queue_size < 1.5 * desired_batch_sizes[model_name]):
             continue
         else:
             lr = linregress(x=range(len(qs)), y=qs)
-            logger.info("{mname} regression results:\n{lr}".format(mname=model_name, lr=lr))
+            logger.info("{mname} regression results:\n{lr}".format(
+                mname=model_name, lr=lr))
             # If pvalue less than 0.001, the line definitely has a slope
             if lr.pvalue < 0.01:
                 if lr.slope > 0:
@@ -314,12 +327,12 @@ def check_convergence(stats, configs, latency_upper_bound=None):
 
     """
     window_size = min(15, len(stats["p99_lats"]) - 4)
-    p99_lats = stats["p99_lats"][-1*window_size:]
+    p99_lats = stats["p99_lats"][-1 * window_size:]
 
     mean_batch_sizes = {}
     for c in configs:
         mean_batch_sizes[c.name] = np.mean(
-            [b[c.name] for b in stats["mean_batch_sizes"][-1*window_size:]])
+            [b[c.name] for b in stats["mean_batch_sizes"][-1 * window_size:]])
     lr = linregress(x=range(len(p99_lats)), y=p99_lats)
     logger.info(lr)
     # pvalue checks against the null hypothesis that the
@@ -342,8 +355,8 @@ def check_convergence(stats, configs, latency_upper_bound=None):
             mean_p99_lats = np.mean(p99_lats)
             if mean_p99_lats > latency_upper_bound:
                 logger.info(("Slope is 0 but p99 latency ({lat} s) is too high"
-                             " for node {name}").format(lat=mean_p99_lats,
-                                                        name=c.name))
+                             " for node {name}").format(
+                                 lat=mean_p99_lats, name=c.name))
                 return CONVERGED_HIGH
 
         # If any of the nodes batch sizes are set to 1, skip the batch size check

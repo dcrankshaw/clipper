@@ -27,17 +27,16 @@ std::string generate_redis_key(const StateKey& key) {
 }
 
 StateDB::StateDB()
-    : cache_(std::unordered_map<StateKey, std::string, StateKeyHash,
-                                StateKeyEqual>(STATE_DB_CACHE_SIZE_ELEMENTS)) {
+    : cache_(std::unordered_map<StateKey, std::string, StateKeyHash, StateKeyEqual>(
+          STATE_DB_CACHE_SIZE_ELEMENTS)) {
   Config& conf = get_config();
-  while (!redis_connection_.connect(conf.get_redis_address(),
-                                    conf.get_redis_port())) {
+  while (!redis_connection_.connect(conf.get_redis_address(), conf.get_redis_port())) {
     log_error(LOGGING_TAG_STATE_DB, "StateDB failed to connect to redis",
               "Retrying in 1 second...");
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  if (!redis::send_cmd_no_reply<std::string>(
-          redis_connection_, {"SELECT", std::to_string(REDIS_STATE_DB_NUM)})) {
+  if (!redis::send_cmd_no_reply<std::string>(redis_connection_,
+                                             {"SELECT", std::to_string(REDIS_STATE_DB_NUM)})) {
     throw std::runtime_error("Could not select StateDB table from Redis");
   }
   log_info(LOGGING_TAG_STATE_DB, "Persistent state DB created");
@@ -52,8 +51,7 @@ boost::optional<std::string> StateDB::get(const StateKey& key) {
   } else {
     std::string redis_key = generate_redis_key(key);
     const std::vector<std::string> cmd_vec{"GET", redis_key};
-    auto redis_reply =
-        redis::send_cmd_with_reply<std::string>(redis_connection_, cmd_vec);
+    auto redis_reply = redis::send_cmd_with_reply<std::string>(redis_connection_, cmd_vec);
     if (redis_reply) {
       cache_.emplace(key, redis_reply.get());
     }
@@ -75,8 +73,7 @@ bool StateDB::remove(StateKey key) {
 
 int StateDB::num_entries() {
   const std::vector<std::string> cmd_vec{"DBSIZE"};
-  boost::optional<int> result =
-      redis::send_cmd_with_reply<int>(redis_connection_, cmd_vec);
+  boost::optional<int> result = redis::send_cmd_with_reply<int>(redis_connection_, cmd_vec);
   if (result) {
     return *result;
   } else {

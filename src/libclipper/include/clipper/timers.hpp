@@ -37,9 +37,7 @@ class HighPrecisionClock {
 /// Used for unit testing
 class ManualClock {
  public:
-  ManualClock()
-      : now_{std::chrono::time_point<
-            std::chrono::high_resolution_clock>::min()} {}
+  ManualClock() : now_{std::chrono::time_point<std::chrono::high_resolution_clock>::min()} {}
 
   ManualClock(const ManualClock &other) = default;
   ManualClock &operator=(const ManualClock &other) = default;
@@ -54,9 +52,7 @@ class ManualClock {
     now_ += std::chrono::microseconds(increment_micros);
   }
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> now() const {
-    return now_;
-  }
+  std::chrono::time_point<std::chrono::high_resolution_clock> now() const { return now_; }
 
  private:
   std::chrono::time_point<std::chrono::high_resolution_clock> now_;
@@ -91,8 +87,7 @@ class Timer {
 };
 
 struct TimerCompare {
-  bool operator()(const std::shared_ptr<Timer> &lhs,
-                  const std::shared_ptr<Timer> &rhs) const {
+  bool operator()(const std::shared_ptr<Timer> &lhs, const std::shared_ptr<Timer> &rhs) const {
     return *lhs > *rhs;
     // return *rhs < *lhs;
   }
@@ -100,8 +95,7 @@ struct TimerCompare {
 
 // need to use pointers here to get reference semantics
 using TimerPQueue =
-    std::priority_queue<std::shared_ptr<Timer>,
-                        std::vector<std::shared_ptr<Timer>>, TimerCompare>;
+    std::priority_queue<std::shared_ptr<Timer>, std::vector<std::shared_ptr<Timer>>, TimerCompare>;
 
 template <typename Clock>
 class TimerSystem {
@@ -132,9 +126,8 @@ class TimerSystem {
       std::unique_lock<std::mutex> lock(queue_mutex_);
 
       if (queue_.empty()) {
-        queue_not_empty_condition_.wait_for(
-            lock, std::chrono::milliseconds(100),
-            [this]() { return !queue_.empty(); });
+        queue_not_empty_condition_.wait_for(lock, std::chrono::milliseconds(100),
+                                            [this]() { return !queue_.empty(); });
       }
       if (queue_.size() > 0) {
         auto earliest_timer = queue_.top();

@@ -46,9 +46,7 @@ void GenerateRandomAlphaNumString(std::string *string, size_t size) {
   }
 }
 
-long GenerateRandomNumber(long min, long max) {
-  return rand() % (max - min) + min;
-}
+long GenerateRandomNumber(long min, long max) { return rand() % (max - min) + min; }
 
 void TestBase64(const std::string &input, bool strip_padding = false) {
   static std::string encoded;
@@ -67,14 +65,12 @@ void TestCBase64(const std::string &input, bool strip_padding = false) {
   static std::string decoded;
 
   encoded.resize(Base64::EncodedLength(input));
-  ASSERT_TRUE(
-      Base64::Encode(input.c_str(), input.size(), &encoded[0], encoded.size()));
+  ASSERT_TRUE(Base64::Encode(input.c_str(), input.size(), &encoded[0], encoded.size()));
 
   if (strip_padding) Base64::StripPadding(&encoded);
   decoded.resize(Base64::DecodedLength(encoded));
 
-  ASSERT_TRUE(Base64::Decode(encoded.c_str(), encoded.size(), &decoded[0],
-                             decoded.size()));
+  ASSERT_TRUE(Base64::Decode(encoded.c_str(), encoded.size(), &decoded[0], decoded.size()));
   ASSERT_EQ(input, decoded);
 }
 

@@ -56,11 +56,9 @@ TEST(InputSerializationTests, EmptySerialization) {
 
 TEST(InputSerializationTests, ByteSerialization) {
   clipper::rpc::PredictionRequest request(DataType::Bytes);
-  std::vector<std::vector<uint8_t>> data_vectors =
-      get_primitive_data_vectors<uint8_t>();
+  std::vector<std::vector<uint8_t>> data_vectors = get_primitive_data_vectors<uint8_t>();
   for (int i = 0; i < (int)data_vectors.size(); i++) {
-    std::shared_ptr<ByteVector> byte_vec =
-        std::make_shared<ByteVector>(data_vectors[i]);
+    std::shared_ptr<ByteVector> byte_vec = std::make_shared<ByteVector>(data_vectors[i]);
     request.add_input(byte_vec);
   }
   std::vector<clipper::ByteBuffer> serialized_request = request.serialize();
@@ -71,21 +69,15 @@ TEST(InputSerializationTests, ByteSerialization) {
   clipper::ByteBuffer input_content_size = serialized_request[3];
   clipper::ByteBuffer input_content = serialized_request[4];
 
-  long* raw_input_header_size =
-      reinterpret_cast<long*>(input_header_size.data());
+  long* raw_input_header_size = reinterpret_cast<long*>(input_header_size.data());
   ASSERT_EQ((size_t)raw_input_header_size[0], input_header.size());
-  long* raw_input_content_size =
-      reinterpret_cast<long*>(input_content_size.data());
+  long* raw_input_content_size = reinterpret_cast<long*>(input_content_size.data());
   ASSERT_EQ((size_t)raw_input_content_size[0], input_content.size());
 
-  uint32_t* raw_request_type =
-      reinterpret_cast<uint32_t*>(request_header.data());
-  ASSERT_EQ(*raw_request_type,
-            static_cast<uint32_t>(clipper::RequestType::PredictRequest));
-  uint32_t* typed_input_header =
-      reinterpret_cast<uint32_t*>(input_header.data());
-  ASSERT_EQ(*typed_input_header,
-            static_cast<uint32_t>(clipper::DataType::Bytes));
+  uint32_t* raw_request_type = reinterpret_cast<uint32_t*>(request_header.data());
+  ASSERT_EQ(*raw_request_type, static_cast<uint32_t>(clipper::RequestType::PredictRequest));
+  uint32_t* typed_input_header = reinterpret_cast<uint32_t*>(input_header.data());
+  ASSERT_EQ(*typed_input_header, static_cast<uint32_t>(clipper::DataType::Bytes));
   typed_input_header++;
   uint32_t num_inputs = *typed_input_header;
   ASSERT_EQ(num_inputs, static_cast<uint32_t>(data_vectors.size()));
@@ -95,8 +87,7 @@ TEST(InputSerializationTests, ByteSerialization) {
   uint32_t prev_index = 0;
   for (int i = 0; i < (int)num_inputs - 1; i++) {
     uint32_t split_index = typed_input_header[i];
-    std::vector<uint8_t> vec(content_ptr + prev_index,
-                             content_ptr + split_index);
+    std::vector<uint8_t> vec(content_ptr + prev_index, content_ptr + split_index);
     ASSERT_EQ(vec, data_vectors[i]);
     prev_index = split_index;
   }
@@ -106,19 +97,16 @@ TEST(InputSerializationTests, ByteSerialization) {
   // final vector.
   // This vector is composed of the elements from the last split index through
   // the total content length.
-  std::vector<uint8_t> tail_vec(
-      content_ptr + prev_index,
-      content_ptr + (input_content.size() / sizeof(uint8_t)));
+  std::vector<uint8_t> tail_vec(content_ptr + prev_index,
+                                content_ptr + (input_content.size() / sizeof(uint8_t)));
   ASSERT_EQ(tail_vec, data_vectors[data_vectors.size() - 1]);
 }
 
 TEST(InputSerializationTests, IntSerialization) {
   clipper::rpc::PredictionRequest request(DataType::Ints);
-  std::vector<std::vector<int>> data_vectors =
-      get_primitive_data_vectors<int>();
+  std::vector<std::vector<int>> data_vectors = get_primitive_data_vectors<int>();
   for (int i = 0; i < (int)data_vectors.size(); i++) {
-    std::shared_ptr<IntVector> int_vec =
-        std::make_shared<IntVector>(data_vectors[i]);
+    std::shared_ptr<IntVector> int_vec = std::make_shared<IntVector>(data_vectors[i]);
     request.add_input(int_vec);
   }
   std::vector<clipper::ByteBuffer> serialized_request = request.serialize();
@@ -130,22 +118,15 @@ TEST(InputSerializationTests, IntSerialization) {
   clipper::ByteBuffer input_content_size = serialized_request[3];
   clipper::ByteBuffer input_content = serialized_request[4];
 
-  long* raw_input_header_size =
-      reinterpret_cast<long*>(input_header_size.data());
+  long* raw_input_header_size = reinterpret_cast<long*>(input_header_size.data());
   ASSERT_EQ(static_cast<size_t>(raw_input_header_size[0]), input_header.size());
-  long* raw_input_content_size =
-      reinterpret_cast<long*>(input_content_size.data());
-  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]),
-            input_content.size());
+  long* raw_input_content_size = reinterpret_cast<long*>(input_content_size.data());
+  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]), input_content.size());
 
-  uint32_t* raw_request_type =
-      reinterpret_cast<uint32_t*>(request_header.data());
-  ASSERT_EQ(*raw_request_type,
-            static_cast<uint32_t>(clipper::RequestType::PredictRequest));
-  uint32_t* typed_input_header =
-      reinterpret_cast<uint32_t*>(input_header.data());
-  ASSERT_EQ(*typed_input_header,
-            static_cast<uint32_t>(clipper::DataType::Ints));
+  uint32_t* raw_request_type = reinterpret_cast<uint32_t*>(request_header.data());
+  ASSERT_EQ(*raw_request_type, static_cast<uint32_t>(clipper::RequestType::PredictRequest));
+  uint32_t* typed_input_header = reinterpret_cast<uint32_t*>(input_header.data());
+  ASSERT_EQ(*typed_input_header, static_cast<uint32_t>(clipper::DataType::Ints));
   typed_input_header++;
   uint32_t num_inputs = *typed_input_header;
   ASSERT_EQ(num_inputs, static_cast<uint32_t>(data_vectors.size()));
@@ -172,11 +153,9 @@ TEST(InputSerializationTests, IntSerialization) {
 
 TEST(InputSerializationTests, FloatSerialization) {
   clipper::rpc::PredictionRequest request(DataType::Floats);
-  std::vector<std::vector<float>> data_vectors =
-      get_primitive_data_vectors<float>();
+  std::vector<std::vector<float>> data_vectors = get_primitive_data_vectors<float>();
   for (int i = 0; i < (int)data_vectors.size(); i++) {
-    std::shared_ptr<FloatVector> float_vec =
-        std::make_shared<FloatVector>(data_vectors[i]);
+    std::shared_ptr<FloatVector> float_vec = std::make_shared<FloatVector>(data_vectors[i]);
     request.add_input(float_vec);
   }
   std::vector<clipper::ByteBuffer> serialized_request = request.serialize();
@@ -188,22 +167,15 @@ TEST(InputSerializationTests, FloatSerialization) {
   clipper::ByteBuffer input_content_size = serialized_request[3];
   clipper::ByteBuffer input_content = serialized_request[4];
 
-  long* raw_input_header_size =
-      reinterpret_cast<long*>(input_header_size.data());
+  long* raw_input_header_size = reinterpret_cast<long*>(input_header_size.data());
   ASSERT_EQ(static_cast<size_t>(raw_input_header_size[0]), input_header.size());
-  long* raw_input_content_size =
-      reinterpret_cast<long*>(input_content_size.data());
-  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]),
-            input_content.size());
+  long* raw_input_content_size = reinterpret_cast<long*>(input_content_size.data());
+  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]), input_content.size());
 
-  uint32_t* raw_request_type =
-      reinterpret_cast<uint32_t*>(request_header.data());
-  ASSERT_EQ(*raw_request_type,
-            static_cast<uint32_t>(clipper::RequestType::PredictRequest));
-  uint32_t* typed_input_header =
-      reinterpret_cast<uint32_t*>(input_header.data());
-  ASSERT_EQ(*typed_input_header,
-            static_cast<uint32_t>(clipper::DataType::Floats));
+  uint32_t* raw_request_type = reinterpret_cast<uint32_t*>(request_header.data());
+  ASSERT_EQ(*raw_request_type, static_cast<uint32_t>(clipper::RequestType::PredictRequest));
+  uint32_t* typed_input_header = reinterpret_cast<uint32_t*>(input_header.data());
+  ASSERT_EQ(*typed_input_header, static_cast<uint32_t>(clipper::DataType::Floats));
   typed_input_header++;
   uint32_t num_inputs = *typed_input_header;
   ASSERT_EQ(num_inputs, static_cast<uint32_t>(data_vectors.size()));
@@ -223,19 +195,16 @@ TEST(InputSerializationTests, FloatSerialization) {
   // final vector.
   // This vector is composed of the elements from the last split index through
   // the total content length.
-  std::vector<float> tail_vec(
-      content_ptr + prev_index,
-      content_ptr + (input_content.size() / sizeof(float)));
+  std::vector<float> tail_vec(content_ptr + prev_index,
+                              content_ptr + (input_content.size() / sizeof(float)));
   ASSERT_EQ(tail_vec, data_vectors[data_vectors.size() - 1]);
 }
 
 TEST(InputSerializationTests, DoubleSerialization) {
   clipper::rpc::PredictionRequest request(DataType::Doubles);
-  std::vector<std::vector<double>> data_vectors =
-      get_primitive_data_vectors<double>();
+  std::vector<std::vector<double>> data_vectors = get_primitive_data_vectors<double>();
   for (int i = 0; i < (int)data_vectors.size(); i++) {
-    std::shared_ptr<DoubleVector> double_vec =
-        std::make_shared<DoubleVector>(data_vectors[i]);
+    std::shared_ptr<DoubleVector> double_vec = std::make_shared<DoubleVector>(data_vectors[i]);
     request.add_input(double_vec);
   }
   std::vector<clipper::ByteBuffer> serialized_request = request.serialize();
@@ -247,22 +216,15 @@ TEST(InputSerializationTests, DoubleSerialization) {
   clipper::ByteBuffer input_content_size = serialized_request[3];
   clipper::ByteBuffer input_content = serialized_request[4];
 
-  long* raw_input_header_size =
-      reinterpret_cast<long*>(input_header_size.data());
+  long* raw_input_header_size = reinterpret_cast<long*>(input_header_size.data());
   ASSERT_EQ(static_cast<size_t>(raw_input_header_size[0]), input_header.size());
-  long* raw_input_content_size =
-      reinterpret_cast<long*>(input_content_size.data());
-  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]),
-            input_content.size());
+  long* raw_input_content_size = reinterpret_cast<long*>(input_content_size.data());
+  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]), input_content.size());
 
-  uint32_t* raw_request_type =
-      reinterpret_cast<uint32_t*>(request_header.data());
-  ASSERT_EQ(*raw_request_type,
-            static_cast<uint32_t>(clipper::RequestType::PredictRequest));
-  uint32_t* typed_input_header =
-      reinterpret_cast<uint32_t*>(input_header.data());
-  ASSERT_EQ(*typed_input_header,
-            static_cast<uint32_t>(clipper::DataType::Doubles));
+  uint32_t* raw_request_type = reinterpret_cast<uint32_t*>(request_header.data());
+  ASSERT_EQ(*raw_request_type, static_cast<uint32_t>(clipper::RequestType::PredictRequest));
+  uint32_t* typed_input_header = reinterpret_cast<uint32_t*>(input_header.data());
+  ASSERT_EQ(*typed_input_header, static_cast<uint32_t>(clipper::DataType::Doubles));
   typed_input_header++;
   uint32_t num_inputs = *typed_input_header;
   ASSERT_EQ(num_inputs, static_cast<uint32_t>(data_vectors.size()));
@@ -272,8 +234,7 @@ TEST(InputSerializationTests, DoubleSerialization) {
   uint32_t prev_index = 0;
   for (int i = 0; i < (int)num_inputs - 1; i++) {
     uint32_t split_index = typed_input_header[i];
-    std::vector<double> vec(content_ptr + prev_index,
-                            content_ptr + split_index);
+    std::vector<double> vec(content_ptr + prev_index, content_ptr + split_index);
     ASSERT_EQ(vec, data_vectors[i]);
     prev_index = split_index;
   }
@@ -283,9 +244,8 @@ TEST(InputSerializationTests, DoubleSerialization) {
   // final vector.
   // This vector is composed of the elements from the last split index through
   // the total content length.
-  std::vector<double> tail_vec(
-      content_ptr + prev_index,
-      content_ptr + (input_content.size() / sizeof(double)));
+  std::vector<double> tail_vec(content_ptr + prev_index,
+                               content_ptr + (input_content.size() / sizeof(double)));
   ASSERT_EQ(tail_vec, data_vectors[data_vectors.size() - 1]);
 }
 
@@ -306,22 +266,15 @@ TEST(InputSerializationTests, StringSerialization) {
   clipper::ByteBuffer input_content_size = serialized_request[3];
   clipper::ByteBuffer input_content = serialized_request[4];
 
-  long* raw_input_header_size =
-      reinterpret_cast<long*>(input_header_size.data());
+  long* raw_input_header_size = reinterpret_cast<long*>(input_header_size.data());
   ASSERT_EQ(static_cast<size_t>(raw_input_header_size[0]), input_header.size());
-  long* raw_input_content_size =
-      reinterpret_cast<long*>(input_content_size.data());
-  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]),
-            input_content.size());
+  long* raw_input_content_size = reinterpret_cast<long*>(input_content_size.data());
+  ASSERT_EQ(static_cast<size_t>(raw_input_content_size[0]), input_content.size());
 
-  uint32_t* raw_request_type =
-      reinterpret_cast<uint32_t*>(request_header.data());
-  ASSERT_EQ(*raw_request_type,
-            static_cast<uint32_t>(clipper::RequestType::PredictRequest));
-  uint32_t* typed_input_header =
-      reinterpret_cast<uint32_t*>(input_header.data());
-  ASSERT_EQ(*typed_input_header,
-            static_cast<uint32_t>(clipper::DataType::Strings));
+  uint32_t* raw_request_type = reinterpret_cast<uint32_t*>(request_header.data());
+  ASSERT_EQ(*raw_request_type, static_cast<uint32_t>(clipper::RequestType::PredictRequest));
+  uint32_t* typed_input_header = reinterpret_cast<uint32_t*>(input_header.data());
+  ASSERT_EQ(*typed_input_header, static_cast<uint32_t>(clipper::DataType::Strings));
   typed_input_header++;
   uint32_t num_inputs = *typed_input_header;
   ASSERT_EQ(num_inputs, static_cast<uint32_t>(string_vector.size()));
@@ -341,8 +294,7 @@ TEST(InputSerializationTests, RpcPredictionRequestsOnlyAcceptValidInputs) {
   for (int elem : int_data) {
     raw_data_vec.push_back(elem);
   }
-  std::shared_ptr<IntVector> int_vec =
-      std::make_shared<IntVector>(raw_data_vec);
+  std::shared_ptr<IntVector> int_vec = std::make_shared<IntVector>(raw_data_vec);
   std::vector<std::shared_ptr<Input>> inputs;
   inputs.push_back(int_vec);
 
@@ -357,14 +309,12 @@ TEST(InputSerializationTests, RpcPredictionRequestsOnlyAcceptValidInputs) {
 
   // We expect an invalid argument exception when we attempt to construct a
   // double-typed PredictionRequest by supplying a vector of IntVector inputs
-  ASSERT_THROW(rpc::PredictionRequest(inputs, DataType::Doubles),
-               std::invalid_argument);
+  ASSERT_THROW(rpc::PredictionRequest(inputs, DataType::Doubles), std::invalid_argument);
 
   // We expect an invalid argument exception when we attempt to add
   // an IntVector input to a double-typed PredictionRequest
   rpc::PredictionRequest doubles_prediction_request(DataType::Doubles);
-  ASSERT_THROW(doubles_prediction_request.add_input(int_vec),
-               std::invalid_argument);
+  ASSERT_THROW(doubles_prediction_request.add_input(int_vec), std::invalid_argument);
 }
 
 template <typename T>
@@ -388,122 +338,98 @@ TEST(InputHashTests, IntVectorsHashCorrectly) {
   // Obtains 3 vectors containing integer interpretations of unsigned bytes
   // 0-99.
   // The first two are identical, and the third is reversed
-  std::vector<std::vector<int>> int_hash_vecs =
-      get_primitive_hash_vectors<int>();
-  ASSERT_EQ(IntVector(int_hash_vecs[0]).hash(),
-            IntVector(int_hash_vecs[1]).hash());
-  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(),
-            IntVector(int_hash_vecs[2]).hash());
+  std::vector<std::vector<int>> int_hash_vecs = get_primitive_hash_vectors<int>();
+  ASSERT_EQ(IntVector(int_hash_vecs[0]).hash(), IntVector(int_hash_vecs[1]).hash());
+  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(), IntVector(int_hash_vecs[2]).hash());
   int_hash_vecs[1].pop_back();
   // Removing the last element of the second vector renders the first two
   // vectors
   // distinct, so they should have different hashes
-  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(),
-            IntVector(int_hash_vecs[1]).hash());
+  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(), IntVector(int_hash_vecs[1]).hash());
   int_hash_vecs[1].push_back(500);
   // Adding the element 500, which is not present in the first vector, to the
   // second vector
   // leaves the first two vectors distinct, so they should have different hashes
-  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(),
-            IntVector(int_hash_vecs[1]).hash());
+  ASSERT_NE(IntVector(int_hash_vecs[0]).hash(), IntVector(int_hash_vecs[1]).hash());
   std::reverse(int_hash_vecs[2].begin(), int_hash_vecs[2].end());
   // Reversing the third vector, which was initially the reverse of the first
   // vector,
   // renders the first and third vectors identical, so they should have the same
   // hash
-  ASSERT_EQ(IntVector(int_hash_vecs[0]).hash(),
-            IntVector(int_hash_vecs[2]).hash());
+  ASSERT_EQ(IntVector(int_hash_vecs[0]).hash(), IntVector(int_hash_vecs[2]).hash());
 }
 
 TEST(InputHashTests, FloatVectorsHashCorrectly) {
   // Obtains 3 vectors containing float intepretations of unsigned bytes 0-99.
   // The first two are identical, and the third is reversed
-  std::vector<std::vector<float>> float_hash_vecs =
-      get_primitive_hash_vectors<float>();
-  ASSERT_EQ(FloatVector(float_hash_vecs[0]).hash(),
-            FloatVector(float_hash_vecs[1]).hash());
-  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(),
-            FloatVector(float_hash_vecs[2]).hash());
+  std::vector<std::vector<float>> float_hash_vecs = get_primitive_hash_vectors<float>();
+  ASSERT_EQ(FloatVector(float_hash_vecs[0]).hash(), FloatVector(float_hash_vecs[1]).hash());
+  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(), FloatVector(float_hash_vecs[2]).hash());
   float_hash_vecs[1].pop_back();
   // Removing the last element of the second vector renders the first two
   // vectors
   // distinct, so they should have different hashes
-  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(),
-            FloatVector(float_hash_vecs[1]).hash());
+  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(), FloatVector(float_hash_vecs[1]).hash());
   float_hash_vecs[1].push_back(500);
   // Adding the element 500.0, which is not present in the first vector, to the
   // second vector
   // leaves the first two vectors distinct, so they should have different hashes
-  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(),
-            FloatVector(float_hash_vecs[1]).hash());
+  ASSERT_NE(FloatVector(float_hash_vecs[0]).hash(), FloatVector(float_hash_vecs[1]).hash());
   std::reverse(float_hash_vecs[2].begin(), float_hash_vecs[2].end());
   // Reversing the third vector, which was initially the reverse of the first
   // vector,
   // renders the first and third vectors identical, so they should have the same
   // hash
-  ASSERT_EQ(FloatVector(float_hash_vecs[0]).hash(),
-            FloatVector(float_hash_vecs[2]).hash());
+  ASSERT_EQ(FloatVector(float_hash_vecs[0]).hash(), FloatVector(float_hash_vecs[2]).hash());
 }
 
 TEST(InputHashTests, DoubleVectorsHashCorrectly) {
   // Obtains 3 vectors containing double intepretations of unsigned bytes 0-99.
   // The first two are identical, and the third is reversed
-  std::vector<std::vector<double>> double_hash_vecs =
-      get_primitive_hash_vectors<double>();
-  ASSERT_EQ(DoubleVector(double_hash_vecs[0]).hash(),
-            DoubleVector(double_hash_vecs[1]).hash());
-  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(),
-            DoubleVector(double_hash_vecs[2]).hash());
+  std::vector<std::vector<double>> double_hash_vecs = get_primitive_hash_vectors<double>();
+  ASSERT_EQ(DoubleVector(double_hash_vecs[0]).hash(), DoubleVector(double_hash_vecs[1]).hash());
+  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(), DoubleVector(double_hash_vecs[2]).hash());
   double_hash_vecs[1].pop_back();
   // Removing the last element of the second vector renders the first two
   // vectors
   // distinct, so they should have different hashes
-  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(),
-            DoubleVector(double_hash_vecs[1]).hash());
+  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(), DoubleVector(double_hash_vecs[1]).hash());
   double_hash_vecs[1].push_back(500);
   // Adding the element 500.0, which is not present in the first vector, to the
   // second vector
   // leaves the first two vectors distinct, so they should have different hashes
-  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(),
-            DoubleVector(double_hash_vecs[1]).hash());
+  ASSERT_NE(DoubleVector(double_hash_vecs[0]).hash(), DoubleVector(double_hash_vecs[1]).hash());
   std::reverse(double_hash_vecs[2].begin(), double_hash_vecs[2].end());
   // Reversing the third vector, which was initially the reverse of the first
   // vector,
   // renders the first and third vectors identical, so they should have the same
   // hash
-  ASSERT_EQ(DoubleVector(double_hash_vecs[0]).hash(),
-            DoubleVector(double_hash_vecs[2]).hash());
+  ASSERT_EQ(DoubleVector(double_hash_vecs[0]).hash(), DoubleVector(double_hash_vecs[2]).hash());
 }
 
 TEST(InputHashTests, ByteVectorsHashCorrectly) {
   // Obtains 3 vectors containing unsigned bytes 0-99.
   // The first two are identical, and the third is reversed
-  std::vector<std::vector<uint8_t>> byte_hash_vecs =
-      get_primitive_hash_vectors<uint8_t>();
-  ASSERT_EQ(ByteVector(byte_hash_vecs[0]).hash(),
-            ByteVector(byte_hash_vecs[1]).hash());
-  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(),
-            ByteVector(byte_hash_vecs[2]).hash());
+  std::vector<std::vector<uint8_t>> byte_hash_vecs = get_primitive_hash_vectors<uint8_t>();
+  ASSERT_EQ(ByteVector(byte_hash_vecs[0]).hash(), ByteVector(byte_hash_vecs[1]).hash());
+  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(), ByteVector(byte_hash_vecs[2]).hash());
   byte_hash_vecs[1].pop_back();
   // Removing the last element of the second vector renders the first two
   // vectors
   // distinct, so they should have different hashes
-  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(),
-            ByteVector(byte_hash_vecs[1]).hash());
+  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(), ByteVector(byte_hash_vecs[1]).hash());
   byte_hash_vecs[1].push_back(200);
   // Adding an unsigned byte with value 200, which is not present in the first
   // vector,
   // to the second vector leaves the first two vectors distinct, so they should
   // have different hashes
-  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(),
-            ByteVector(byte_hash_vecs[1]).hash());
+  ASSERT_NE(ByteVector(byte_hash_vecs[0]).hash(), ByteVector(byte_hash_vecs[1]).hash());
   std::reverse(byte_hash_vecs[2].begin(), byte_hash_vecs[2].end());
   // Reversing the third vector, which was initially the reverse of the first
   // vector,
   // renders the first and third vectors identical, so they should have the same
   // hash
-  ASSERT_EQ(ByteVector(byte_hash_vecs[0]).hash(),
-            ByteVector(byte_hash_vecs[2]).hash());
+  ASSERT_EQ(ByteVector(byte_hash_vecs[0]).hash(), ByteVector(byte_hash_vecs[2]).hash());
 }
 
 TEST(InputHashTests, SerializableStringsHashCorrectly) {
@@ -511,20 +437,16 @@ TEST(InputHashTests, SerializableStringsHashCorrectly) {
   std::string cat_string_copy = cat_string;
   std::string tac_string = "TAC";
 
-  ASSERT_EQ(SerializableString(cat_string).hash(),
-            SerializableString(cat_string_copy).hash());
-  ASSERT_NE(SerializableString(cat_string).hash(),
-            SerializableString(tac_string).hash());
+  ASSERT_EQ(SerializableString(cat_string).hash(), SerializableString(cat_string_copy).hash());
+  ASSERT_NE(SerializableString(cat_string).hash(), SerializableString(tac_string).hash());
   // The strings "CATS" and "CAT" are not equal, so they should have different
   // hashes
-  ASSERT_NE(SerializableString(cat_string + "S").hash(),
-            SerializableString(cat_string).hash());
+  ASSERT_NE(SerializableString(cat_string + "S").hash(), SerializableString(cat_string).hash());
   std::reverse(tac_string.rbegin(), tac_string.rend());
   // The reverse of the string "TAC" is "CAT", so cat_string and the reverse of
   // tac_string
   // should have identical hashes
-  ASSERT_EQ(SerializableString(cat_string).hash(),
-            SerializableString(tac_string).hash());
+  ASSERT_EQ(SerializableString(cat_string).hash(), SerializableString(tac_string).hash());
 }
 
 TEST(OutputDeserializationTests, PredictionResponseDeserialization) {
@@ -545,15 +467,12 @@ TEST(OutputDeserializationTests, PredictionResponseDeserialization) {
 
   memcpy(buf.data(), num_outputs_bytes, sizeof(uint32_t));
   memcpy(buf.data() + sizeof(uint32_t), first_length_bytes, sizeof(uint32_t));
-  memcpy(buf.data() + (2 * sizeof(uint32_t)), second_length_bytes,
-         sizeof(uint32_t));
-  memcpy(buf.data() + metadata_length, first_string.data(),
-         first_string.length());
-  memcpy(buf.data() + metadata_length + first_string.length(),
-         second_string.data(), second_string.length());
+  memcpy(buf.data() + (2 * sizeof(uint32_t)), second_length_bytes, sizeof(uint32_t));
+  memcpy(buf.data() + metadata_length, first_string.data(), first_string.length());
+  memcpy(buf.data() + metadata_length + first_string.length(), second_string.data(),
+         second_string.length());
 
-  rpc::PredictionResponse response =
-      rpc::PredictionResponse::deserialize_prediction_response(buf);
+  rpc::PredictionResponse response = rpc::PredictionResponse::deserialize_prediction_response(buf);
   ASSERT_EQ(response.outputs_.size(), static_cast<size_t>(2));
   ASSERT_EQ(response.outputs_[0], first_string);
   ASSERT_EQ(response.outputs_[1], second_string);

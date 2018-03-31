@@ -75,7 +75,8 @@ class Client:
     def _run_recv(self):
         global active
         # The address of the socket from which we want to receive data
-        clipper_recv_address = "tcp://{0}:{1}".format(self.clipper_host, self.recv_port)
+        clipper_recv_address = "tcp://{0}:{1}".format(self.clipper_host,
+                                                      self.recv_port)
         context = zmq.Context()
         socket = context.socket(zmq.DEALER)
         poller = zmq.Poller()
@@ -100,7 +101,8 @@ class Client:
     def _run_send(self):
         global active
         # The address of the socket to which we want to send data
-        clipper_send_address = "tcp://{0}:{1}".format(self.clipper_host, self.send_port)
+        clipper_send_address = "tcp://{0}:{1}".format(self.clipper_host,
+                                                      self.send_port)
         context = zmq.Context()
         socket = context.socket(zmq.DEALER)
         poller = zmq.Poller()
@@ -132,13 +134,15 @@ class Client:
         if data_type == DATA_TYPE_STRINGS:
             output = output_data
         else:
-            output = np.frombuffer(output_data, dtype=self._clipper_type_to_dtype(data_type))
+            output = np.frombuffer(
+                output_data, dtype=self._clipper_type_to_dtype(data_type))
 
         self.request_lock.acquire()
         future = self.outstanding_requests[request_id]
         del self.outstanding_requests[request_id]
         self.request_lock.release()
-        self.futures_executor.submit(lambda future, output: future.set_result(output), future, output)
+        self.futures_executor.submit(
+            lambda future, output: future.set_result(output), future, output)
 
     def _send_requests(self, socket):
         if self.request_queue.empty():

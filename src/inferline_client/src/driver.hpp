@@ -12,21 +12,17 @@ void spin_sleep(int duration_micros);
 
 class Driver {
  public:
-  Driver(std::function<void(FrontendRPCClient&, ClientFeatureVector,
-                            std::atomic<int>&)>
-             predict_func,
-         std::vector<ClientFeatureVector> inputs, float target_throughput,
-         std::string distribution, int trial_length, int num_trials,
-         std::string log_file, std::string clipper_address, int batch_size,
-         std::vector<float> delay_ms);
+  Driver(
+      std::function<void(FrontendRPCClient&, ClientFeatureVector, std::atomic<int>&)> predict_func,
+      std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
+      int trial_length, int num_trials, std::string log_file, std::string clipper_address,
+      int batch_size, std::vector<float> delay_ms);
 
   void start();
 
  private:
   void monitor_results();
-  std::function<void(FrontendRPCClient&, ClientFeatureVector,
-                     std::atomic<int>&)>
-      predict_func_;
+  std::function<void(FrontendRPCClient&, ClientFeatureVector, std::atomic<int>&)> predict_func_;
   std::vector<ClientFeatureVector> inputs_;
   float target_throughput_;
   std::string distribution_;

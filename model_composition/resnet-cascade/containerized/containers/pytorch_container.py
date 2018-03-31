@@ -10,9 +10,10 @@ from PIL import Image
 import logging
 from datetime import datetime
 
-logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-                    datefmt='%y-%m-%d:%H:%M:%S',
-                    level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%y-%m-%d:%H:%M:%S',
+    level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +50,12 @@ class TorchContainer(rpc.ModelContainerBase):
         self.width = 299
 
         normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         self.preprocess = transforms.Compose([
             transforms.Scale(256),
             transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize
+            transforms.ToTensor(), normalize
         ])
 
     def predict_doubles(self, inputs):

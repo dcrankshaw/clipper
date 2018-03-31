@@ -1,11 +1,11 @@
 #include "zmq_frontend.hpp"
 // #include "zmq_frontend_no_queries.hpp"
 
+#include <clipper/clock.hpp>
 #include <clipper/config.hpp>
 #include <clipper/constants.hpp>
 #include <cxxopts.hpp>
 #include <server_http.hpp>
-#include <clipper/clock.hpp>
 
 using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
@@ -51,33 +51,33 @@ int main(int argc, char* argv[]) {
 
   HttpServer metrics_server("0.0.0.0", clipper::QUERY_FRONTEND_PORT, 1);
 
-  metrics_server.add_endpoint(
-      GET_METRICS, "GET", [](std::shared_ptr<HttpServer::Response> response,
-                             std::shared_ptr<HttpServer::Request> /*request*/) {
-        clipper::metrics::MetricsRegistry& registry =
-            clipper::metrics::MetricsRegistry::get_metrics();
-        std::string metrics_report =
-            // registry.report_metrics(false);
-            registry.report_metrics(true);
-        std::cout << metrics_report << std::endl;
-        respond_http(metrics_report, "200 OK", response);
-      });
+  metrics_server.add_endpoint(GET_METRICS, "GET",
+                              [](std::shared_ptr<HttpServer::Response> response,
+                                 std::shared_ptr<HttpServer::Request> /*request*/) {
+                                clipper::metrics::MetricsRegistry& registry =
+                                    clipper::metrics::MetricsRegistry::get_metrics();
+                                std::string metrics_report =
+                                    // registry.report_metrics(false);
+                                    registry.report_metrics(true);
+                                std::cout << metrics_report << std::endl;
+                                respond_http(metrics_report, "200 OK", response);
+                              });
 
-  metrics_server.add_endpoint(
-      DRAIN_QUEUES, "GET", [&zmq_server](std::shared_ptr<HttpServer::Response> response,
-                             std::shared_ptr<HttpServer::Request> /*request*/) {
-        zmq_server.drain_queues();
-        std::cout << "Drained queues" << std::endl;
-        respond_http("DONE", "200 OK", response);
-      });
+  metrics_server.add_endpoint(DRAIN_QUEUES, "GET",
+                              [&zmq_server](std::shared_ptr<HttpServer::Response> response,
+                                            std::shared_ptr<HttpServer::Request> /*request*/) {
+                                zmq_server.drain_queues();
+                                std::cout << "Drained queues" << std::endl;
+                                respond_http("DONE", "200 OK", response);
+                              });
 
-  metrics_server.add_endpoint(
-      FULL_BATCHES, "GET", [&zmq_server](std::shared_ptr<HttpServer::Response> response,
-                             std::shared_ptr<HttpServer::Request> /*request*/) {
-        zmq_server.set_full_batches();
-        std::cout << "Set full batches" << std::endl;
-        respond_http("DONE", "200 OK", response);
-      });
+  metrics_server.add_endpoint(FULL_BATCHES, "GET",
+                              [&zmq_server](std::shared_ptr<HttpServer::Response> response,
+                                            std::shared_ptr<HttpServer::Request> /*request*/) {
+                                zmq_server.set_full_batches();
+                                std::cout << "Set full batches" << std::endl;
+                                respond_http("DONE", "200 OK", response);
+                              });
 
   metrics_server.start();
 }

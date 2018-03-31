@@ -60,7 +60,8 @@ class ContainerManager(object):
         return
 
     @abc.abstractmethod
-    def set_num_replicas(self, name, version, input_type, image, num_replicas, **kwargs):
+    def set_num_replicas(self, name, version, input_type, image, num_replicas,
+                         **kwargs):
         return
 
     @abc.abstractmethod

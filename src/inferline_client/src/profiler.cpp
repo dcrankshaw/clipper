@@ -71,10 +71,9 @@ void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector in
     metrics.throughput_->mark(1);
     metrics.num_predictions_->increment(1);
     prediction_counter += 1;
-    lineage->add_timestamp(
-        "driver::send",
-        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
-            .count());
+    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
+                                               start_time.time_since_epoch())
+                                               .count());
 
     lineage->add_timestamp(
         "driver::recv",

@@ -1,8 +1,8 @@
+#include <fstream>
+#include <iostream>
 #include <random>
 #include <sstream>
 #include <string>
-#include <fstream>
-#include <iostream>
 
 #include <boost/optional.hpp>
 
@@ -87,7 +87,9 @@ std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
   return inputs;
 }
 
-std::vector<ClientFeatureVector> generate_inputs(const std::string& model_name, size_t input_size, boost::optional<std::string> workload_path = boost::optional<std::string>()) {
+std::vector<ClientFeatureVector> generate_inputs(
+    const std::string& model_name, size_t input_size,
+    boost::optional<std::string> workload_path = boost::optional<std::string>()) {
   if (std::find(FLOAT_VECTOR_MODELS.begin(), FLOAT_VECTOR_MODELS.end(), model_name) !=
       FLOAT_VECTOR_MODELS.end()) {
     return generate_float_inputs(input_size);

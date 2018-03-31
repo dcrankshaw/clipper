@@ -24,9 +24,8 @@ using namespace clipper;
 FrontendRPCClient::FrontendRPCClient() : FrontendRPCClient(1) {}
 
 FrontendRPCClient::FrontendRPCClient(int num_threads)
-    : request_queue_(std::make_shared<
-                     moodycamel::ConcurrentQueue<FrontendRPCClientRequest>>(
-          QUEUE_SIZE)),
+    : request_queue_(
+          std::make_shared<moodycamel::ConcurrentQueue<FrontendRPCClientRequest>>(QUEUE_SIZE)),
       active_(false),
       closure_map_{},
       closure_threadpool_("frontend_rpc", 1),
@@ -34,15 +33,12 @@ FrontendRPCClient::FrontendRPCClient(int num_threads)
       request_id_(0),
       connected_(false) {}
 
-void FrontendRPCClient::start(const std::string address, int send_port,
-                              int recv_port) {
+void FrontendRPCClient::start(const std::string address, int send_port, int recv_port) {
   active_ = true;
-  rpc_send_thread_ = std::thread([this, address, send_port]() {
-    manage_send_service(address, send_port);
-  });
-  rpc_recv_thread_ = std::thread([this, address, recv_port]() {
-    manage_recv_service(address, recv_port);
-  });
+  rpc_send_thread_ =
+      std::thread([this, address, send_port]() { manage_send_service(address, send_port); });
+  rpc_recv_thread_ =
+      std::thread([this, address, recv_port]() { manage_recv_service(address, recv_port); });
 }
 
 void FrontendRPCClient::stop() {
@@ -89,8 +85,7 @@ void FrontendRPCClient::send_messages(socket_t &socket, int max_num_messages) {
   }
   FrontendRPCClientRequest request;
   size_t sent_requests = 0;
-  while (sent_requests < max_num_messages &&
-         request_queue_->try_dequeue(request) && active_) {
+  while (sent_requests < max_num_messages && request_queue_->try_dequeue(request) && active_) {
     int request_id = std::get<0>(request);
     std::string app_name = std::get<1>(request);
     ClientFeatureVector input = std::get<2>(request);
@@ -157,10 +152,8 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   socket.recv(&msg_data_length_bytes, 0);
 
   int request_id = static_cast<int *>(msg_request_id.data())[0];
-  DataType output_type =
-      static_cast<DataType>(static_cast<int *>(msg_data_type.data())[0]);
-  size_t data_length_bytes =
-      (size_t)(static_cast<int *>(msg_data_length_bytes.data())[0]);
+  DataType output_type = static_cast<DataType>(static_cast<int *>(msg_data_type.data())[0]);
+  size_t data_length_bytes = (size_t)(static_cast<int *>(msg_data_length_bytes.data())[0]);
 
   size_t bytes_per_input;
   switch (output_type) {
@@ -194,8 +187,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
 
   std::shared_ptr<void> output_recv_buffer(malloc(data_length_bytes), free);
   socket.recv(output_recv_buffer.get(), data_length_bytes, 0);
-  ClientFeatureVector output(output_recv_buffer, data_length_typed,
-                             data_length_bytes, output_type);
+  ClientFeatureVector output(output_recv_buffer, data_length_typed, data_length_bytes, output_type);
 
   zmq::message_t msg_lineage_length;
 
@@ -205,8 +197,7 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   for (int i = 0; i < lineage_length; ++i) {
     zmq::message_t msg_description;
     socket.recv(&msg_description, 0);
-    std::string description(static_cast<char *>(msg_description.data()),
-                            msg_description.size());
+    std::string description(static_cast<char *>(msg_description.data()), msg_description.size());
     zmq::message_t msg_timestamp;
     socket.recv(&msg_timestamp, 0);
     long long timestamp = static_cast<long long *>(msg_timestamp.data())[0];
@@ -228,13 +219,9 @@ void FrontendRPCClient::receive_response(zmq::socket_t &socket) {
   }
 }
 
-ClientFeatureVector::ClientFeatureVector(std::shared_ptr<void> data,
-                                         size_t size_typed, size_t size_bytes,
-                                         DataType type)
-    : data_(data),
-      size_typed_(size_typed),
-      size_bytes_(size_bytes),
-      type_(type) {}
+ClientFeatureVector::ClientFeatureVector(std::shared_ptr<void> data, size_t size_typed,
+                                         size_t size_bytes, DataType type)
+    : data_(data), size_typed_(size_typed), size_bytes_(size_bytes), type_(type) {}
 
 void *ClientFeatureVector::get_data() { return data_.get(); }
 }

@@ -17,17 +17,14 @@ namespace clipper {
 DefaultOutputSelectionState::DefaultOutputSelectionState(Output default_output)
     : default_output_(default_output) {}
 
-DefaultOutputSelectionState::DefaultOutputSelectionState(
-    std::string serialized_state)
+DefaultOutputSelectionState::DefaultOutputSelectionState(std::string serialized_state)
     : default_output_(deserialize(serialized_state)) {}
 
 std::string DefaultOutputSelectionState::serialize() const {
   rapidjson::Document d;
   d.SetObject();
-  auto output_data =
-      std::dynamic_pointer_cast<StringOutput>(default_output_.y_hat_);
-  char* output_str =
-      static_cast<char*>(malloc(output_data->size() * sizeof(char)));
+  auto output_data = std::dynamic_pointer_cast<StringOutput>(default_output_.y_hat_);
+  char* output_str = static_cast<char*>(malloc(output_data->size() * sizeof(char)));
   output_data->serialize(output_str);
   json::add_string(d, "y_hat", output_str, output_data->size());
   return json::to_json_string(d);
@@ -36,10 +33,8 @@ std::string DefaultOutputSelectionState::serialize() const {
 std::string DefaultOutputSelectionState::get_debug_string() const {
   rapidjson::Document d;
   d.SetObject();
-  auto output_data =
-      std::dynamic_pointer_cast<StringOutput>(default_output_.y_hat_);
-  char* output_str =
-      static_cast<char*>(malloc(output_data->size() * sizeof(char)));
+  auto output_data = std::dynamic_pointer_cast<StringOutput>(default_output_.y_hat_);
+  char* output_str = static_cast<char*>(malloc(output_data->size() * sizeof(char)));
   output_data->serialize(output_str);
   json::add_string(d, "y_hat", output_str, output_data->size());
   std::vector<std::string> empty_vec;
@@ -51,16 +46,12 @@ Output DefaultOutputSelectionState::deserialize(std::string serialized_state) {
   rapidjson::Document d;
   json::parse_json(serialized_state, d);
   std::string output_str = json::get_string(d, "y_hat");
-  std::shared_ptr<char> output(static_cast<char*>(malloc(output_str.size())),
-                               free);
+  std::shared_ptr<char> output(static_cast<char*>(malloc(output_str.size())), free);
   memcpy(output.get(), output_str.data(), output_str.size());
-  return Output(std::make_shared<StringOutput>(output, 0, output_str.size()),
-                {});
+  return Output(std::make_shared<StringOutput>(output, 0, output_str.size()), {});
 }
 
-std::string DefaultOutputSelectionPolicy::get_name() {
-  return "DefaultOutputSelectionPolicy";
-}
+std::string DefaultOutputSelectionPolicy::get_name() { return "DefaultOutputSelectionPolicy"; }
 
 std::shared_ptr<SelectionState> DefaultOutputSelectionPolicy::init_state(
     Output default_output) const {
@@ -68,13 +59,11 @@ std::shared_ptr<SelectionState> DefaultOutputSelectionPolicy::init_state(
 }
 
 std::vector<PredictTask> DefaultOutputSelectionPolicy::select_predict_tasks(
-    std::shared_ptr<SelectionState> /*state*/, Query query,
-    long query_id) const {
+    std::shared_ptr<SelectionState> /*state*/, Query query, long query_id) const {
   std::vector<PredictTask> tasks;
   size_t num_candidate_models = query.candidate_models_.size();
   if (num_candidate_models == (size_t)0) {
-    log_error_formatted(LOGGING_TAG_SELECTION_POLICY,
-                        "No candidate models for query with label {}",
+    log_error_formatted(LOGGING_TAG_SELECTION_POLICY, "No candidate models for query with label {}",
                         query.label_);
   } else {
     if (num_candidate_models > 1) {
@@ -83,8 +72,8 @@ std::vector<PredictTask> DefaultOutputSelectionPolicy::select_predict_tasks(
                           "{}. Picking the first one.",
                           num_candidate_models, query.label_);
     }
-    tasks.emplace_back(query.input_, query.candidate_models_.front(), 1.0,
-                       query_id, query.latency_budget_micros_);
+    tasks.emplace_back(query.input_, query.candidate_models_.front(), 1.0, query_id,
+                       query.latency_budget_micros_);
   }
   return tasks;
 }
@@ -96,8 +85,7 @@ const std::pair<Output, bool> DefaultOutputSelectionPolicy::combine_predictions(
     return std::make_pair(std::move(predictions.front()), false);
   } else if (predictions.empty()) {
     Output default_output =
-        std::dynamic_pointer_cast<DefaultOutputSelectionState>(state)
-            ->default_output_;
+        std::dynamic_pointer_cast<DefaultOutputSelectionState>(state)->default_output_;
     return std::make_pair(std::move(default_output), true);
   } else {
     log_error_formatted(LOGGING_TAG_SELECTION_POLICY,
@@ -112,8 +100,7 @@ std::pair<std::vector<PredictTask>, std::vector<FeedbackTask>>
 DefaultOutputSelectionPolicy::select_feedback_tasks(
     const std::shared_ptr<SelectionState>& /*state*/, FeedbackQuery /*query*/,
     long /*query_id*/) const {
-  return std::make_pair<std::vector<PredictTask>, std::vector<FeedbackTask>>(
-      {}, {});
+  return std::make_pair<std::vector<PredictTask>, std::vector<FeedbackTask>>({}, {});
 }
 
 std::shared_ptr<SelectionState> DefaultOutputSelectionPolicy::process_feedback(
@@ -127,10 +114,8 @@ std::shared_ptr<SelectionState> DefaultOutputSelectionPolicy::deserialize(
   return std::make_shared<DefaultOutputSelectionState>(serialized_state);
 }
 
-std::string DefaultOutputSelectionPolicy::serialize(
-    std::shared_ptr<SelectionState> state) const {
-  return std::dynamic_pointer_cast<DefaultOutputSelectionState>(state)
-      ->serialize();
+std::string DefaultOutputSelectionPolicy::serialize(std::shared_ptr<SelectionState> state) const {
+  return std::dynamic_pointer_cast<DefaultOutputSelectionState>(state)->serialize();
 }
 
 }  // namespace clipper

@@ -32,9 +32,8 @@ TEST(ThreadPoolTests, TestSingleQueueSingleJob) {
   std::mutex notification_mutex;
   threadpool.submit(vm, replica_id, [&counter] { task_completes(counter); });
   std::unique_lock<std::mutex> l(notification_mutex);
-  bool result =
-      notification_counter.wait_for(l, std::chrono::milliseconds(2000),
-                                    [&counter]() { return counter == 1; });
+  bool result = notification_counter.wait_for(l, std::chrono::milliseconds(2000),
+                                              [&counter]() { return counter == 1; });
   ASSERT_TRUE(result);
 }
 
@@ -51,9 +50,9 @@ TEST(ThreadPoolTests, TestSingleQueueManyJobs) {
     threadpool.submit(vm, replica_id, [&counter] { task_completes(counter); });
   }
   std::unique_lock<std::mutex> l(notification_mutex);
-  bool result = notification_counter.wait_for(
-      l, std::chrono::milliseconds(2000),
-      [&counter, &num_tasks]() { return counter == num_tasks; });
+  bool result =
+      notification_counter.wait_for(l, std::chrono::milliseconds(2000),
+                                    [&counter, &num_tasks]() { return counter == num_tasks; });
   ASSERT_TRUE(result);
 }
 
@@ -71,9 +70,9 @@ TEST(ThreadPoolTests, TestSingleQueueJobHangs) {
     threadpool.submit(vm, replica_id, [&counter] { task_completes(counter); });
   }
   std::unique_lock<std::mutex> l(notification_mutex);
-  bool result = notification_counter.wait_for(
-      l, std::chrono::milliseconds(2000),
-      [&counter, &num_tasks]() { return counter == num_tasks; });
+  bool result =
+      notification_counter.wait_for(l, std::chrono::milliseconds(2000),
+                                    [&counter, &num_tasks]() { return counter == num_tasks; });
   ASSERT_FALSE(result);
   ASSERT_EQ(counter, 0);
 }
@@ -94,20 +93,16 @@ TEST(ThreadPoolTests, TestMultipleQueuesOneQueueHangs) {
   std::atomic<int> counter_two(0);
   std::condition_variable_any notification_counter;
   std::mutex notification_mutex;
-  threadpool.submit(vm_two, replica_id_two,
-                    [&counter_two] { task_hangs(counter_two); });
+  threadpool.submit(vm_two, replica_id_two, [&counter_two] { task_hangs(counter_two); });
   for (int i = 0; i < num_tasks; ++i) {
-    threadpool.submit(vm_two, replica_id_two,
-                      [&counter_two] { task_completes(counter_two); });
+    threadpool.submit(vm_two, replica_id_two, [&counter_two] { task_completes(counter_two); });
   }
   for (int i = 0; i < num_tasks; ++i) {
-    threadpool.submit(vm_one, replica_id_one,
-                      [&counter_one] { task_completes(counter_one); });
+    threadpool.submit(vm_one, replica_id_one, [&counter_one] { task_completes(counter_one); });
   }
   std::unique_lock<std::mutex> l(notification_mutex);
   bool result = notification_counter.wait_for(
-      l, std::chrono::milliseconds(2000),
-      [&counter_one, &counter_two, &num_tasks]() {
+      l, std::chrono::milliseconds(2000), [&counter_one, &counter_two, &num_tasks]() {
         return counter_one == num_tasks && counter_two == num_tasks;
       });
   ASSERT_FALSE(result);
@@ -130,16 +125,13 @@ TEST(ThreadPoolTests, TestSubmitToNonexistentQueue) {
   std::atomic<int> counter(0);
   std::condition_variable_any notification_counter;
   std::mutex notification_mutex;
-  ASSERT_THROW(threadpool.submit(vm_one, replica_id_one,
-                                 [&counter] { task_completes(counter); }),
+  ASSERT_THROW(threadpool.submit(vm_one, replica_id_one, [&counter] { task_completes(counter); }),
                std::runtime_error);
   ASSERT_TRUE(threadpool.create_queue(vm_one, replica_id_one));
-  threadpool.submit(vm_one, replica_id_one,
-                    [&counter] { task_completes(counter); });
+  threadpool.submit(vm_one, replica_id_one, [&counter] { task_completes(counter); });
   std::unique_lock<std::mutex> l(notification_mutex);
-  bool result =
-      notification_counter.wait_for(l, std::chrono::milliseconds(2000),
-                                    [&counter]() { return counter == 1; });
+  bool result = notification_counter.wait_for(l, std::chrono::milliseconds(2000),
+                                              [&counter]() { return counter == 1; });
   ASSERT_TRUE(result);
 }
 

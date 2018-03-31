@@ -5,11 +5,13 @@ import rpc
 import numpy as np
 import gensim
 
-class SimilarityModelContainer(rpc.ModelContainerBase):
 
+class SimilarityModelContainer(rpc.ModelContainerBase):
     def __init__(self, model_path, dictionary_path):
-        self.word_ids_dict = gensim.corpora.Dictionary.load_from_text(dictionary_path)
-        self.model = gensim.similarities.docsim.SparseMatrixSimilarity.load(model_path, mmap='r')
+        self.word_ids_dict = gensim.corpora.Dictionary.load_from_text(
+            dictionary_path)
+        self.model = gensim.similarities.docsim.SparseMatrixSimilarity.load(
+            model_path, mmap='r')
 
     def predict_strings(self, inputs):
         """
@@ -34,6 +36,7 @@ class SimilarityModelContainer(rpc.ModelContainerBase):
             outputs.append(str(best_doc_index))
 
         return outputs
+
 
 if __name__ == "__main__":
     print("Starting Gensim Document Similarity Container")
@@ -65,7 +68,6 @@ if __name__ == "__main__":
             "ERROR: CLIPPER_DICT_PATH environment variable must be set",
             file=sys.stdout)
         sys.exit(1)
-
 
     ip = "127.0.0.1"
     if "CLIPPER_IP" in os.environ:

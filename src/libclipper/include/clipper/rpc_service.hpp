@@ -32,8 +32,7 @@ const std::string LOGGING_TAG_RPC = "RPC";
 using RPCResponse = std::tuple<int, DataType, std::shared_ptr<void>>;
 
 // Tuple of query_id, zmq message contents
-using RPCRequestItem =
-    std::pair<boost::optional<std::shared_ptr<QueryLineage>>, zmq::message_t>;
+using RPCRequestItem = std::pair<boost::optional<std::shared_ptr<QueryLineage>>, zmq::message_t>;
 
 /// Tuple of zmq_connection_id, message_id, vector of messages, creation time
 using RPCRequest = std::tuple<int, int, std::vector<RPCRequestItem>, long>;
@@ -47,11 +46,7 @@ enum class RPCEvent {
   ReceivedContainerContent = 6
 };
 
-enum class MessageType {
-  NewContainer = 0,
-  ContainerContent = 1,
-  Heartbeat = 2
-};
+enum class MessageType { NewContainer = 0, ContainerContent = 1, Heartbeat = 2 };
 
 enum class HeartbeatType { KeepAlive = 0, RequestContainerMetadata = 1 };
 
@@ -70,19 +65,16 @@ class RPCService {
   void start(
       const string ip, int send_port, int recv_port,
       std::function<void(VersionedModelId, int)> &&container_ready_callback,
-      std::function<void(RPCResponse, long long, long long, long long)>
-          &&new_response_callback);
+      std::function<void(RPCResponse, long long, long long, long long)> &&new_response_callback);
   /**
    * Stops the RPC Service. This is called implicitly within the RPCService
    * destructor.
    */
   void stop();
 
-  int send_message(std::vector<RPCRequestItem> msg,
-                   const int zmq_connection_id);
+  int send_message(std::vector<RPCRequestItem> msg, const int zmq_connection_id);
 
-  int send_model_message(std::string model_name,
-                         std::vector<RPCRequestItem> msg,
+  int send_model_message(std::string model_name, std::vector<RPCRequestItem> msg,
                          const int zmq_connection_id);
 
  private:
@@ -110,12 +102,10 @@ class RPCService {
       model_processing_latencies_;
   std::shared_ptr<metrics::DataList<long long>> model_send_times_;
   std::unordered_map<int, std::string> msg_id_models_map_;
-  std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>>
-      msg_id_timestamp_map_;
+  std::unordered_map<int, std::chrono::time_point<std::chrono::system_clock>> msg_id_timestamp_map_;
 
   std::function<void(VersionedModelId, int)> container_ready_callback_;
-  std::function<void(RPCResponse, long long, long long, long long)>
-      new_response_callback_;
+  std::function<void(RPCResponse, long long, long long, long long)> new_response_callback_;
 
   // Mapping from zmq_connection_id to routing id (for sending)
   std::unordered_map<int, const std::vector<uint8_t>> connection_routing_map_;
@@ -123,8 +113,7 @@ class RPCService {
 
   // Map from zmq_connection_id to container metadata.
   // Values are pairs of model id and integer replica id.
-  std::unordered_map<int, std::pair<VersionedModelId, int>>
-      connections_containers_map_;
+  std::unordered_map<int, std::pair<VersionedModelId, int>> connections_containers_map_;
   std::mutex connections_containers_map_mutex_;
 };
 
