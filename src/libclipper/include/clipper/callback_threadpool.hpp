@@ -63,8 +63,9 @@ class CallbackThreadPool {
       : done_{false},
         queue_{100000},
         threads_{},
-        queue_submit_latency_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
-            name + ":queue_submit_latency", "microseconds", 4096)) {
+        queue_submit_latency_hist_(
+            metrics::MetricsRegistry::get_metrics().create_histogram(
+                name + ":queue_submit_latency", "microseconds", 4096)) {
     try {
       for (std::uint32_t i = 0u; i < numThreads; ++i) {
         threads_.emplace_back(&CallbackThreadPool::worker, this);
@@ -95,7 +96,8 @@ class CallbackThreadPool {
    */
   template <typename Func, typename... Args>
   auto submit(Func&& func, Args&&... args) {
-    auto boundTask = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+    auto boundTask =
+        std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
     using ResultType = std::result_of_t<decltype(boundTask)()>;
     using PackagedTask = boost::packaged_task<ResultType()>;
     using TaskType = ThreadTask<PackagedTask>;
@@ -109,8 +111,10 @@ class CallbackThreadPool {
 
     auto submit_latency = current_time - start_time;
     long submit_latency_micros =
-        std::chrono::duration_cast<std::chrono::microseconds>(submit_latency).count();
-    queue_submit_latency_hist_->insert(static_cast<int64_t>(submit_latency_micros));
+        std::chrono::duration_cast<std::chrono::microseconds>(submit_latency)
+            .count();
+    queue_submit_latency_hist_->insert(
+        static_cast<int64_t>(submit_latency_micros));
     return result_future;
   }
 

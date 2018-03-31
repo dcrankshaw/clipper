@@ -81,15 +81,17 @@ class ThreadPool {
     auto queue = queues_.find(queue_id);
     if (queue != queues_.end()) {
       log_error_formatted(LOGGING_TAG_THREADPOOL,
-                          "Work queue already exists for model {}, replica {}", vm.serialize(),
-                          std::to_string(replica_id));
+                          "Work queue already exists for model {}, replica {}",
+                          vm.serialize(), std::to_string(replica_id));
       return false;
     } else {
       queues_.emplace(std::piecewise_construct, std::forward_as_tuple(queue_id),
                       std::forward_as_tuple());
-      threads_.emplace(std::piecewise_construct, std::forward_as_tuple(queue_id),
-                       std::forward_as_tuple(&ThreadPool::worker, this, queue_id));
-      log_info_formatted(LOGGING_TAG_THREADPOOL, "Work queue created for model {}, replica {}",
+      threads_.emplace(
+          std::piecewise_construct, std::forward_as_tuple(queue_id),
+          std::forward_as_tuple(&ThreadPool::worker, this, queue_id));
+      log_info_formatted(LOGGING_TAG_THREADPOOL,
+                         "Work queue created for model {}, replica {}",
                          vm.serialize(), std::to_string(replica_id));
       return true;
     }
@@ -99,8 +101,10 @@ class ThreadPool {
    * Submit a job to be run by the thread pool.
    */
   template <typename Func, typename... Args>
-  auto submit(VersionedModelId vm, int replica_id, Func&& func, Args&&... args) {
-    auto boundTask = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+  auto submit(VersionedModelId vm, int replica_id, Func&& func,
+              Args&&... args) {
+    auto boundTask =
+        std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
     using ResultType = std::result_of_t<decltype(boundTask)()>;
     using PackagedTask = boost::packaged_task<ResultType()>;
     using TaskType = ThreadTask<PackagedTask>;
@@ -153,7 +157,8 @@ class ThreadPool {
     auto thread_id = std::this_thread::get_id();
     std::stringstream ss;
     ss << thread_id;
-    log_info_formatted(LOGGING_TAG_THREADPOOL, "Worker {}, thread {} is shutting down",
+    log_info_formatted(LOGGING_TAG_THREADPOOL,
+                       "Worker {}, thread {} is shutting down",
                        std::to_string(worker_id), ss.str());
   }
 
@@ -176,7 +181,9 @@ class ThreadPool {
  private:
   std::atomic_bool done_;
   boost::shared_mutex queues_mutex_;
-  std::unordered_map<size_t, moodycamel::ConcurrentQueue<std::unique_ptr<IThreadTask>>> queues_;
+  std::unordered_map<size_t,
+                     moodycamel::ConcurrentQueue<std::unique_ptr<IThreadTask>>>
+      queues_;
   std::unordered_map<size_t, std::thread> threads_;
 };
 
@@ -194,7 +201,8 @@ inline ThreadPool& get_thread_pool(void) {
  * Submit a job to the task execution thread pool.
  */
 template <typename Func, typename... Args>
-inline auto submit_job(VersionedModelId vm, int replica_id, Func&& func, Args&&... args) {
+inline auto submit_job(VersionedModelId vm, int replica_id, Func&& func,
+                       Args&&... args) {
   return get_thread_pool().submit(vm, replica_id, std::forward<Func>(func),
                                   std::forward<Args>(args)...);
 }

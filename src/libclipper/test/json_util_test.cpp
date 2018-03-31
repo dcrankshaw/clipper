@@ -151,9 +151,11 @@ TEST(JsonUtilTests, TestArrayTypeMismatch) {
 
   rapidjson::Document d;
   parse_json(source_json, d);
-  ASSERT_THROW(get_double_array(d, "double_array_with_int"), json_semantic_error);
+  ASSERT_THROW(get_double_array(d, "double_array_with_int"),
+               json_semantic_error);
   ASSERT_THROW(get_int_array(d, "int_array_with_string"), json_semantic_error);
-  ASSERT_THROW(get_string_array(d, "string_array_with_bool"), json_semantic_error);
+  ASSERT_THROW(get_string_array(d, "string_array_with_bool"),
+               json_semantic_error);
 }
 
 TEST(JsonUtilTests, TestEmptyDocumentToString) {
@@ -202,11 +204,14 @@ TEST(JsonUtilTests, TestParseCandidateModels) {
   }
   )";
   std::vector<clipper::VersionedModelId> expected_models = {
-      {"sklearn_svm", "92248e3"}, {"sklearn_svm", "1.2.4"}, {"network", "3--0"}};
+      {"sklearn_svm", "92248e3"},
+      {"sklearn_svm", "1.2.4"},
+      {"network", "3--0"}};
 
   rapidjson::Document d;
   parse_json(correct_json, d);
-  EXPECT_EQ(get_candidate_models(d, "correct_candidate_models"), expected_models);
+  EXPECT_EQ(get_candidate_models(d, "correct_candidate_models"),
+            expected_models);
 
   parse_json(missing_name_json, d);
   ASSERT_THROW(get_candidate_models(d, "missing_name"), json_semantic_error);
@@ -218,7 +223,8 @@ TEST(JsonUtilTests, TestParseCandidateModels) {
   ASSERT_THROW(get_candidate_models(d, "wrong_name_type"), json_semantic_error);
 
   parse_json(wrong_version_type_json, d);
-  ASSERT_THROW(get_candidate_models(d, "wrong_version_type"), json_semantic_error);
+  ASSERT_THROW(get_candidate_models(d, "wrong_version_type"),
+               json_semantic_error);
 }
 
 TEST(JsonUtilTests, TestParseNestedObject) {
@@ -238,7 +244,8 @@ TEST(JsonUtilTests, TestParseNestedObject) {
 
   rapidjson::Value& nested_object = get_object(d, "nested_object");
   EXPECT_EQ(get_double_array(nested_object, "double_array"), double_array);
-  rapidjson::Value& twice_nested_object = get_object(nested_object, "twice_nested_object");
+  rapidjson::Value& twice_nested_object =
+      get_object(nested_object, "twice_nested_object");
   EXPECT_EQ(get_double(twice_nested_object, "double_val"), double_val);
 }
 
@@ -263,7 +270,8 @@ TEST(JsonUtilTests, TestBase64DecodingYieldsOriginalString) {
   d.SetObject();
   std::string key_name = "test_key";
   json::add_string(d, key_name.data(), encoded_string);
-  std::vector<uint8_t> decoded_bytes = json::get_base64_encoded_byte_array(d, key_name.data());
+  std::vector<uint8_t> decoded_bytes =
+      json::get_base64_encoded_byte_array(d, key_name.data());
   std::string decoded_string(decoded_bytes.begin(), decoded_bytes.end());
   ASSERT_EQ(raw_string, decoded_string);
 }
@@ -290,9 +298,11 @@ TEST_F(RedisToJsonTest, TestRedisAppMetadataToJson) {
   int latency_slo_micros = 10000;
   std::string selection_policy = DefaultOutputSelectionPolicy::get_name();
 
-  ASSERT_TRUE(add_application(*redis_, "myappname", parse_input_type(input_type), selection_policy,
+  ASSERT_TRUE(add_application(*redis_, "myappname",
+                              parse_input_type(input_type), selection_policy,
                               default_output, latency_slo_micros));
-  std::unordered_map<std::string, std::string> app_metadata = get_application(*redis_, "myappname");
+  std::unordered_map<std::string, std::string> app_metadata =
+      get_application(*redis_, "myappname");
 
   rapidjson::Document d;
   redis_app_metadata_to_json(d, app_metadata);
@@ -303,15 +313,17 @@ TEST_F(RedisToJsonTest, TestRedisAppMetadataToJson) {
 }
 
 TEST_F(RedisToJsonTest, TestRedisModelMetadataToJson) {
-  std::vector<std::string> labels{"ads", "images", "experimental", "other", "labels"};
+  std::vector<std::string> labels{"ads", "images", "experimental", "other",
+                                  "labels"};
   VersionedModelId model = VersionedModelId("m", "1");
   std::string input_type = "doubles";
   std::string container_name = "clipper/test_container";
   std::string model_path = "/tmp/models/m/1";
-  ASSERT_TRUE(
-      add_model(*redis_, model, parse_input_type(input_type), labels, container_name, model_path));
+  ASSERT_TRUE(add_model(*redis_, model, parse_input_type(input_type), labels,
+                        container_name, model_path));
 
-  std::unordered_map<std::string, std::string> model_metadata = get_model(*redis_, model);
+  std::unordered_map<std::string, std::string> model_metadata =
+      get_model(*redis_, model);
 
   rapidjson::Document d;
   redis_model_metadata_to_json(d, model_metadata);
@@ -330,8 +342,8 @@ TEST_F(RedisToJsonTest, TestRedisContainerMetadataToJson) {
   int replica_id = 4;
   int zmq_connection_id = 12;
   std::string input_type = "doubles";
-  ASSERT_TRUE(
-      add_container(*redis_, model, replica_id, zmq_connection_id, parse_input_type(input_type)));
+  ASSERT_TRUE(add_container(*redis_, model, replica_id, zmq_connection_id,
+                            parse_input_type(input_type)));
   std::unordered_map<std::string, std::string> container_metadata =
       get_container(*redis_, model, replica_id);
 

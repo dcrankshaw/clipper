@@ -6,8 +6,8 @@ import pickle
 
 from sklearn.svm import LinearSVC
 
-
 class OpenCvSvmContainer(rpc.ModelContainerBase):
+
     def __init__(self, model_path):
         model_file = open(model_path, "rb")
         self.model = pickle.load(model_file)
@@ -25,7 +25,6 @@ class OpenCvSvmContainer(rpc.ModelContainerBase):
         print(outputs)
         print(type(outputs))
         return self.model.predict(inputs)
-
 
 if __name__ == "__main__":
     print("Starting OpenCV SVM Container")

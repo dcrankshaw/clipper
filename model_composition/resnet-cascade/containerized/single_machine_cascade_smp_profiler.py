@@ -16,6 +16,7 @@ from containerized_utils import driver_utils
 from multiprocessing import Process, Queue
 # from scipy.stats import linregress
 
+
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%y-%m-%d:%H:%M:%S',
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 RES50 = "res50"
 RES152 = "res152"
 ALEXNET = "alexnet"
+
 
 CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
@@ -51,64 +53,64 @@ def setup_clipper(config):
     return config
 
 
-def get_heavy_node_config(model_name, batch_size, num_replicas,
-                          cpus_per_replica, allocated_cpus, allocated_gpus):
+def get_heavy_node_config(model_name,
+                          batch_size,
+                          num_replicas,
+                          cpus_per_replica,
+                          allocated_cpus,
+                          allocated_gpus):
 
     if model_name == "alexnet":
-        return driver_utils.HeavyNodeConfig(
-            name="alexnet",
-            input_type="floats",
-            model_image="model-comp/pytorch-alexnet",
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True,
-            no_diverge=True,
-        )
+        return driver_utils.HeavyNodeConfig(name="alexnet",
+                                            input_type="floats",
+                                            model_image="model-comp/pytorch-alexnet",
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            )
 
     elif model_name == "res50":
-        return driver_utils.HeavyNodeConfig(
-            name="res50",
-            input_type="floats",
-            model_image="model-comp/pytorch-res50",
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True,
-            no_diverge=True,
-        )
+        return driver_utils.HeavyNodeConfig(name="res50",
+                                            input_type="floats",
+                                            model_image="model-comp/pytorch-res50",
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            )
 
     elif model_name == "res18":
-        return driver_utils.HeavyNodeConfig(
-            name="res18",
-            input_type="floats",
-            model_image="model-comp/pytorch-res18",
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True,
-            no_diverge=True,
-        )
+        return driver_utils.HeavyNodeConfig(name="res18",
+                                            input_type="floats",
+                                            model_image="model-comp/pytorch-res18",
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            )
 
     elif model_name == "res152":
-        return driver_utils.HeavyNodeConfig(
-            name="res152",
-            input_type="floats",
-            model_image="model-comp/pytorch-res152",
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True,
-            no_diverge=True,
-        )
+        return driver_utils.HeavyNodeConfig(name="res152",
+                                            input_type="floats",
+                                            model_image="model-comp/pytorch-res152",
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            )
 
 
 def get_batch_sizes(metrics_json):
@@ -124,18 +126,17 @@ def get_batch_sizes(metrics_json):
 
 
 class Predictor(object):
+
     def __init__(self, config, clipper_metrics):
         self.outstanding_reqs = {}
-        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT,
-                             CLIPPER_RECV_PORT)
+        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
             "thrus": [],
             "all_lats": [],
             "p99_lats": [],
-            "mean_lats": []
-        }
+            "mean_lats": []}
         self.total_num_complete = 0
         self.config = config
         self.cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -156,8 +157,7 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.batch_num_complete) / (
-            end_time - self.start_time).total_seconds()
+        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["all_lats"].append(lats.tolist())
         self.stats["p99_lats"].append(p99)
@@ -168,14 +168,13 @@ class Predictor(object):
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}").format(
-                             p99=p99,
-                             mean=mean,
-                             thru=thru,
-                             batches=json.dumps(batch_sizes, sort_keys=True)))
+                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
+                                                          batches=json.dumps(
+                                                              batch_sizes, sort_keys=True)))
         else:
-            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(
-                p99=p99, mean=mean, thru=thru))
+            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                           mean=mean,
+                                                                           thru=thru))
 
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
@@ -188,13 +187,12 @@ class Predictor(object):
             self.latencies.append(latency)
             self.total_num_complete += 1
             self.batch_num_complete += 1
-            queries_per_batch = max(300, 20 * self.config.batch_size)
+            queries_per_batch = max(300, 20*self.config.batch_size)
             if self.batch_num_complete % queries_per_batch == 0:
                 self.print_stats()
                 self.init_stats()
 
-        return self.client.send_request(model_app_name,
-                                        input_item).then(continuation)
+        return self.client.send_request(model_app_name, input_item).then(continuation)
 
 
 class ModelBenchmarker(object):
@@ -204,10 +202,7 @@ class ModelBenchmarker(object):
         assert client_num == 0
         self.client_num = client_num
         logger.info("Generating random inputs")
-        base_inputs = [
-            np.array(np.random.rand(299 * 299 * 3), dtype=np.float32)
-            for _ in range(1000)
-        ]
+        base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
         self.inputs = [i for _ in range(60) for i in base_inputs]
 
     # start with an overly aggressive request rate
@@ -220,8 +215,7 @@ class ModelBenchmarker(object):
         predictor = Predictor(self.config, clipper_metrics=True)
         idx = 0
         while len(predictor.stats["thrus"]) < 5:
-            predictor.predict(
-                model_app_name=self.config.name, input_item=self.inputs[idx])
+            predictor.predict(model_app_name=self.config.name, input_item=self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
@@ -240,25 +234,23 @@ class ModelBenchmarker(object):
         last_checked_length = 7
         divergence_possible = True
         while not done:
-            predictor.predict(
-                model_app_name=self.config.name, input_item=self.inputs[idx])
+            predictor.predict(model_app_name=self.config.name,
+                              input_item=self.inputs[idx])
             time.sleep(self.delay)
             idx += 1
             idx = idx % len(self.inputs)
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 5
-                is_converged, slope_sign = driver_utils.check_convergence(
-                    predictor.stats, [self.config])
+                is_converged, slope_sign = driver_utils.check_convergence(predictor.stats,
+                                                                          [self.config])
                 # Diverging, try again with higher delay
-                if (not is_converged
-                    ) and divergence_possible and slope_sign > 0.0:
+                if (not is_converged) and divergence_possible and slope_sign > 0.0:
                     self.delay += 0.0005  # Increase by 500 us
                     logger.info("Increasing delay to {}".format(self.delay))
                     done = True
                     return self.find_steady_state()
                 elif is_converged:
-                    logger.info("Converged with delay of {}".format(
-                        self.delay))
+                    logger.info("Converged with delay of {}".format(self.delay))
                     done = True
                     self.queue.put(predictor.stats)
                     return
@@ -303,11 +295,11 @@ if __name__ == "__main__":
                 num_replicas=1,
                 cpus_per_replica=cpus,
                 allocated_cpus=range(12, 21),
-                allocated_gpus=range(gpus))
+                allocated_gpus=range(gpus)
+            )
             logger.info(json.dumps(model_config.__dict__))
             queue = Queue()
-            benchmarker = ModelBenchmarker(
-                model_config, queue=queue, client_num=0)
+            benchmarker = ModelBenchmarker(model_config, queue=queue, client_num=0)
 
             p = Process(target=benchmarker.run, args=())
             p.start()
@@ -317,6 +309,6 @@ if __name__ == "__main__":
 
             cl = ClipperConnection(DockerContainerManager(redis_port=6380))
             cl.connect()
-            driver_utils.save_results([model_config], cl, all_stats,
-                                      "no-diverge-single_model_prof_{}".format(
-                                          model_config.name))
+            driver_utils.save_results([model_config], cl,
+                                      all_stats,
+                                      "no-diverge-single_model_prof_{}".format(model_config.name))

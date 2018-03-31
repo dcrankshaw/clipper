@@ -65,8 +65,7 @@ class DockerContainerManager(ContainerManager):
         if docker_network is "host":
             raise ClipperException(
                 "DockerContainerManager does not support running Clipper on the "
-                "\"host\" docker network. Please pick a different network name"
-            )
+                "\"host\" docker network. Please pick a different network name")
         self.docker_network = docker_network
 
         self.docker_client = docker.from_env()
@@ -86,13 +85,8 @@ class DockerContainerManager(ContainerManager):
 
         self.extra_container_kwargs.update(container_args)
 
-    def start_clipper(self,
-                      query_frontend_image,
-                      mgmt_frontend_image,
-                      cache_size,
-                      redis_cpu_str="0",
-                      mgmt_cpu_str="1",
-                      query_cpu_str="2-11"):
+    def start_clipper(self, query_frontend_image, mgmt_frontend_image,
+                      cache_size, redis_cpu_str="0", mgmt_cpu_str="1", query_cpu_str="2-11"):
         """
         Parameters
         ----------
@@ -115,8 +109,8 @@ class DockerContainerManager(ContainerManager):
             redis_container = self.docker_client.containers.run(
                 'redis:alpine',
                 "redis-server --port %s" % self.redis_port,
-                name="redis-{}".format(random.randint(
-                    0, 100000)),  # generate a random name
+                name="redis-{}".format(
+                    random.randint(0, 100000)),  # generate a random name
                 ports={'%s/tcp' % self.redis_port: self.redis_port},
                 labels=self.common_labels.copy(),
                 cpuset_cpus=redis_cpu_str,
@@ -130,8 +124,8 @@ class DockerContainerManager(ContainerManager):
         self.docker_client.containers.run(
             mgmt_frontend_image,
             mgmt_cmd,
-            name="mgmt_frontend-{}".format(random.randint(
-                0, 100000)),  # generate a random name
+            name="mgmt_frontend-{}".format(
+                random.randint(0, 100000)),  # generate a random name
             ports={
                 '%s/tcp' % CLIPPER_INTERNAL_MANAGEMENT_PORT:
                 self.clipper_management_port
@@ -148,8 +142,8 @@ class DockerContainerManager(ContainerManager):
         self.docker_client.containers.run(
             query_frontend_image,
             query_cmd,
-            name="query_frontend-{}".format(random.randint(
-                0, 100000)),  # generate a random name
+            name="query_frontend-{}".format(
+                random.randint(0, 100000)),  # generate a random name
             ports={
                 '4455/tcp': 4455,
                 '4456/tcp': 4456,
@@ -170,13 +164,7 @@ class DockerContainerManager(ContainerManager):
         # No extra connection steps to take on connection
         return
 
-    def deploy_model(self,
-                     name,
-                     version,
-                     input_type,
-                     image,
-                     num_replicas=1,
-                     **kwargs):
+    def deploy_model(self, name, version, input_type, image, num_replicas=1, **kwargs):
         # Parameters
         # ----------
         # image : str
@@ -184,8 +172,7 @@ class DockerContainerManager(ContainerManager):
         #     registry, the registry name must be prepended to the image. For example,
         #     "localhost:5000/my_model_name:my_model_version" or
         #     "quay.io/my_namespace/my_model_name:my_model_version"
-        self.set_num_replicas(name, version, input_type, image, num_replicas,
-                              **kwargs)
+        self.set_num_replicas(name, version, input_type, image, num_replicas, **kwargs)
 
     def _get_replicas(self, name, version):
         containers = self.docker_client.containers.list(
@@ -200,18 +187,9 @@ class DockerContainerManager(ContainerManager):
     def get_num_replicas(self, name, version):
         return len(self._get_replicas(name, version))
 
-    def _add_replica(self,
-                     name,
-                     version,
-                     input_type,
-                     image,
-                     gpu_num=None,
-                     cpu_str=None,
-                     use_nvidia_docker=False):
+    def _add_replica(self, name, version, input_type, image, gpu_num=None, cpu_str=None, use_nvidia_docker=False):
         containers = self.docker_client.containers.list(
-            filters={
-                "label": CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL
-            })
+            filters={"label": CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL})
         if len(containers) < 1:
             logger.warning("No Clipper query frontend found.")
             raise ClipperException(
@@ -233,14 +211,11 @@ class DockerContainerManager(ContainerManager):
             # we may still need to launch it using nvidia-docker because
             # the model framework may still depend on libcuda
             env = os.environ.copy()
-            cmd = [
-                "nvidia-docker", "run", "-d",
-                "--network=%s" % self.docker_network
-            ]
+            cmd = ["nvidia-docker", "run", "-d",
+                   "--network=%s" % self.docker_network]
             if gpu_num is not None:
-                logger.info(
-                    "Starting {name}:{version} on GPU {gpu_num}".format(
-                        name=name, version=version, gpu_num=gpu_num))
+                logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
+                    name=name, version=version, gpu_num=gpu_num))
                 env["NV_GPU"] = str(gpu_num)
             else:
                 # We're not running on a GPU, so we should mask all available
@@ -269,8 +244,7 @@ class DockerContainerManager(ContainerManager):
                 cpuset_cpus=cpu_str,
                 **self.extra_container_kwargs)
 
-    def set_num_replicas(self, name, version, input_type, image, num_replicas,
-                         **kwargs):
+    def set_num_replicas(self, name, version, input_type, image, num_replicas, **kwargs):
         """
         optional kwargs
         ----------
@@ -304,8 +278,7 @@ class DockerContainerManager(ContainerManager):
             if (len(allocated_cpus) / cpus_per_replica) < num_missing:
                 raise ClipperException(
                     "Not enough cpus available. Trying to allocate {reps} replicas \
-                    {cpus_per} CPUs each out of only {alloc_cpus} allocated cpus"
-                    .format(
+                    {cpus_per} CPUs each out of only {alloc_cpus} allocated cpus".format(
                         reps=num_missing,
                         cpus_per=cpus_per_replica,
                         alloc_cpus=len(allocated_cpus)))
@@ -315,20 +288,13 @@ class DockerContainerManager(ContainerManager):
                     use_nvidia_docker = True
                 else:
                     gpu_num = None
-                cpus = allocated_cpus[i * cpus_per_replica:(
-                    i + 1) * cpus_per_replica]
+                cpus = allocated_cpus[i*cpus_per_replica: (i+1)*cpus_per_replica]
                 cpus = self.get_virtual_cpus(cpus)
                 cpus = [str(c) for c in cpus]
                 cpu_str = ",".join(cpus)
 
-                self._add_replica(
-                    name,
-                    version,
-                    input_type,
-                    image,
-                    gpu_num=gpu_num,
-                    cpu_str=cpu_str,
-                    use_nvidia_docker=use_nvidia_docker)
+                self._add_replica(name, version, input_type, image, gpu_num=gpu_num,
+                                  cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
 
         elif len(current_replicas) > num_replicas:
             num_extra = len(current_replicas) - num_replicas
@@ -360,11 +326,10 @@ class DockerContainerManager(ContainerManager):
 
         return vcpus
 
+
     def get_logs(self, logging_dir):
         containers = self.docker_client.containers.list(
-            filters={
-                "label": CLIPPER_DOCKER_LABEL
-            })
+            filters={"label": CLIPPER_DOCKER_LABEL})
         logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
 
         log_files = []
@@ -382,9 +347,7 @@ class DockerContainerManager(ContainerManager):
 
     def stop_models(self, models):
         containers = self.docker_client.containers.list(
-            filters={
-                "label": CLIPPER_MODEL_CONTAINER_LABEL
-            })
+            filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
         for c in containers:
             c_name, c_version = parse_model_container_label(
                 c.labels[CLIPPER_MODEL_CONTAINER_LABEL])
@@ -393,17 +356,13 @@ class DockerContainerManager(ContainerManager):
 
     def stop_all_model_containers(self):
         containers = self.docker_client.containers.list(
-            filters={
-                "label": CLIPPER_MODEL_CONTAINER_LABEL
-            })
+            filters={"label": CLIPPER_MODEL_CONTAINER_LABEL})
         for c in containers:
             c.stop()
 
     def stop_all(self):
         containers = self.docker_client.containers.list(
-            filters={
-                "label": CLIPPER_DOCKER_LABEL
-            })
+            filters={"label": CLIPPER_DOCKER_LABEL})
         for c in containers:
             c.stop(timeout=1)
         try:

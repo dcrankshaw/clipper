@@ -8,8 +8,8 @@ import cv2
 
 NUM_SIFT_FEATURES = 20
 
-
 class SIFTFeaturizationContainer(rpc.ModelContainerBase):
+
     def __init__(self):
         self.sift = cv2.xfeatures2d.SIFT_create(nfeatures=NUM_SIFT_FEATURES)
 
@@ -21,17 +21,13 @@ class SIFTFeaturizationContainer(rpc.ModelContainerBase):
             A list of images, each of which is represented
             as a numpy array of floats
         """
-        inputs = [
-            input_item.reshape((299, 299, 3)).astype(np.uint8)
-            for input_item in inputs
-        ]
+        inputs = [input_item.reshape((299,299,3)).astype(np.uint8) for input_item in inputs]
         return [self._get_keypoints(input_img) for input_img in inputs]
 
     def _get_keypoints(self, img):
         grayscale_img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         keypoints, features = self.sift.detectAndCompute(grayscale_img, None)
         return np.array(features[:NUM_SIFT_FEATURES], dtype=np.int32)
-
 
 if __name__ == "__main__":
     print("Starting OpenCV SIFT Featurization Container")

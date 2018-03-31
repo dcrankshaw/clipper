@@ -1,10 +1,10 @@
 #include <time.h>
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <chrono>
 
 // #include "httplib.h"
 // #define HTTP_IMPLEMENTATION
@@ -19,11 +19,13 @@ using namespace clipper;
 constexpr int SEND_PORT = 4456;
 constexpr int RECV_PORT = 4455;
 
-Driver::Driver(
-    std::function<void(FrontendRPCClient &, ClientFeatureVector, std::atomic<int> &)> predict_func,
-    std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
-    int trial_length, int num_trials, std::string log_file, std::string clipper_address,
-    int batch_size, std::vector<float> delay_ms)
+Driver::Driver(std::function<void(FrontendRPCClient &, ClientFeatureVector,
+                                  std::atomic<int> &)>
+                   predict_func,
+               std::vector<ClientFeatureVector> inputs, float target_throughput,
+               std::string distribution, int trial_length, int num_trials,
+               std::string log_file, std::string clipper_address,
+               int batch_size, std::vector<float> delay_ms)
     : predict_func_(predict_func),
       inputs_(inputs),
       target_throughput_(target_throughput),
@@ -45,26 +47,27 @@ void spin_sleep(long duration_micros) {
   long cur_delay_micros = 0;
   while (cur_delay_micros < duration_micros) {
     auto cur_delay = std::chrono::system_clock::now() - start_time;
-    cur_delay_micros = std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
+    cur_delay_micros =
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_delay)
+            .count();
   }
 }
 
 void Driver::start() {
-  if (!(distribution_ == "poisson" || distribution_ == "constant" || distribution_ == "batch" ||
-        distribution_ == "file")) {
+  if (!(distribution_ == "poisson" || distribution_ == "constant" ||
+        distribution_ == "batch" || distribution_ == "file")) {
     std::cerr << "Invalid distribution: " << distribution_ << std::endl;
     return;
   }
   auto monitor_thread = std::thread([this]() { monitor_results(); });
   if (distribution_ == "batch") {
-    std::cout << "starting batch arrival process with batch size " << std::to_string(batch_size_)
-              << std::endl;
+    std::cout << "starting batch arrival process with batch size " << std::to_string(batch_size_) << std::endl;
     int cur_idx = 0;
 
     // Send a query to flush the system
     predict_func_(client_, inputs_[cur_idx], prediction_counter_);
     cur_idx += 1;
-    spin_sleep(1000 * 1000L);
+    spin_sleep(1000*1000L);
 
     while (!done_) {
       // Get the current pred counter
@@ -85,11 +88,11 @@ void Driver::start() {
     while (!done_) {
       int delay_idx = 0;
       long seed = 1000;
-      // long seed =
-      // std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+      // long seed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
       std::mt19937 gen(seed);
       std::exponential_distribution<> exp_dist(target_throughput_);
-      long constant_request_delay_micros = std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
+      long constant_request_delay_micros =
+          std::lround(1.0 / target_throughput_ * 1000.0 * 1000.0);
       for (ClientFeatureVector f : inputs_) {
         if (done_) {
           break;
@@ -134,13 +137,15 @@ void Driver::monitor_results() {
     int current_count = prediction_counter_;
     if (current_count > trial_length_ * (num_completed_trials + 1)) {
       num_completed_trials += 1;
-      std::cout << "Trial " << std::to_string(num_completed_trials) << " completed" << std::endl;
+      std::cout << "Trial " << std::to_string(num_completed_trials)
+                << " completed" << std::endl;
       std::string metrics_report =
           // registry.report_metrics(false);
           registry.report_metrics(true);
       client_metrics_file << metrics_report;
       client_metrics_file << "," << std::endl;
-      std::string address = "http://" + clipper_address_ + ":" + std::to_string(1337) + "/metrics";
+      std::string address = "http://" + clipper_address_ + ":" +
+                            std::to_string(1337) + "/metrics";
       std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
       std::system(cmd_str.c_str());
       std::ifstream curl_output("curl_out.txt");

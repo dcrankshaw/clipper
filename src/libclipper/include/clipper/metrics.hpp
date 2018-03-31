@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
-#include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 #include "clock.hpp"
 
 namespace clipper {
@@ -19,7 +19,13 @@ using std::vector;
 
 const std::string LOGGING_TAG_METRICS = "METRICS";
 
-enum class MetricType { Counter = 0, RatioCounter = 1, Meter = 2, Histogram = 3, DataList = 4 };
+enum class MetricType {
+  Counter = 0,
+  RatioCounter = 1,
+  Meter = 2,
+  Histogram = 3,
+  DataList = 4
+};
 
 class Metric {
  public:
@@ -49,12 +55,13 @@ class Metric {
 template <typename T>
 class DataList : public Metric {
  public:
-  explicit DataList(const std::string name, const std::string unit) : name_(name), unit_(unit) {}
+  explicit DataList(const std::string name, const std::string unit)
+      : name_(name), unit_(unit) {}
 
   // Disallow copy and move
   DataList(DataList &other) = delete;
   DataList &operator=(DataList &other) = delete;
-  DataList(DataList &&other) = delete;
+  DataList (DataList &&other) = delete;
   DataList &operator=(DataList &&other) = delete;
 
   void insert(T item) {
@@ -63,15 +70,19 @@ class DataList : public Metric {
     items_.push_back(std::make_pair(timestamp, item));
   }
 
-  MetricType type() const override { return MetricType::DataList; }
+  MetricType type() const override {
+    return MetricType::DataList;
+  }
 
-  const std::string name() const override { return name_; }
+  const std::string name() const override {
+    return name_;
+  }
 
   const boost::property_tree::ptree report_tree() override {
     std::lock_guard<std::mutex> lock(mtx_);
     boost::property_tree::ptree report_tree;
     boost::property_tree::ptree data_array;
-    for (auto &item : items_) {
+    for(auto &item : items_) {
       boost::property_tree::ptree child;
       child.put(std::to_string(item.first), item.second);
       data_array.push_back(std::make_pair("", child));
@@ -99,6 +110,7 @@ class DataList : public Metric {
   std::string unit_;
   std::mutex mtx_;
 };
+
 
 class Counter : public Metric {
  public:
@@ -136,7 +148,8 @@ class RatioCounter : public Metric {
  public:
   /** Creates a RatioCounter with numerator 0 and denominator 0 **/
   explicit RatioCounter(const std::string name);
-  explicit RatioCounter(const std::string name, const uint32_t num, const uint32_t denom);
+  explicit RatioCounter(const std::string name, const uint32_t num,
+                        const uint32_t denom);
 
   // Disallow copy and move
   RatioCounter(RatioCounter &other) = delete;
@@ -321,8 +334,9 @@ class HistogramStats {
  public:
   /** Constructs a HistogramStats object with all values zero **/
   explicit HistogramStats(){};
-  explicit HistogramStats(size_t data_size, int64_t min, int64_t max, long double mean,
-                          long double std_dev, long double p50, long double p95, long double p99);
+  explicit HistogramStats(size_t data_size, int64_t min, int64_t max,
+                          long double mean, long double std_dev,
+                          long double p50, long double p95, long double p99);
 
   size_t data_size_ = 0;
   int64_t min_ = 0;
@@ -336,7 +350,8 @@ class HistogramStats {
 
 class Histogram : public Metric {
  public:
-  explicit Histogram(const std::string name, const std::string unit, const size_t sample_size);
+  explicit Histogram(const std::string name, const std::string unit,
+                     const size_t sample_size);
 
   // Disallow copy and move
   Histogram(Histogram &other) = delete;
@@ -346,11 +361,11 @@ class Histogram : public Metric {
 
   void insert(const int64_t value);
   const HistogramStats compute_stats();
-  static long double percentile(std::vector<int64_t> &snapshot, double rank);
+  static long double percentile(std::vector<int64_t>& snapshot, double rank);
   // This method obtains a snapshot from the histogram's reservoir sampler
   // and then calculates the percentile
   long double percentile(double rank);
-  long double compute_mean(std::vector<int64_t> &snapshot);
+  long double compute_mean(std::vector<int64_t>& snapshot);
 
   // Metric implementation
   MetricType type() const override;
@@ -397,13 +412,16 @@ class MetricsRegistry {
 
   /** Creates a Counter with initial value zero */
   std::shared_ptr<Counter> create_counter(const std::string name);
-  std::shared_ptr<Counter> create_counter(const std::string name, const int initial_count);
+  std::shared_ptr<Counter> create_counter(const std::string name,
+                                          const int initial_count);
   /** Creates a RatioCounter with initial value zero */
   std::shared_ptr<RatioCounter> create_ratio_counter(const std::string name);
-  std::shared_ptr<RatioCounter> create_ratio_counter(const std::string name, const uint32_t num,
+  std::shared_ptr<RatioCounter> create_ratio_counter(const std::string name,
+                                                     const uint32_t num,
                                                      const uint32_t denom);
   std::shared_ptr<Meter> create_meter(const std::string name);
-  std::shared_ptr<Histogram> create_histogram(const std::string name, const std::string unit,
+  std::shared_ptr<Histogram> create_histogram(const std::string name,
+                                              const std::string unit,
                                               const size_t sample_size);
 
   template <typename T>

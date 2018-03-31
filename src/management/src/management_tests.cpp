@@ -5,7 +5,8 @@
 
 int main(int argc, char** argv) {
   cxxopts::Options options("management_tests", "Management tests");
-  options.add_options()("p,redis_port", "Redis port", cxxopts::value<int>()->default_value("-1"));
+  options.add_options()("p,redis_port", "Redis port",
+                        cxxopts::value<int>()->default_value("-1"));
   options.parse(argc, argv);
   int redis_port = options["redis_port"].as<int>();
   // means the option wasn't supplied and an exception should be thrown

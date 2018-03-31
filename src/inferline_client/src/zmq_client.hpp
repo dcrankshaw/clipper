@@ -21,8 +21,8 @@ class ClientFeatureVector {
  public:
   ClientFeatureVector() = default;
 
-  ClientFeatureVector(std::shared_ptr<void> data, size_t size_typed, size_t size_bytes,
-                      DataType type);
+  ClientFeatureVector(std::shared_ptr<void> data, size_t size_typed,
+                      size_t size_bytes, DataType type);
 
   // Copy constructors
   ClientFeatureVector(const ClientFeatureVector &other) = default;
@@ -40,7 +40,8 @@ class ClientFeatureVector {
 };
 
 // Tuple of request ID, app name, input
-typedef std::tuple<int, std::string, ClientFeatureVector> FrontendRPCClientRequest;
+typedef std::tuple<int, std::string, ClientFeatureVector>
+    FrontendRPCClientRequest;
 // Tuple of request id, output.
 // typedef std::tuple<int, Output> FrontendRPCClientResponse;
 
@@ -66,13 +67,15 @@ class FrontendRPCClient {
   void handle_new_connection(zmq::socket_t &socket);
   void send_messages(zmq::socket_t &socket, int max_num_messages);
 
-  std::shared_ptr<moodycamel::ConcurrentQueue<FrontendRPCClientRequest>> request_queue_;
+  std::shared_ptr<moodycamel::ConcurrentQueue<FrontendRPCClientRequest>>
+      request_queue_;
   // std::shared_ptr<clipper::CallbackThreadPool> prediction_executor_;
   std::atomic_bool active_;
   std::thread rpc_send_thread_;
   std::thread rpc_recv_thread_;
 
-  std::unordered_map<int, std::function<void(ClientFeatureVector, std::shared_ptr<QueryLineage>)>>
+  std::unordered_map<int,
+                     std::function<void(ClientFeatureVector, std::shared_ptr<QueryLineage>)>>
       closure_map_;
   std::mutex closure_map_mutex_;
 

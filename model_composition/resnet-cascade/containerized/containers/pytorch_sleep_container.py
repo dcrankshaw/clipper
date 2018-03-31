@@ -11,10 +11,9 @@ import logging
 # from datetime import datetime
 import time
 
-logging.basicConfig(
-    format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
+                    datefmt='%y-%m-%d:%H:%M:%S',
+                    level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +31,20 @@ class TorchContainer(rpc.ModelContainerBase):
         self.width = 299
 
         normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
 
         self.preprocess = transforms.Compose([
             transforms.Scale(256),
             transforms.CenterCrop(224),
-            transforms.ToTensor(), normalize
+            transforms.ToTensor(),
+            normalize
         ])
 
     def predict_floats(self, inputs):
         batch_size = 30
-        num_batches = (len(inputs) // batch_size) + (
-            (len(inputs) % batch_size) > 0)
+        num_batches = (len(inputs) // batch_size) + ((len(inputs) % batch_size) > 0)
         # for _ in range(num_batches):
         #     time.sleep(0.178)
         return np.random.random(len(inputs)).astype(str).tolist()

@@ -7,7 +7,8 @@
 #include "management_frontend.hpp"
 
 int main(int argc, char* argv[]) {
-  cxxopts::Options options("management_frontend", "Clipper management interface");
+  cxxopts::Options options("management_frontend",
+                           "Clipper management interface");
 
   // clang-format off
   options.add_options()

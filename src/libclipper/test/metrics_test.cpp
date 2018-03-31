@@ -73,7 +73,8 @@ TEST(MetricsTests, EWMACorrectness) {
 TEST(MetricsTests, HistogramPercentileFunctionCorrectness) {
   int64_t arr1[] = {15, 20, 35, 40, 50};
   double p1 = 0.4;
-  double percentile1 = Histogram::percentile(std::vector<int64_t>(arr1, arr1 + 5), p1);
+  double percentile1 =
+      Histogram::percentile(std::vector<int64_t>(arr1, arr1 + 5), p1);
   // The 40th percentile of the set of the data enumerated in arr1 should be 26
   ASSERT_EQ(static_cast<int>(percentile1), 26);
 
@@ -143,7 +144,8 @@ TEST(MetricsTests, HistogramMinMaxMeanAreCorrectWithNumericallyLargeElements) {
     histogram.insert(max_long - i);
     sum += max_long - i;
   }
-  long double expected_mean = static_cast<long double>(sum) / static_cast<long double>(sample_size);
+  long double expected_mean =
+      static_cast<long double>(sum) / static_cast<long double>(sample_size);
   HistogramStats stats = histogram.compute_stats();
   ASSERT_DOUBLE_EQ(stats.mean_, expected_mean);
   ASSERT_DOUBLE_EQ(stats.max_, max_long);
@@ -157,12 +159,14 @@ TEST(MetricsTests, MetricsRegistryReportingFormatCorrectness) {
   const std::string counter1_name("Counter");
   const std::string ratio_counter1_name("Ratio Counter");
 
-  std::shared_ptr<Histogram> hist1 = registry.create_histogram(hist1_name, "milliseconds", 2056);
+  std::shared_ptr<Histogram> hist1 =
+      registry.create_histogram(hist1_name, "milliseconds", 2056);
   hist1->insert(100);
   hist1->insert(200);
   hist1->insert(300);
 
-  std::shared_ptr<Histogram> hist2 = registry.create_histogram(hist2_name, "milliseconds", 2056);
+  std::shared_ptr<Histogram> hist2 =
+      registry.create_histogram(hist2_name, "milliseconds", 2056);
   hist2->insert(30);
   hist2->insert(60);
   hist2->insert(115);
@@ -170,7 +174,8 @@ TEST(MetricsTests, MetricsRegistryReportingFormatCorrectness) {
   std::shared_ptr<Counter> counter1 = registry.create_counter(counter1_name);
   counter1->increment(9);
 
-  std::shared_ptr<RatioCounter> ratio_counter1 = registry.create_ratio_counter(ratio_counter1_name);
+  std::shared_ptr<RatioCounter> ratio_counter1 =
+      registry.create_ratio_counter(ratio_counter1_name);
   ratio_counter1->increment(8, 40);
 
   // Get a metrics data report without clearing any metrics
@@ -184,7 +189,8 @@ TEST(MetricsTests, MetricsRegistryReportingFormatCorrectness) {
       report_tree.get_child(get_metrics_category_name(MetricType::Histogram));
   ASSERT_EQ((int)hists_tree.size(), 2);
 
-  boost::property_tree::ptree hist1_tree = hists_tree.front().second.get_child(hist1_name);
+  boost::property_tree::ptree hist1_tree =
+      hists_tree.front().second.get_child(hist1_name);
   HistogramStats hist1_stats = hist1->compute_stats();
   ASSERT_EQ(hist1_tree.get<size_t>("size"), hist1_stats.data_size_);
   ASSERT_EQ(hist1_tree.get<int64_t>("min"), hist1_stats.min_);
@@ -195,13 +201,15 @@ TEST(MetricsTests, MetricsRegistryReportingFormatCorrectness) {
   ASSERT_EQ(hist1_tree.get<long double>("p95"), hist1_stats.p95_);
   ASSERT_EQ(hist1_tree.get<long double>("p99"), hist1_stats.p99_);
 
-  boost::property_tree::ptree hist2_tree = hists_tree.back().second.get_child(hist2_name);
+  boost::property_tree::ptree hist2_tree =
+      hists_tree.back().second.get_child(hist2_name);
   HistogramStats hist2_stats = hist2->compute_stats();
   ASSERT_EQ(hist2_tree.get<size_t>("size"), hist2_stats.data_size_);
   ASSERT_EQ(hist2_tree.get<int64_t>("min"), hist2_stats.min_);
   ASSERT_EQ(hist2_tree.get<int64_t>("max"), hist2_stats.max_);
   ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("mean"), hist2_stats.mean_);
-  ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("std_dev"), hist2_stats.std_dev_);
+  ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("std_dev"),
+                   hist2_stats.std_dev_);
   ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("p50"), hist2_stats.p50_);
   ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("p95"), hist2_stats.p95_);
   ASSERT_DOUBLE_EQ(hist2_tree.get<long double>("p99"), hist2_stats.p99_);
@@ -209,21 +217,24 @@ TEST(MetricsTests, MetricsRegistryReportingFormatCorrectness) {
   boost::property_tree::ptree counters_tree =
       report_tree.get_child(get_metrics_category_name(MetricType::Counter));
   ASSERT_EQ((int)counters_tree.size(), 1);
-  boost::property_tree::ptree counter1_tree = counters_tree.front().second.get_child(counter1_name);
+  boost::property_tree::ptree counter1_tree =
+      counters_tree.front().second.get_child(counter1_name);
   ASSERT_EQ(counter1_tree.get<int>("count"), counter1->value());
 
-  boost::property_tree::ptree ratio_counters_tree =
-      report_tree.get_child(get_metrics_category_name(MetricType::RatioCounter));
+  boost::property_tree::ptree ratio_counters_tree = report_tree.get_child(
+      get_metrics_category_name(MetricType::RatioCounter));
   ASSERT_EQ((int)ratio_counters_tree.size(), 1);
   boost::property_tree::ptree ratio_counter1_tree =
       ratio_counters_tree.front().second.get_child(ratio_counter1_name);
-  ASSERT_EQ(ratio_counter1_tree.get<double>("ratio"), ratio_counter1->get_ratio());
+  ASSERT_EQ(ratio_counter1_tree.get<double>("ratio"),
+            ratio_counter1->get_ratio());
 }
 
 TEST(MetricsTests, MetricsRegistryReportingWithClearEnabledClearsCorrectly) {
   MetricsRegistry &registry = MetricsRegistry::get_metrics();
 
-  std::shared_ptr<Histogram> hist = registry.create_histogram("Test Hist", "milliseconds", 10);
+  std::shared_ptr<Histogram> hist =
+      registry.create_histogram("Test Hist", "milliseconds", 10);
   hist->insert(8);
   hist->insert(10);
   HistogramStats stats = hist->compute_stats();

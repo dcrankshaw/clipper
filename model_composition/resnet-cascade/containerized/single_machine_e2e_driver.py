@@ -29,6 +29,7 @@ RES50 = "res50"
 RES152 = "res152"
 ALEXNET = "alexnet"
 
+
 CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
 CLIPPER_RECV_PORT = 4455
@@ -54,53 +55,59 @@ def setup_clipper(configs):
     return config
 
 
-def setup_alexnet(batch_size, num_replicas, cpus_per_replica, allocated_cpus,
+def setup_alexnet(batch_size,
+                  num_replicas,
+                  cpus_per_replica,
+                  allocated_cpus,
                   allocated_gpus):
 
-    return driver_utils.HeavyNodeConfig(
-        name="alexnet",
-        input_type="floats",
-        model_image="model-comp/pytorch-alexnet",
-        allocated_cpus=allocated_cpus,
-        cpus_per_replica=cpus_per_replica,
-        gpus=allocated_gpus,
-        batch_size=batch_size,
-        num_replicas=num_replicas,
-        use_nvidia_docker=True,
-        no_diverge=True,
-    )
+    return driver_utils.HeavyNodeConfig(name="alexnet",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-alexnet",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
-def setup_res50(batch_size, num_replicas, cpus_per_replica, allocated_cpus,
+def setup_res50(batch_size,
+                num_replicas,
+                cpus_per_replica,
+                allocated_cpus,
                 allocated_gpus):
-    return driver_utils.HeavyNodeConfig(
-        name="res50",
-        input_type="floats",
-        model_image="model-comp/pytorch-res50",
-        allocated_cpus=allocated_cpus,
-        cpus_per_replica=cpus_per_replica,
-        gpus=allocated_gpus,
-        batch_size=batch_size,
-        num_replicas=num_replicas,
-        use_nvidia_docker=True,
-        no_diverge=True,
-    )
+    return driver_utils.HeavyNodeConfig(name="res50",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-res50",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
-def setup_res152(batch_size, num_replicas, cpus_per_replica, allocated_cpus,
+def setup_res152(batch_size,
+                 num_replicas,
+                 cpus_per_replica,
+                 allocated_cpus,
                  allocated_gpus):
-    return driver_utils.HeavyNodeConfig(
-        name="res152",
-        input_type="floats",
-        model_image="model-comp/pytorch-res152",
-        allocated_cpus=allocated_cpus,
-        cpus_per_replica=cpus_per_replica,
-        gpus=allocated_gpus,
-        batch_size=batch_size,
-        num_replicas=num_replicas,
-        use_nvidia_docker=True,
-        no_diverge=True,
-    )
+    return driver_utils.HeavyNodeConfig(name="res152",
+                                        input_type="floats",
+                                        model_image="model-comp/pytorch-res152",
+                                        allocated_cpus=allocated_cpus,
+                                        cpus_per_replica=cpus_per_replica,
+                                        gpus=allocated_gpus,
+                                        batch_size=batch_size,
+                                        num_replicas=num_replicas,
+                                        use_nvidia_docker=True,
+                                        no_diverge=True,
+                                        )
 
 
 def get_batch_sizes(metrics_json):
@@ -116,10 +123,10 @@ def get_batch_sizes(metrics_json):
 
 
 class Predictor(object):
+
     def __init__(self, clipper_metrics):
         self.outstanding_reqs = {}
-        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT,
-                             CLIPPER_RECV_PORT)
+        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
@@ -147,8 +154,7 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.batch_num_complete) / (
-            end_time - self.start_time).total_seconds()
+        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["all_lats"].append(lats.tolist())
         self.stats["p99_lats"].append(p99)
@@ -159,14 +165,13 @@ class Predictor(object):
             self.stats["mean_batch_sizes"].append(batch_sizes)
             self.stats["all_metrics"].append(metrics)
             logger.info(("p99: {p99}, mean: {mean}, thruput: {thru}, "
-                         "batch_sizes: {batches}").format(
-                             p99=p99,
-                             mean=mean,
-                             thru=thru,
-                             batches=json.dumps(batch_sizes, sort_keys=True)))
+                         "batch_sizes: {batches}").format(p99=p99, mean=mean, thru=thru,
+                                                          batches=json.dumps(
+                                                              batch_sizes, sort_keys=True)))
         else:
-            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(
-                p99=p99, mean=mean, thru=thru))
+            logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                           mean=mean,
+                                                                           thru=thru))
 
     def predict(self, input_item):
         begin_time = datetime.now()
@@ -194,8 +199,7 @@ class Predictor(object):
                 idk = np.random.random() > 0.4633
                 # idk = True
                 if idk:
-                    self.client.send_request("res152",
-                                             input_item).then(res152_cont)
+                    self.client.send_request("res152", input_item).then(res152_cont)
                 else:
                     complete()
 
@@ -205,8 +209,7 @@ class Predictor(object):
             else:
                 idk = np.random.random() > 0.192
                 if idk:
-                    self.client.send_request("res50",
-                                             input_item).then(res50_cont)
+                    self.client.send_request("res50", input_item).then(res50_cont)
                 else:
                     complete()
 
@@ -220,10 +223,7 @@ class ModelBenchmarker(object):
         assert client_num == 0
         self.client_num = client_num
         logger.info("Generating random inputs")
-        base_inputs = [
-            np.array(np.random.rand(299 * 299 * 3), dtype=np.float32)
-            for _ in range(1000)
-        ]
+        base_inputs = [np.array(np.random.rand(299*299*3), dtype=np.float32) for _ in range(1000)]
         self.inputs = [i for _ in range(60) for i in base_inputs]
         self.latency_upper_bound = latency_upper_bound
 
@@ -254,6 +254,7 @@ class ModelBenchmarker(object):
         else:
             self.delay += 0.001
 
+
     def find_steady_state(self):
         setup_clipper(self.configs)
         time.sleep(7)
@@ -270,8 +271,7 @@ class ModelBenchmarker(object):
 
             if len(predictor.stats["thrus"]) > last_checked_length:
                 last_checked_length = len(predictor.stats["thrus"]) + 4
-                convergence_state = driver_utils.check_convergence(
-                    predictor.stats, self.configs, self.latency_upper_bound)
+                convergence_state = driver_utils.check_convergence(predictor.stats, self.configs, self.latency_upper_bound)
                 # Diverging, try again with higher
                 # delay
                 if convergence_state == INCREASING or convergence_state == CONVERGED_HIGH:
@@ -280,8 +280,7 @@ class ModelBenchmarker(object):
                     done = True
                     return self.find_steady_state()
                 elif convergence_state == CONVERGED:
-                    logger.info("Converged with delay of {}".format(
-                        self.delay))
+                    logger.info("Converged with delay of {}".format(self.delay))
                     done = True
                     self.queue.put(predictor.stats)
                     return
@@ -293,8 +292,7 @@ class ModelBenchmarker(object):
                 elif convergence_state == DECREASING or convergence_state == UNKNOWN:
                     logger.info("Not converged yet. Still waiting")
                 else:
-                    logger.error("Unknown convergence state: {}".format(
-                        convergence_state))
+                    logger.error("Unknown convergence state: {}".format(convergence_state))
                     sys.exit(1)
 
     def run(self):
@@ -322,7 +320,12 @@ if __name__ == "__main__":
     # alexnet_reps = 1
     # res50_reps = 1
     # res152_reps = 1
-    reps = [(1, 1, 1), (1, 1, 2), (1, 2, 2), (2, 2, 2), (2, 2, 3), (2, 3, 3)]
+    reps = [(1, 1, 1),
+            (1, 1, 2),
+            (1, 2, 2),
+            (2, 2, 2),
+            (2, 2, 3),
+            (2, 3, 3)]
 
     for alexnet_reps, res50_reps, res152_reps in reps:
         total_cpus = range(9, 29)
@@ -336,29 +339,25 @@ if __name__ == "__main__":
             return [total_gpus.pop() for _ in range(num_gpus)]
 
         configs = [
-            setup_alexnet(
-                batch_size=alex_batch,
-                num_replicas=alexnet_reps,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(alexnet_reps),
-                allocated_gpus=get_gpus(alexnet_reps)),
-            setup_res50(
-                batch_size=res50_batch,
-                num_replicas=res50_reps,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(res50_reps),
-                allocated_gpus=get_gpus(res50_reps)),
-            setup_res152(
-                batch_size=res152_batch,
-                num_replicas=res152_reps,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(res152_reps),
-                allocated_gpus=get_gpus(res152_reps))
+            setup_alexnet(batch_size=alex_batch,
+                          num_replicas=alexnet_reps,
+                          cpus_per_replica=1,
+                          allocated_cpus=get_cpus(alexnet_reps),
+                          allocated_gpus=get_gpus(alexnet_reps)),
+            setup_res50(batch_size=res50_batch,
+                        num_replicas=res50_reps,
+                        cpus_per_replica=1,
+                        allocated_cpus=get_cpus(res50_reps),
+                        allocated_gpus=get_gpus(res50_reps)),
+            setup_res152(batch_size=res152_batch,
+                         num_replicas=res152_reps,
+                         cpus_per_replica=1,
+                         allocated_cpus=get_cpus(res152_reps),
+                         allocated_gpus=get_gpus(res152_reps))
         ]
 
         client_num = 0
-        benchmarker = ModelBenchmarker(configs, queue, client_num,
-                                       latency_upper_bound)
+        benchmarker = ModelBenchmarker(configs, queue, client_num, latency_upper_bound)
         p = Process(target=benchmarker.run)
         p.start()
 
@@ -368,11 +367,9 @@ if __name__ == "__main__":
 
         cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
-        fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps,
-                                                res152_reps)
+        fname = "alex_{}-r50_{}-r152_{}".format(alexnet_reps, res50_reps, res152_reps)
         # driver_utils.save_results(configs, cl, all_stats, "e2e_max_thru_resnet-cascade", prefix=fname)
-        driver_utils.save_results(
-            configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
+        driver_utils.save_results(configs, cl, all_stats, "e2e_min_lat_resnet-cascade", prefix=fname)
         # driver_utils.save_results(configs, cl, all_stats, "e2e_500_slo_resnet-cascade", prefix=fname)
         # driver_utils.save_results(configs, cl, all_stats,
         #                           "e2e_alex_no_gpu_resnet-cascade", prefix=fname)

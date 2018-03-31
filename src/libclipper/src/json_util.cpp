@@ -24,38 +24,47 @@ using rapidjson::Type;
 namespace clipper {
 namespace json {
 
-json_parse_error::json_parse_error(const std::string& what) : std::runtime_error(what) {}
+json_parse_error::json_parse_error(const std::string& what)
+    : std::runtime_error(what) {}
 json_parse_error::~json_parse_error() throw() {}
 
-json_semantic_error::json_semantic_error(const std::string& what) : std::runtime_error(what) {}
+json_semantic_error::json_semantic_error(const std::string& what)
+    : std::runtime_error(what) {}
 json_semantic_error::~json_semantic_error() throw() {}
 
-void check_document_is_object_and_key_exists(rapidjson::Value& d, const char* key_name) {
+void check_document_is_object_and_key_exists(rapidjson::Value& d,
+                                             const char* key_name) {
   if (!d.IsObject()) {
     throw json_semantic_error("Can only get key-value pair from an object");
   } else if (!d.HasMember(key_name)) {
-    throw json_semantic_error("JSON object does not have required key: " + std::string(key_name));
+    throw json_semantic_error("JSON object does not have required key: " +
+                              std::string(key_name));
   }
 }
 
-rapidjson::Value& check_kv_type_and_return(rapidjson::Value& d, const char* key_name,
+rapidjson::Value& check_kv_type_and_return(rapidjson::Value& d,
+                                           const char* key_name,
                                            Type expected_type) {
   check_document_is_object_and_key_exists(d, key_name);
   rapidjson::Value& val = d[key_name];
   if (val.GetType() != expected_type) {
-    throw json_semantic_error("Type mismatch! JSON key " + std::string(key_name) +
-                              " expected type " + kTypeNames[expected_type] + "but found type " +
+    throw json_semantic_error("Type mismatch! JSON key " +
+                              std::string(key_name) + " expected type " +
+                              kTypeNames[expected_type] + "but found type " +
                               kTypeNames[val.GetType()]);
   }
   return val;
 }
 
-rapidjson::Value& check_kv_type_is_bool_and_return(rapidjson::Value& d, const char* key_name) {
+rapidjson::Value& check_kv_type_is_bool_and_return(rapidjson::Value& d,
+                                                   const char* key_name) {
   check_document_is_object_and_key_exists(d, key_name);
   rapidjson::Value& val = d[key_name];
-  if (val.GetType() != rapidjson::kFalseType && val.GetType() != rapidjson::kTrueType) {
-    throw json_semantic_error("Type mismatch! JSON key " + std::string(key_name) +
-                              " expected type bool but found type " + kTypeNames[val.GetType()]);
+  if (val.GetType() != rapidjson::kFalseType &&
+      val.GetType() != rapidjson::kTrueType) {
+    throw json_semantic_error(
+        "Type mismatch! JSON key " + std::string(key_name) +
+        " expected type bool but found type " + kTypeNames[val.GetType()]);
   }
   return val;
 }
@@ -65,13 +74,15 @@ rapidjson::Value& check_kv_type_is_bool_and_return(rapidjson::Value& d, const ch
 bool get_bool(rapidjson::Value& d, const char* key_name) {
   rapidjson::Value& v = check_kv_type_is_bool_and_return(d, key_name);
   if (!v.IsBool()) {
-    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] + " is not of type bool");
+    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
+                              " is not of type bool");
   }
   return v.GetBool();
 }
 
 double get_double(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
   if (!v.IsDouble()) {
     throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
                               " is not of type double");
@@ -80,31 +91,38 @@ double get_double(rapidjson::Value& d, const char* key_name) {
 }
 
 float get_float(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
   if (!v.IsFloat()) {
-    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] + " is not of type float");
+    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
+                              " is not of type float");
   }
   return v.GetFloat();
 }
 
 long get_long(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
   if (!v.IsInt64()) {
-    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] + " is not of type long");
+    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
+                              " is not of type long");
   }
   return static_cast<long>(v.GetInt64());
 }
 
 int get_int(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kNumberType);
   if (!v.IsInt()) {
-    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] + " is not of type int");
+    throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
+                              " is not of type int");
   }
   return v.GetInt();
 }
 
 std::string get_string(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kStringType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kStringType);
   if (!v.IsString()) {
     throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
                               " is not of type string");
@@ -112,8 +130,10 @@ std::string get_string(rapidjson::Value& d, const char* key_name) {
   return std::string(v.GetString());
 }
 
-std::vector<uint8_t> get_base64_encoded_byte_array(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kStringType);
+std::vector<uint8_t> get_base64_encoded_byte_array(rapidjson::Value& d,
+                                                   const char* key_name) {
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kStringType);
   if (!v.IsString()) {
     throw json_semantic_error("Input of type " + kTypeNames[v.GetType()] +
                               " is not of type base64-encoded string");
@@ -128,13 +148,16 @@ std::vector<uint8_t> get_base64_encoded_byte_array(rapidjson::Value& d, const ch
 }
 
 /* Getters with error handling for arrays of double, float, int, string */
-std::vector<double> get_double_array(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
+std::vector<double> get_double_array(rapidjson::Value& d,
+                                     const char* key_name) {
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
   std::vector<double> vals;
   vals.reserve(v.Capacity());
   for (rapidjson::Value& elem : v.GetArray()) {
     if (!elem.IsDouble()) {
-      throw json_semantic_error("Array input of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array input of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type double");
     }
     vals.push_back(elem.GetDouble());
@@ -143,12 +166,14 @@ std::vector<double> get_double_array(rapidjson::Value& d, const char* key_name) 
 }
 
 std::vector<float> get_float_array(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
   std::vector<float> vals;
   vals.reserve(v.Capacity());
   for (rapidjson::Value& elem : v.GetArray()) {
     if (!elem.IsFloat()) {
-      throw json_semantic_error("Array input of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array input of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type float");
     }
     vals.push_back(elem.GetFloat());
@@ -157,12 +182,14 @@ std::vector<float> get_float_array(rapidjson::Value& d, const char* key_name) {
 }
 
 std::vector<int> get_int_array(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
   std::vector<int> vals;
   vals.reserve(v.Capacity());
   for (rapidjson::Value& elem : v.GetArray()) {
     if (!elem.IsInt()) {
-      throw json_semantic_error("Array input of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array input of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type int");
     }
     vals.push_back(elem.GetInt());
@@ -170,13 +197,16 @@ std::vector<int> get_int_array(rapidjson::Value& d, const char* key_name) {
   return vals;
 }
 
-std::vector<std::string> get_string_array(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
+std::vector<std::string> get_string_array(rapidjson::Value& d,
+                                          const char* key_name) {
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
   std::vector<std::string> vals;
   vals.reserve(v.Capacity());
   for (rapidjson::Value& elem : v.GetArray()) {
     if (!elem.IsString()) {
-      throw json_semantic_error("Array input of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array input of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type string");
     }
     vals.push_back(elem.GetString());
@@ -184,18 +214,23 @@ std::vector<std::string> get_string_array(rapidjson::Value& d, const char* key_n
   return vals;
 }
 
-std::vector<VersionedModelId> get_candidate_models(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& v = check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
+std::vector<VersionedModelId> get_candidate_models(rapidjson::Value& d,
+                                                   const char* key_name) {
+  rapidjson::Value& v =
+      check_kv_type_and_return(d, key_name, rapidjson::kArrayType);
   std::vector<VersionedModelId> candidate_models;
   candidate_models.reserve(v.Capacity());
   for (rapidjson::Value& elem : v.GetArray()) {
     if (!elem.IsObject()) {
-      throw json_semantic_error("Array input of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array input of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type Object");
     } else if (!elem.HasMember("model_name")) {
-      throw json_semantic_error("Candidate model JSON object missing model_name.");
+      throw json_semantic_error(
+          "Candidate model JSON object missing model_name.");
     } else if (!elem.HasMember("model_version")) {
-      throw json_semantic_error("Candidate model JSON object missing model_version.");
+      throw json_semantic_error(
+          "Candidate model JSON object missing model_version.");
     }
     std::string model_name = get_string(elem, "model_name");
     std::string model_version = get_string(elem, "model_version");
@@ -205,16 +240,18 @@ std::vector<VersionedModelId> get_candidate_models(rapidjson::Value& d, const ch
 }
 
 rapidjson::Value& get_object(rapidjson::Value& d, const char* key_name) {
-  rapidjson::Value& object = check_kv_type_and_return(d, key_name, rapidjson::kObjectType);
+  rapidjson::Value& object =
+      check_kv_type_and_return(d, key_name, rapidjson::kObjectType);
   return object;
 }
 
-void parse_json(const char* json_content, size_t length, rapidjson::Document& d) {
+void parse_json(const char* json_content, size_t length,
+                rapidjson::Document& d) {
   rapidjson::ParseResult ok = d.Parse(json_content, length);
   if (!ok) {
     std::stringstream ss;
-    ss << "JSON parse error: " << rapidjson::GetParseError_En(ok.Code()) << " (offset "
-       << ok.Offset() << ")\n";
+    ss << "JSON parse error: " << rapidjson::GetParseError_En(ok.Code())
+       << " (offset " << ok.Offset() << ")\n";
     throw json_parse_error(ss.str());
   }
 }
@@ -273,7 +310,8 @@ void parse_json(const std::string& json_content, rapidjson::Document& d) {
 // }
 
 /* Utilities for serialization into JSON */
-void add_kv_pair(rapidjson::Document& d, const char* key_name, rapidjson::Value& value_to_add) {
+void add_kv_pair(rapidjson::Document& d, const char* key_name,
+                 rapidjson::Value& value_to_add) {
   if (!d.IsObject()) {
     throw json_semantic_error("Can only add a key-value pair to an object");
   } else if (d.HasMember(key_name)) {
@@ -295,11 +333,13 @@ void add_byte_array(rapidjson::Document& d, const char* key_name,
                     std::vector<uint8_t>& values_to_add) {
   char* decoded_str = reinterpret_cast<char*>(values_to_add.data());
   size_t decoded_length = values_to_add.size() * sizeof(char);
-  size_t encoded_length = static_cast<size_t>(Base64::EncodedLength(decoded_length));
+  size_t encoded_length =
+      static_cast<size_t>(Base64::EncodedLength(decoded_length));
   char* encoded_str = static_cast<char*>(malloc(encoded_length));
   Base64 encoder;
   encoder.Encode(decoded_str, decoded_length, encoded_str, encoded_length);
-  rapidjson::Value val_to_add(encoded_str, static_cast<int>(encoded_length), d.GetAllocator());
+  rapidjson::Value val_to_add(encoded_str, static_cast<int>(encoded_length),
+                              d.GetAllocator());
   add_kv_pair(d, key_name, val_to_add);
 }
 
@@ -323,7 +363,8 @@ void add_float_array(rapidjson::Document& d, const char* key_name,
   add_kv_pair(d, key_name, float_array);
 }
 
-void add_int_array(rapidjson::Document& d, const char* key_name, std::vector<int>& values_to_add) {
+void add_int_array(rapidjson::Document& d, const char* key_name,
+                   std::vector<int>& values_to_add) {
   rapidjson::Value int_array(rapidjson::kArrayType);
   rapidjson::Document::AllocatorType& allocator = d.GetAllocator();
   for (std::size_t i = 0; i < values_to_add.size(); i++) {
@@ -363,16 +404,19 @@ void add_long(rapidjson::Document& d, const char* key_name, long val) {
   add_kv_pair(d, key_name, val_to_add);
 }
 
-void add_string(rapidjson::Document& d, const char* key_name, const char* val, size_t length) {
+void add_string(rapidjson::Document& d, const char* key_name, const char* val,
+                size_t length) {
   rapidjson::Value val_to_add(val, static_cast<int>(length), d.GetAllocator());
   add_kv_pair(d, key_name, val_to_add);
 }
 
-void add_string(rapidjson::Document& d, const char* key_name, const std::string& val) {
+void add_string(rapidjson::Document& d, const char* key_name,
+                const std::string& val) {
   add_string(d, key_name, val.c_str(), val.length());
 }
 
-void add_object(rapidjson::Document& d, const char* key_name, rapidjson::Document& to_add) {
+void add_object(rapidjson::Document& d, const char* key_name,
+                rapidjson::Document& to_add) {
   add_kv_pair(d, key_name, to_add);
 }
 
@@ -383,10 +427,12 @@ std::string to_json_string(rapidjson::Document& d) {
   return buffer.GetString();
 }
 
-void set_string_array(rapidjson::Document& d, const std::vector<std::string>& str_array) {
+void set_string_array(rapidjson::Document& d,
+                      const std::vector<std::string>& str_array) {
   d.SetArray();
   for (auto const& str : str_array) {
-    rapidjson::Value string_val(rapidjson::StringRef(str.c_str(), str.length()), d.GetAllocator());
+    rapidjson::Value string_val(rapidjson::StringRef(str.c_str(), str.length()),
+                                d.GetAllocator());
     d.PushBack(string_val, d.GetAllocator());
   }
 }
@@ -399,7 +445,8 @@ std::vector<std::string> to_string_array(rapidjson::Document& d) {
 
   for (rapidjson::Value& elem : d.GetArray()) {
     if (!elem.IsString()) {
-      throw json_semantic_error("Array element of type " + kTypeNames[elem.GetType()] +
+      throw json_semantic_error("Array element of type " +
+                                kTypeNames[elem.GetType()] +
                                 " is not of type string");
     }
     converted_array.push_back(elem.GetString());
@@ -407,81 +454,92 @@ std::vector<std::string> to_string_array(rapidjson::Document& d) {
   return converted_array;
 }
 
-void check_key_exists_in_map(std::string& key,
-                             const std::unordered_map<std::string, std::string>& map) {
+void check_key_exists_in_map(
+    std::string& key, const std::unordered_map<std::string, std::string>& map) {
   if (map.find(key) == map.end()) {
     throw std::invalid_argument("key `" + key + "` does not exist in map");
   }
 }
 
-void add_input_type_from_redis(rapidjson::Document& d,
-                               const std::unordered_map<std::string, std::string>& app_metadata) {
+void add_input_type_from_redis(
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& app_metadata) {
   std::string key = "input_type";
   check_key_exists_in_map(key, app_metadata);
   add_string(d, key.c_str(), app_metadata.at(key));
 }
 
 void add_app_default_output_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& app_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& app_metadata) {
   std::string key = "default_output";
   check_key_exists_in_map(key, app_metadata);
   add_string(d, key.c_str(), app_metadata.at(key));
 }
 
 void add_app_latency_slo_micros_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& app_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& app_metadata) {
   // latency_slo_micros is stored as a string in redis
   std::string key = "latency_slo_micros";
   check_key_exists_in_map(key, app_metadata);
   add_int(d, key.c_str(), atoi(app_metadata.at(key).c_str()));
 }
 
-void redis_app_metadata_to_json(rapidjson::Document& d,
-                                const std::unordered_map<std::string, std::string>& app_metadata) {
+void redis_app_metadata_to_json(
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& app_metadata) {
   d.SetObject();
   add_input_type_from_redis(d, app_metadata);
   add_app_default_output_from_redis(d, app_metadata);
   add_app_latency_slo_micros_from_redis(d, app_metadata);
 }
 
-void add_model_name_from_redis(rapidjson::Document& d,
-                               const std::unordered_map<std::string, std::string>& model_metadata) {
+void add_model_name_from_redis(
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   std::string key = "model_name";
   check_key_exists_in_map(key, model_metadata);
   add_string(d, key.c_str(), model_metadata.at(key));
 }
 
 void add_model_version_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& model_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   std::string key = "model_version";
   check_key_exists_in_map(key, model_metadata);
   add_string(d, key.c_str(), model_metadata.at(key));
 }
 
 void add_model_labels_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& model_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   std::string key = "labels";
   check_key_exists_in_map(key, model_metadata);
-  std::vector<std::string> labels_vec = clipper::redis::str_to_labels(model_metadata.at(key));
+  std::vector<std::string> labels_vec =
+      clipper::redis::str_to_labels(model_metadata.at(key));
   add_string_array(d, key.c_str(), labels_vec);
 }
 
 void add_container_name_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& model_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   std::string key = "container_name";
   check_key_exists_in_map(key, model_metadata);
   add_string(d, key.c_str(), model_metadata.at(key));
 }
 
 void add_model_data_path_from_redis(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& model_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   std::string key = "model_data_path";
   check_key_exists_in_map(key, model_metadata);
   add_string(d, key.c_str(), model_metadata.at(key));
 }
 
 void redis_model_metadata_to_json(
-    rapidjson::Document& d, const std::unordered_map<std::string, std::string>& model_metadata) {
+    rapidjson::Document& d,
+    const std::unordered_map<std::string, std::string>& model_metadata) {
   d.SetObject();
   add_model_name_from_redis(d, model_metadata);
   add_model_version_from_redis(d, model_metadata);

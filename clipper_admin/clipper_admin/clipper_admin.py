@@ -175,8 +175,7 @@ class ClipperConnection(object):
                 break
             except requests.exceptions.ConnectionError as e:
                 num_attempts += 1
-                logger.info(
-                    "Attempt {} failed. Sleeping 5".format(num_attempts))
+                logger.info("Attempt {} failed. Sleeping 5".format(num_attempts))
                 time.sleep(5)
 
         if not registered or r.status_code != requests.codes.ok:
@@ -227,9 +226,8 @@ class ClipperConnection(object):
             logger.error(msg)
             raise ClipperException(msg)
         else:
-            logger.info(
-                "Model {model} is now linked to application {app}".format(
-                    model=model_name, app=app_name))
+            logger.info("Model {model} is now linked to application {app}".
+                        format(model=model_name, app=app_name))
 
     def build_and_deploy_model(self,
                                name,
@@ -295,8 +293,7 @@ class ClipperConnection(object):
             raise UnconnectedException()
         image = self.build_model(name, version, model_data_path, base_image,
                                  container_registry)
-        self.deploy_model(name, version, input_type, batch_size, image, labels,
-                          num_replicas, **kwargs)
+        self.deploy_model(name, version, input_type, batch_size, image, labels, num_replicas, **kwargs)
 
     def build_model(self,
                     name,
@@ -383,9 +380,8 @@ class ClipperConnection(object):
                 image = "{reg}/{image}".format(
                     reg=container_registry, image=image)
             docker_client = docker.from_env()
-            logger.info(
-                "Building model Docker image with model data from {}".format(
-                    model_data_path))
+            logger.info("Building model Docker image with model data from {}".
+                        format(model_data_path))
             docker_client.images.build(
                 fileobj=context_file, custom_context=True, tag=image)
 
@@ -463,19 +459,9 @@ class ClipperConnection(object):
         version = str(version)
         _validate_versioned_model_name(name, version)
         self.cm.deploy_model(
-            name,
-            version,
-            input_type,
-            image,
-            num_replicas=num_replicas,
-            **kwargs)
+            name, version, input_type, image, num_replicas=num_replicas, **kwargs)
         self.register_model(
-            name,
-            version,
-            input_type,
-            batch_size=batch_size,
-            image=image,
-            labels=labels)
+            name, version, input_type, batch_size=batch_size, image=image, labels=labels)
         logger.info("Done deploying model {name}:{version}.".format(
             name=name, version=version))
 
@@ -550,9 +536,8 @@ class ClipperConnection(object):
             logger.error(msg)
             raise ClipperException(msg)
         else:
-            logger.info(
-                "Successfully registered model {name}:{version}".format(
-                    name=name, version=version))
+            logger.info("Successfully registered model {name}:{version}".
+                        format(name=name, version=version))
 
     def get_current_model_version(self, name):
         """Get the current model version for the specified model.
@@ -735,9 +720,8 @@ class ClipperConnection(object):
         if r.status_code == requests.codes.ok:
             app_info = r.json()
             if len(app_info) == 0:
-                logger.warning(
-                    "Application {} is not registered with Clipper".format(
-                        name))
+                logger.warning("Application {} is not registered with Clipper".
+                               format(name))
                 return None
             return app_info
         else:
@@ -1015,8 +999,7 @@ class ClipperConnection(object):
         """
         if not self.connected:
             raise UnconnectedException()
-        url = "http://{host}/drain_queues".format(
-            host=self.cm.get_query_addr())
+        url = "http://{host}/drain_queues".format(host=self.cm.get_query_addr())
         r = requests.get(url)
         logger.debug(r.text)
         if r.status_code != requests.codes.ok:
@@ -1035,8 +1018,7 @@ class ClipperConnection(object):
         """
         if not self.connected:
             raise UnconnectedException()
-        url = "http://{host}/set_full_batches".format(
-            host=self.cm.get_query_addr())
+        url = "http://{host}/set_full_batches".format(host=self.cm.get_query_addr())
         r = requests.get(url)
         logger.debug(r.text)
         if r.status_code != requests.codes.ok:

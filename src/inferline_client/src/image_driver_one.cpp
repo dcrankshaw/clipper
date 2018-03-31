@@ -147,9 +147,10 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.ksvm_throughput_->mark(1);
     metrics.ksvm_num_predictions_->increment(1);
 
-    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
-                                               request_start_time.time_since_epoch())
-                                               .count());
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+            .count());
 
     lineage->add_timestamp(
         "driver::recv",
@@ -193,9 +194,10 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.log_reg_throughput_->mark(1);
     metrics.log_reg_num_predictions_->increment(1);
 
-    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
-                                               request_start_time.time_since_epoch())
-                                               .count());
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+            .count());
 
     lineage->add_timestamp(
         "driver::recv",
@@ -243,9 +245,10 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.inception_throughput_->mark(1);
     metrics.inception_num_predictions_->increment(1);
 
-    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
-                                               start_time.time_since_epoch())
-                                               .count());
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
+            .count());
 
     lineage->add_timestamp(
         "driver::recv",
@@ -288,9 +291,10 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     metrics.resnet_throughput_->mark(1);
     metrics.resnet_num_predictions_->increment(1);
 
-    lineage->add_timestamp("driver::send", std::chrono::duration_cast<std::chrono::microseconds>(
-                                               start_time.time_since_epoch())
-                                               .count());
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
+            .count());
 
     lineage->add_timestamp(
         "driver::recv",
@@ -355,8 +359,8 @@ int main(int argc, char* argv[]) {
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch" ||
-        distribution == "file")) {
+  if (!(distribution == "poisson" || distribution == "constant"
+        || distribution == "batch" || distribution == "file")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -376,7 +380,7 @@ int main(int argc, char* argv[]) {
   for (auto model : models) {
     lineage_file_map.emplace(model, std::ofstream{});
     lineage_file_map[model].open(options["log_file"].as<std::string>() + "-" + model +
-                                 "-query_lineage.txt");
+                            "-query_lineage.txt");
     // lineage_file_map_refs.emplace(model, lineage_file_map[model]);
     lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
@@ -394,8 +398,7 @@ int main(int argc, char* argv[]) {
       delays_ms.push_back(std::stof(line));
     }
     delay_file_stream.close();
-    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines"
-              << std::endl;
+    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines" << std::endl;
   }
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),

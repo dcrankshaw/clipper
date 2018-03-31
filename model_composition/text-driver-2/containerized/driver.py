@@ -31,7 +31,10 @@ GENSIM_DOCSIM_MODEL_APP_NAME = "gensim-docsim"
 GENSIM_LDA_IMAGE_NAME = "model-comp/gensim-lda"
 GENSIM_DOCSIM_IMAGE_NAME = "model-comp/gensim-docsim"
 
-VALID_MODEL_NAMES = [GENSIM_LDA_MODEL_APP_NAME, GENSIM_DOCSIM_MODEL_APP_NAME]
+VALID_MODEL_NAMES = [
+    GENSIM_LDA_MODEL_APP_NAME,
+    GENSIM_DOCSIM_MODEL_APP_NAME
+]
 
 CLIPPER_ADDRESS = "localhost"
 CLIPPER_SEND_PORT = 4456
@@ -40,7 +43,6 @@ CLIPPER_RECV_PORT = 4455
 DEFAULT_OUTPUT = "TIMEOUT"
 
 ########## Setup ##########
-
 
 def setup_clipper(config):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -56,13 +58,7 @@ def setup_clipper(config):
     logger.info("Clipper is set up!")
     return config
 
-
-def get_heavy_node_config(model_name,
-                          batch_size,
-                          num_replicas,
-                          cpus_per_replica=None,
-                          allocated_cpus=None,
-                          allocated_gpus=None):
+def get_heavy_node_config(model_name, batch_size, num_replicas, cpus_per_replica=None, allocated_cpus=None, allocated_gpus=None):
     if model_name == GENSIM_LDA_MODEL_APP_NAME:
         if not cpus_per_replica:
             cpus_per_replica = 1
@@ -70,16 +66,15 @@ def get_heavy_node_config(model_name,
             allocated_cpus = [20]
         if not allocated_gpus:
             allocated_gpus = []
-        return driver_utils.HeavyNodeConfig(
-            name=GENSIM_LDA_MODEL_APP_NAME,
-            input_type="strings",
-            model_image=GENSIM_LDA_IMAGE_NAME,
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True)
+        return driver_utils.HeavyNodeConfig(name=GENSIM_LDA_MODEL_APP_NAME,
+                                            input_type="strings",
+                                            model_image=GENSIM_LDA_IMAGE_NAME,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True)
 
     elif model_name == GENSIM_DOCSIM_MODEL_APP_NAME:
         if not cpus_per_replica:
@@ -88,34 +83,30 @@ def get_heavy_node_config(model_name,
             allocated_cpus = [21]
         if not allocated_gpus:
             allocated_gpus = []
-        return driver_utils.HeavyNodeConfig(
-            name=GENSIM_DOCSIM_MODEL_APP_NAME,
-            input_type="strings",
-            model_image=GENSIM_DOCSIM_IMAGE_NAME,
-            allocated_cpus=allocated_cpus,
-            cpus_per_replica=cpus_per_replica,
-            gpus=allocated_gpus,
-            batch_size=batch_size,
-            num_replicas=num_replicas,
-            use_nvidia_docker=True)
-
+        return driver_utils.HeavyNodeConfig(name=GENSIM_DOCSIM_MODEL_APP_NAME,
+                                            input_type="strings",
+                                            model_image=GENSIM_DOCSIM_IMAGE_NAME,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=allocated_gpus,
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True)
 
 ########## Benchmarking ##########
 
-
 class Predictor(object):
+
     def __init__(self):
         self.outstanding_reqs = {}
-        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT,
-                             CLIPPER_RECV_PORT)
+        self.client = Client(CLIPPER_ADDRESS, CLIPPER_SEND_PORT, CLIPPER_RECV_PORT)
         self.client.start()
         self.init_stats()
         self.stats = {
             "thrus": [],
             "all_lats": [],
             "p99_lats": [],
-            "mean_lats": []
-        }
+            "mean_lats": []}
         self.total_num_complete = 0
 
     def init_stats(self):
@@ -129,18 +120,17 @@ class Predictor(object):
         p99 = np.percentile(lats, 99)
         mean = np.mean(lats)
         end_time = datetime.now()
-        thru = float(self.batch_num_complete) / (
-            end_time - self.start_time).total_seconds()
+        thru = float(self.batch_num_complete) / (end_time - self.start_time).total_seconds()
         self.stats["thrus"].append(thru)
         self.stats["all_lats"] = self.stats["all_lats"] + self.latencies
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
-        logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(
-            p99=p99, mean=mean, thru=thru))
+        logger.info("p99: {p99}, mean: {mean}, thruput: {thru}".format(p99=p99,
+                                                                       mean=mean,
+                                                                       thru=thru))
 
     def predict(self, model_app_name, input_item):
         begin_time = datetime.now()
-
         def continuation(output):
             if output == DEFAULT_OUTPUT:
                 return
@@ -153,16 +143,13 @@ class Predictor(object):
                 self.print_stats()
                 self.init_stats()
 
-        return self.client.send_request(model_app_name,
-                                        input_item).then(continuation)
-
+        return self.client.send_request(model_app_name, input_item).then(continuation)
 
 class ModelBenchmarker(object):
     def __init__(self, config, queue, input_length=20):
         self.config = config
         self.queue = queue
-        self.input_generator_fn = self._get_input_generator_fn(
-            model_app_name=self.config.name, input_length=input_length)
+        self.input_generator_fn = self._get_input_generator_fn(model_app_name=self.config.name, input_length=input_length)
         self.loaded_docs = False
 
     def run(self, num_trials):
@@ -173,8 +160,7 @@ class ModelBenchmarker(object):
         start_time = datetime.now()
         predictor = Predictor()
         for input_item in inputs:
-            predictor.predict(
-                model_app_name=self.config.name, input_item=input_item)
+            predictor.predict(model_app_name=self.config.name, input_item=input_item)
             time.sleep(.001)
 
         while len(predictor.stats["thrus"]) < num_trials:
@@ -194,8 +180,7 @@ class ModelBenchmarker(object):
             text = self.doc_text[idx]
             words = text.split()
             if len(words) < input_length:
-                expansion_factor = int(
-                    math.ceil(float(input_length) / len(text)))
+                expansion_factor = int(math.ceil(float(input_length)/len(text)))
                 for i in range(expansion_factor):
                     words = words + words
             words = words[:input_length]
@@ -214,7 +199,6 @@ class ModelBenchmarker(object):
     def _get_input_generator_fn(self, model_app_name, input_length=20):
         return lambda num_inputs : self._gen_docs_inputs(num_inputs=num_inputs, input_length=input_length)
 
-
 class InputLengthConfig:
     def __init__(self, input_length):
         self.input_length_words = input_length
@@ -222,77 +206,22 @@ class InputLengthConfig:
     def to_json(self):
         return json.dumps(self.__dict__)
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='Set up and benchmark models for Clipper image driver 1')
+    parser = argparse.ArgumentParser(description='Set up and benchmark models for Clipper image driver 1')
     parser.add_argument('-t', '--num_trials', type=int, default=15)
-    parser.add_argument(
-        '-m',
-        '--model_name',
-        type=str,
-        help=
-        "The name of the model to benchmark. One of: 'gensim-lda', 'gensim-docsim'"
-    )
-    parser.add_argument(
-        '-b',
-        '--batch_sizes',
-        type=int,
-        nargs='+',
-        help=
-        "The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately."
-    )
-    parser.add_argument(
-        '-r',
-        '--num_replicas',
-        type=int,
-        nargs='+',
-        help=
-        "The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately."
-    )
-    parser.add_argument(
-        '-c',
-        '--model_cpus',
-        type=int,
-        nargs='+',
-        help=
-        "The set of cpu cores on which to run replicas of the provided model")
-    parser.add_argument(
-        '-p',
-        '--cpus_per_replica_nums',
-        type=int,
-        nargs='+',
-        help=
-        "Configurations for the number of cpu cores allocated to each replica of the model"
-    )
-    parser.add_argument(
-        '-g',
-        '--model_gpus',
-        type=int,
-        nargs='+',
-        help=
-        "The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!"
-    )
-    parser.add_argument(
-        '-n',
-        '--num_clients',
-        type=int,
-        default=1,
-        help=
-        "The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models."
-    )
-    parser.add_argument(
-        '-l',
-        '--input_lengths',
-        type=int,
-        nargs='+',
-        help="Input length configurations to benchmark")
-
+    parser.add_argument('-m', '--model_name', type=str, help="The name of the model to benchmark. One of: 'gensim-lda', 'gensim-docsim'")
+    parser.add_argument('-b', '--batch_sizes', type=int, nargs='+', help="The batch size configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    parser.add_argument('-r', '--num_replicas', type=int, nargs='+', help="The replica number configurations to benchmark for the model. Each configuration will be benchmarked separately.")
+    parser.add_argument('-c', '--model_cpus', type=int, nargs='+', help="The set of cpu cores on which to run replicas of the provided model")
+    parser.add_argument('-p', '--cpus_per_replica_nums', type=int, nargs='+', help="Configurations for the number of cpu cores allocated to each replica of the model")
+    parser.add_argument('-g', '--model_gpus', type=int, nargs='+', help="The set of gpus on which to run replicas of the provided model. Each replica of a gpu model must have its own gpu!")
+    parser.add_argument('-n', '--num_clients', type=int, default=1, help="The number of concurrent client processes. This can help increase the request rate in order to saturate high throughput models.")
+    parser.add_argument('-l', '--input_lengths', type=int, nargs='+', help="Input length configurations to benchmark")
+    
     args = parser.parse_args()
 
     if args.model_name not in VALID_MODEL_NAMES:
-        raise Exception(
-            "Model name must be one of: {}".format(VALID_MODEL_NAMES))
+        raise Exception("Model name must be one of: {}".format(VALID_MODEL_NAMES))
 
     default_batch_size_confs = [2]
     default_replica_num_confs = [1]
@@ -310,32 +239,28 @@ if __name__ == "__main__":
                 for batch_size in batch_size_confs:
                     input_length_config = InputLengthConfig(input_length)
 
-                    model_config = get_heavy_node_config(
-                        model_name=args.model_name,
-                        batch_size=batch_size,
-                        num_replicas=num_replicas,
-                        cpus_per_replica=cpus_per_replica,
-                        allocated_cpus=args.model_cpus,
-                        allocated_gpus=args.model_gpus)
+                    model_config = get_heavy_node_config(model_name=args.model_name, 
+                                                         batch_size=batch_size, 
+                                                         num_replicas=num_replicas,
+                                                         cpus_per_replica=cpus_per_replica,
+                                                         allocated_cpus=args.model_cpus,                               
+                                                         allocated_gpus=args.model_gpus)
                     setup_clipper(model_config)
                     queue = Queue()
-                    benchmarker = ModelBenchmarker(model_config, queue,
-                                                   input_length)
+                    benchmarker = ModelBenchmarker(model_config, queue, input_length)
 
                     processes = []
                     all_stats = []
                     for _ in range(args.num_clients):
-                        p = Process(
-                            target=benchmarker.run, args=(args.num_trials, ))
+                        p = Process(target=benchmarker.run, args=(args.num_trials,))
                         p.start()
                         processes.append(p)
                     for p in processes:
                         all_stats.append(queue.get())
                         p.join()
 
-                    cl = ClipperConnection(
-                        DockerContainerManager(redis_port=6380))
+                    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
                     cl.connect()
-                    driver_utils.save_results(
-                        [input_length_config, model_config], cl, all_stats,
-                        "gpu_and_batch_size_experiments")
+                    driver_utils.save_results([input_length_config, model_config], cl, all_stats, "gpu_and_batch_size_experiments")
+
+

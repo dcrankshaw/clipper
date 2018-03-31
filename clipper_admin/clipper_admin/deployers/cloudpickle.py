@@ -238,7 +238,7 @@ class CloudPickler(Pickler):
         # a builtin_function_or_method which comes in as an attribute of some
         # object (e.g., object.__new__, itertools.chain.from_iterable) will end
         # up with modname "__main__" and so end up here. But these functions
-        # have no __code__ attribute in CPython, so the handling for
+        # have no __code__ attribute in CPython, so the handling for 
         # user-defined functions below will fail.
         # So we pickle them here using save_reduce; have to do it differently
         # for different python versions.
@@ -258,9 +258,9 @@ class CloudPickler(Pickler):
         # if func is lambda, def'ed at prompt, is in main, or is nested, then
         # we'll pickle the actual function object rather than simply saving a
         # reference (as is done in default pickler), via save_function_tuple.
-        if (islambda(obj)
-                or getattr(obj.__code__, 'co_filename', None) == '<stdin>'
-                or themodule is None):
+        if (islambda(obj) or
+                getattr(obj.__code__, 'co_filename', None) == '<stdin>' or
+                themodule is None):
             self.save_function_tuple(obj)
             return
         else:
@@ -322,9 +322,9 @@ class CloudPickler(Pickler):
         write(pickle.REDUCE)  # applies _fill_function on the tuple
 
     _extract_code_globals_cache = (weakref.WeakKeyDictionary()
-                                   if sys.version_info >= (2, 7)
-                                   and not hasattr(sys, "pypy_version_info")
-                                   else {})
+                                   if sys.version_info >= (2, 7) and
+                                   not hasattr(sys, "pypy_version_info") else
+                                   {})
 
     @classmethod
     def extract_code_globals(cls, co):
@@ -339,8 +339,8 @@ class CloudPickler(Pickler):
                 # PyPy "builtin-code" object
                 out_names = set()
             else:
-                out_names = set(
-                    names[oparg] for op, oparg in _walk_global_ops(co))
+                out_names = set(names[oparg]
+                                for op, oparg in _walk_global_ops(co))
 
                 # see if nested function have any global refs
                 if co.co_consts:
@@ -443,8 +443,8 @@ class CloudPickler(Pickler):
                     types.MethodType, (obj.__func__, obj.__self__), obj=obj)
             else:
                 self.save_reduce(
-                    types.MethodType,
-                    (obj.__func__, obj.__self__, obj.__self__.__class__),
+                    types.MethodType, (obj.__func__, obj.__self__,
+                                       obj.__self__.__class__),
                     obj=obj)
 
     dispatch[types.MethodType] = save_instancemethod

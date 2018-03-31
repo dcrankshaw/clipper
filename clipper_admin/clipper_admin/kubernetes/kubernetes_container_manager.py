@@ -71,8 +71,8 @@ class KubernetesContainerManager(ContainerManager):
                 self._k8s_beta.create_namespaced_deployment(
                     body=yaml.load(
                         open(
-                            os.path.join(cur_dir,
-                                         '{}-deployment.yaml'.format(name)))),
+                            os.path.join(cur_dir, '{}-deployment.yaml'.format(
+                                name)))),
                     namespace='default')
             with _pass_conflicts():
                 body = yaml.load(
@@ -87,8 +87,8 @@ class KubernetesContainerManager(ContainerManager):
             with _pass_conflicts():
                 body = yaml.load(
                     open(
-                        os.path.join(cur_dir,
-                                     '{}-deployment.yaml'.format(name))))
+                        os.path.join(cur_dir, '{}-deployment.yaml'.format(
+                            name))))
                 if self.redis_ip is not None:
                     args = [
                         "--redis_ip={}".format(self.redis_ip),
@@ -212,11 +212,9 @@ class KubernetesContainerManager(ContainerManager):
         self._k8s_beta.patch_namespaced_deployments_scale(
             name=deployment_name,
             namespace='default',
-            body={
-                'spec': {
-                    'replicas': num_replicas,
-                }
-            })
+            body={'spec': {
+                'replicas': num_replicas,
+            }})
 
     def get_logs(self, logging_dir):
         logging_dir = os.path.abspath(os.path.expanduser(logging_dir))
