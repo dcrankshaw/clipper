@@ -16,11 +16,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
 CURR_DIR = os.path.dirname(os.path.realpath(__file__)) 
 
-=======
->>>>>>> crankshaw/high-perf-clipper
 DEFAULT_OUTPUT = "TIMEOUT"
 CLIPPER_ADDRESS = "localhost"
 
@@ -34,12 +31,9 @@ TF_RESNET = "tf-resnet-feats"
 TF_RESNET_VAR = "tf-resnet-feats-var"
 TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
 
-<<<<<<< HEAD
 TF_LANG_DETECT = "tf-lang-detect"
 TF_NMT = "tf-nmt"
 TF_LSTM  = "tf-lstm"
-=======
->>>>>>> crankshaw/high-perf-clipper
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -173,7 +167,6 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
 
-<<<<<<< HEAD
     elif model_name == TF_LANG_DETECT:
         image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
         return driver_utils.HeavyNodeConfig(name=TF_LANG_DETECT,
@@ -214,9 +207,6 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True)
         
-=======
->>>>>>> crankshaw/high-perf-clipper
-
 def get_input_size(config):
     if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:
         return 2048
@@ -226,11 +216,8 @@ def get_input_size(config):
         return 224*224*3
     elif config.name in [TF_RESNET_VAR, TF_RESNET_SLEEP]:
         return config.input_size
-<<<<<<< HEAD
     elif config.name in [TF_NMT, TF_LSTM, TF_LANG_DETECT]:
         return 20
-=======
->>>>>>> crankshaw/high-perf-clipper
 
 
 def setup_clipper(configs):
@@ -379,11 +366,7 @@ def load_lineage(lineage_path):
     return parsed
 
 
-<<<<<<< HEAD
 def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str, workload_path=None):
-=======
-def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str):
->>>>>>> crankshaw/high-perf-clipper
     clipper_address = setup_clipper([config, ])
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -415,11 +398,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                "--clipper_address={}".format(clipper_address)]
         if batch_size is not None:
             cmd.append("--batch_size={}".format(batch_size))
-<<<<<<< HEAD
         if workload_path is not None:
             cmd.append("--workload_path={}".format(workload_path))
-=======
->>>>>>> crankshaw/high-perf-clipper
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
