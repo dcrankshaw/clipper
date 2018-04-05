@@ -19,7 +19,8 @@ class InceptionFeaturizationModel(ModelBase):
         self.images_tensor = self._load_inception_model(inception_model_path)
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=GPU_MEM_FRAC)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True, device_count={'GPU': 1, 'CPU': 2}))
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True))
+        # self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True, device_count={'GPU': 1, 'CPU': 2}))
 
         graph = tf.get_default_graph()
         self.features_tensor = graph.get_tensor_by_name("pool_3:0")

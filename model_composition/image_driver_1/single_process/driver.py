@@ -146,7 +146,7 @@ class Predictor(object):
         inception_log_reg_future = self.thread_pool.submit(
             lambda inputs : self.log_reg_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
-        resnet_svm_classes = resnet_svm_future.result()
+        # resnet_svm_classes = resnet_svm_future.result()
         inception_log_reg_classes = inception_log_reg_future.result()
 
         end_time = datetime.now()
@@ -167,7 +167,7 @@ class DriverBenchmarker(object):
     def set_configs(self, configs):
         self.configs = configs
 
-    def run(self, num_trials, batch_size, num_cpus):
+    def run(self, num_trials, batch_size, num_cpus, replica_num):
         predictor = Predictor(self.models_dict, trial_length=self.trial_length)
 
         logger.info("Generating random inputs")
@@ -190,7 +190,7 @@ class DriverBenchmarker(object):
             if len(predictor.stats["thrus"]) > num_trials:
                 break
 
-        save_results(self.configs, [predictor.stats], "single_proc_exps_vary_cpu", num_cpus)
+        save_results(self.configs, [predictor.stats], "single_proc_exps_vary_cpu", replica_num)
 
     def _get_resnet_feats_input(self):
         resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
@@ -208,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument('-i',  '--inception_gpu', type=int, default=0, help="The GPU on which to run the inception featurization model")
     parser.add_argument('-t',  '--num_trials', type=int, default=15, help="The number of trials to run")
     parser.add_argument('-tl', '--trial_length', type=int, default=200, help="The length of each trial, in requests")
+    parser.add_argument('-n',  '--replica_num', type=int, help="The replica number corresponding to the driver")
     
     args = parser.parse_args()
 
@@ -228,4 +229,4 @@ if __name__ == "__main__":
                                          resnet_gpus=[args.resnet_gpu],
                                          inception_gpus=[args.inception_gpu])
         benchmarker.set_configs(configs)
-        benchmarker.run(args.num_trials, batch_size, num_cpus)
+        benchmarker.run(args.num_trials, batch_size, num_cpus, args.replica_num)
