@@ -172,7 +172,7 @@ int RPCService::send_model_message(std::string model_name,
   //   model_processing_latencies_.emplace(model_name, model_metric);
   // }
 
-  msg_id_models_map_.emplace(id, model_name);
+  // msg_id_models_map_.emplace(id, model_name);
   request_queue_->enqueue(std::move(request));
   return id;
 }
@@ -255,8 +255,8 @@ void RPCService::send_messages(socket_t &socket, int max_num_messages) {
     }
 
     int msg_id = std::get<1>(request);
-    auto outbound_timestamp = std::chrono::system_clock::now();
-    msg_id_timestamp_map_.emplace(msg_id, std::move(outbound_timestamp));
+    // auto outbound_timestamp = std::chrono::system_clock::now();
+    // msg_id_timestamp_map_.emplace(msg_id, std::move(outbound_timestamp));
 
     // long long curr_system_time = clock::ClipperClock::get_clock().get_uptime();
     // model_send_times_->insert(curr_system_time);
@@ -328,7 +328,7 @@ void RPCService::receive_message(socket_t &socket) {
   }
 
   // auto outbound_timestamp = msg_id_timestamp_map_.find(id)->second;
-  std::string model_name = msg_id_models_map_.find(id)->second;
+  // std::string model_name = msg_id_models_map_.find(id)->second;
   // auto model_latencies_list =
   // model_processing_latencies_.find(model_name)->second;
 
@@ -339,8 +339,8 @@ void RPCService::receive_message(socket_t &socket) {
   //         .count();
 
   // model_latencies_list->insert(model_processing_latency);
-  msg_id_timestamp_map_.erase(id);
-  msg_id_models_map_.erase(id);
+  // msg_id_timestamp_map_.erase(id);
+  // msg_id_models_map_.erase(id);
 
   std::pair<VersionedModelId, int> container_info =
       container_info_entry->second;

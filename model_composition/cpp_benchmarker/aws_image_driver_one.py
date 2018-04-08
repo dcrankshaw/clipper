@@ -101,8 +101,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        # query_cpu_str="0,16,1,17,2,18,3,19")
-        query_cpu_str="0,1,2,3,4,5,6,7,8")
+        query_cpu_str="0,16,1,17,2,18,3,19")
     time.sleep(10)
     for c in configs:
         driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
@@ -255,7 +254,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str, through
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        arrival_delay_file = os.path.abspath("arrival_deltas_ms.timestamp")
+        arrival_delay_file = "/home/ubuntu/plots-model-comp-paper/experiments/cached_arrival_processes/34.deltas"
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
@@ -331,15 +330,15 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str, through
                 raise e
 
     run(throughput, 3, "warmup", "constant")
-    throughput_results = run(throughput, 10, "throughput", "file")
+    throughput_results = run(throughput, 25, "throughput", "file")
     cl.stop_all(remote_addrs=[REMOTE_ADDR])
     return throughput_results
 
 
 if __name__ == "__main__":
-    resnet_batch_size = 96
-    inception_batch_size = 16
-    ksvm_batch_size = 4
+    resnet_batch_size = 4
+    inception_batch_size = 4
+    ksvm_batch_size = 1
     log_reg_batch_size = 1
 
     model_cpus = range(4, 11)
@@ -361,7 +360,7 @@ if __name__ == "__main__":
         return [remote_gpus.pop() for _ in range(num)]
 
 
-    resnet_replicas = 1
+    resnet_replicas = 3
     inception_replicas = 1
     ksvm_replicas = 1
     log_reg_replicas = 1
@@ -381,34 +380,33 @@ if __name__ == "__main__":
                 batch_size=inception_batch_size,
                 num_replicas=inception_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_remote_cpus(inception_replicas),
-                allocated_gpus=get_remote_gpus(resnet_replicas),
-                remote_addr=REMOTE_ADDR,
+                allocated_cpus=get_cpus(inception_replicas),
+                allocated_gpus=get_gpus(resnet_replicas),
+                # remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=TF_KERNEL_SVM,
                 batch_size=ksvm_batch_size,
                 num_replicas=ksvm_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_remote_cpus(ksvm_replicas),
+                allocated_cpus=get_cpus(ksvm_replicas),
                 allocated_gpus=None,
-                remote_addr=REMOTE_ADDR,
+                # remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=TF_LOG_REG,
                 batch_size=log_reg_batch_size,
                 num_replicas=log_reg_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_remote_cpus(log_reg_replicas),
+                allocated_cpus=get_cpus(log_reg_replicas),
                 allocated_gpus=None,
-                remote_addr=REMOTE_ADDR,
+                # remote_addr=REMOTE_ADDR,
             )
     ]
 
     throughput_results = run_profiler(
         configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        # "11,27,12,28", 238)
-        "9-12", 238)
+        "11,27,12,28", 238)
     fname = "cpp-aws-p2-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
         i=inception_replicas,
         r=resnet_replicas,

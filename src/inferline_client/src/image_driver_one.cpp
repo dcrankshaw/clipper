@@ -322,7 +322,7 @@ std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
   int num_points = 1000;
   std::random_device rd;         // Will be used to obtain a seed for the random number engine
   std::mt19937 generator(rd());  // Standard mersenne_twister_engine seeded with rd()
-  std::uniform_real_distribution<> distribution(0.0, 1.0);
+  std::uniform_real_distribution<> distribution(0.1, 1.0);
   std::vector<ClientFeatureVector> inputs;
   for (int i = 0; i < num_points; ++i) {
     float* input_buffer = reinterpret_cast<float*>(malloc(input_length * sizeof(float)));
