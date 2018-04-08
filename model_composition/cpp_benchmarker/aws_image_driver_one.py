@@ -24,6 +24,8 @@ TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
+REMOTE_ADDR="172.30.0.164"
+
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -31,6 +33,7 @@ def get_heavy_node_config(model_name,
                           cpus_per_replica,
                           allocated_cpus,
                           allocated_gpus,
+                          remote_addr=None,
                           input_size=None):
 
     if model_name == INCEPTION_FEATS:
@@ -44,7 +47,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_RESNET:
         image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
@@ -57,7 +61,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_LOG_REG:
         image = "gcr.io/clipper-model-comp/tf-log-reg:bench"
@@ -70,7 +75,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_KERNEL_SVM:
         image = "gcr.io/clipper-model-comp/tf-kernel-svm:bench"
@@ -83,18 +89,20 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
 
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    cl.stop_all()
+    cl.stop_all(remote_addrs=[REMOTE_ADDR])
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="0,16,1,17,2,18,3,19")
+        # query_cpu_str="0,16,1,17,2,18,3,19")
+        query_cpu_str="0,1,2,3,4,5,6,7,8")
     time.sleep(10)
     for c in configs:
         driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
@@ -324,7 +332,7 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str, through
 
     run(throughput, 3, "warmup", "constant")
     throughput_results = run(throughput, 10, "throughput", "file")
-    cl.stop_all()
+    cl.stop_all(remote_addrs=[REMOTE_ADDR])
     return throughput_results
 
 
@@ -337,6 +345,8 @@ if __name__ == "__main__":
     model_cpus = range(4, 11)
     model_gpus = range(4)
     # model_gpus = range(8)
+    remote_cpus = range(16)
+    remote_gpus = range(8)
 
     def get_cpus(num):
         return [model_cpus.pop() for _ in range(num)]
@@ -344,9 +354,16 @@ if __name__ == "__main__":
     def get_gpus(num):
         return [model_gpus.pop() for _ in range(num)]
 
+    def get_remote_cpus(num):
+        return [remote_cpus.pop() for _ in range(num)]
+
+    def get_remote_gpus(num):
+        return [remote_gpus.pop() for _ in range(num)]
+
+
     resnet_replicas = 1
     inception_replicas = 1
-    ksvm_replicas = 3
+    ksvm_replicas = 1
     log_reg_replicas = 1
 
     configs = [
@@ -355,38 +372,43 @@ if __name__ == "__main__":
                 batch_size=resnet_batch_size,
                 num_replicas=resnet_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(resnet_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
+                allocated_cpus=get_remote_cpus(resnet_replicas),
+                allocated_gpus=get_remote_gpus(resnet_replicas),
+                remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=INCEPTION_FEATS,
                 batch_size=inception_batch_size,
                 num_replicas=inception_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(inception_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
+                allocated_cpus=get_remote_cpus(inception_replicas),
+                allocated_gpus=get_remote_gpus(resnet_replicas),
+                remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=TF_KERNEL_SVM,
                 batch_size=ksvm_batch_size,
                 num_replicas=ksvm_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(ksvm_replicas),
+                allocated_cpus=get_remote_cpus(ksvm_replicas),
                 allocated_gpus=None,
+                remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=TF_LOG_REG,
                 batch_size=log_reg_batch_size,
                 num_replicas=log_reg_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_cpus(log_reg_replicas),
+                allocated_cpus=get_remote_cpus(log_reg_replicas),
                 allocated_gpus=None,
+                remote_addr=REMOTE_ADDR,
             )
     ]
 
     throughput_results = run_profiler(
         configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        "11,27,12,28", 238)
+        # "11,27,12,28", 238)
+        "9-12", 238)
     fname = "cpp-aws-p2-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
         i=inception_replicas,
         r=resnet_replicas,

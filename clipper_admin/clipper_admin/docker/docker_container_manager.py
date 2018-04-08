@@ -12,9 +12,10 @@ from ..container_manager import (
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
 import subprocess32 as subprocess
-from fabric.api import run, env
-from fabric.context_managers import shell_env
+from fabric.api import run, env, shell_env
+# from fabric.context_managers import shell_env
 
+env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
 
 
 logger = logging.getLogger(__name__)
@@ -297,7 +298,9 @@ class DockerContainerManager(ContainerManager):
             cmd.append("/home/ubuntu/logs:/logs")
             cmd.append(image)
             logger.info("Docker command: \"%s\"" % cmd)
-            env.hosts = [remote_addr]
+            env.host_string = remote_addr
+            env.disable_known_hosts = True
+            print(env.host_string)
             with shell_env(**remote_env):
                 run(" ".join(cmd))
         else:
@@ -480,8 +483,9 @@ class DockerContainerManager(ContainerManager):
         except docker.errors.APIError as e:
             pass
         if remote_addrs is not None:
-            env.hosts = remote_addrs
-            run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
+            for r in remote_addrs:
+                env.host_string = r
+                run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
 
     def get_admin_addr(self):
         return "{host}:{port}".format(
