@@ -239,7 +239,7 @@ class DriverBenchmarker(object):
             curr_batch.append(batch_item)
             while len(curr_batch) < batch_size and (not self.request_queue.empty()):
                 try:
-                    batch_item = self.requet_queue.get_nowait()
+                    batch_item = self.request_queue.get_nowait()
                     curr_batch.append(batch_item)
                 except Queue.Empty:
                     break
