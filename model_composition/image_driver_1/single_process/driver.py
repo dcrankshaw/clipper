@@ -184,6 +184,8 @@ class DriverBenchmarker(object):
         resnet_inputs, inception_inputs = self._generate_inputs()
 
         logger.info("Starting predictions")
+
+        predictor = Predictor(self.models_dict, trial_length=self.trial_length)
         while True:
             send_time = datetime.now()
             send_times = [send_time for _ in range(batch_size)]
@@ -205,7 +207,7 @@ class DriverBenchmarker(object):
         mean_throughput = calculate_mean_throughput(arrival_process)
         peak_throughput = calculate_peak_throughput(arrival_process)
 
-        print("Mean throughput: {}\nPeak throughput: {}".format(mean_throughput, peak_throughput))
+        logger.info("Mean throughput: {}\nPeak throughput: {}".format(mean_throughput, peak_throughput))
 
         logger.info("Generating random inputs")
         resnet_inputs, inception_inputs = self._generate_inputs()
@@ -221,7 +223,7 @@ class DriverBenchmarker(object):
             input_idx = np.random.randint(len(inception_inputs))
             resnet_input = resnet_inputs[input_idx]
             inception_input = inception_inputs[input_idx]
-            self.request_queue.put(send_time, resnet_input, inception_input)
+            self.request_queue.put((send_time, resnet_input, inception_input))
 
             request_delay = arrival_process[idx] * .001
             time.sleep(request_delay)
@@ -233,9 +235,13 @@ class DriverBenchmarker(object):
         while True:
             curr_batch = []
             batch_item = self.request_queue.get(block=True)
-            while len(cur_batch) < batch_size and (not self.request_queue.empty()):
-                batch_item = self.requet_queue.get_nowait()
-                curr_batch.append(batch_item)
+            curr_batch.append(batch_item)
+            while len(curr_batch) < batch_size and (not self.request_queue.empty()):
+                try:
+                    batch_item = self.requet_queue.get_nowait()
+                    curr_batch.append(batch_item)
+                except Queue.Empty:
+                    break
 
             send_times, resnet_inputs, inception_inputs = zip(*curr_batch)
             predictor.predict(send_times, resnet_inputs, inception_inputs)
