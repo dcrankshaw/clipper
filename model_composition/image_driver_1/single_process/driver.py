@@ -209,6 +209,7 @@ if __name__ == "__main__":
     parser.add_argument('-t',  '--num_trials', type=int, default=15, help="The number of trials to run")
     parser.add_argument('-tl', '--trial_length', type=int, default=200, help="The length of each trial, in requests")
     parser.add_argument('-n',  '--replica_num', type=int, help="The replica number corresponding to the driver")
+    parser.add_argument('-p',  '--process_file', type=str, help="Path to an arrival process file")
     
     args = parser.parse_args()
 
