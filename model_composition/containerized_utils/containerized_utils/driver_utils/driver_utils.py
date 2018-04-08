@@ -41,7 +41,8 @@ class HeavyNodeConfig(object):
                  use_nvidia_docker,
                  slo=5000000,
                  input_size=-1,
-                 no_diverge=False):
+                 no_diverge=False,
+                 remote_addr=None):
         self.name = name
         self.cloud = "aws"
         self.input_type = input_type
@@ -54,6 +55,7 @@ class HeavyNodeConfig(object):
         self.batch_size = batch_size
         self.use_nvidia_docker = use_nvidia_docker
         self.input_size = input_size
+        self.remote_addr = remote_addr
         self.instance_type = requests.get(
             "http://169.254.169.254/latest/meta-data/instance-type").text
         if len(gpus) == 0:
@@ -71,17 +73,29 @@ def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
                                       default_output=default_output,
                                       slo_micros=config.slo,
                                       input_type=config.input_type)
-
-    clipper_conn.deploy_model(name=config.name,
-                              version=1,
-                              image=config.model_image,
-                              input_type=config.input_type,
-                              num_replicas=config.num_replicas,
-                              batch_size=config.batch_size,
-                              gpus=config.gpus,
-                              allocated_cpus=config.allocated_cpus,
-                              cpus_per_replica=config.cpus_per_replica,
-                              use_nvidia_docker=config.use_nvidia_docker)
+    if config.remote_addr is not None:
+        clipper_conn.deploy_model_remote(name=config.name,
+                                         version=1,
+                                         image=config.model_image,
+                                         input_type=config.input_type,
+                                         num_replicas=config.num_replicas,
+                                         batch_size=config.batch_size,
+                                         gpus=config.gpus,
+                                         allocated_cpus=config.allocated_cpus,
+                                         cpus_per_replica=config.cpus_per_replica,
+                                         use_nvidia_docker=config.use_nvidia_docker,
+                                         remote_addr=config.remote_addr)
+    else:
+        clipper_conn.deploy_model(name=config.name,
+                                  version=1,
+                                  image=config.model_image,
+                                  input_type=config.input_type,
+                                  num_replicas=config.num_replicas,
+                                  batch_size=config.batch_size,
+                                  gpus=config.gpus,
+                                  allocated_cpus=config.allocated_cpus,
+                                  cpus_per_replica=config.cpus_per_replica,
+                                  use_nvidia_docker=config.use_nvidia_docker)
 
     clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
 

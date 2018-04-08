@@ -465,6 +465,27 @@ class ClipperConnection(object):
         logger.info("Done deploying model {name}:{version}.".format(
             name=name, version=version))
 
+    def deploy_model_remote(self,
+                            name,
+                            version,
+                            input_type,
+                            batch_size,
+                            image,
+                            remote_addr,
+                            labels=None,
+                            num_replicas=1,
+                            **kwargs):
+        if not self.connected:
+            raise UnconnectedException()
+        version = str(version)
+        _validate_versioned_model_name(name, version)
+        self.cm.deploy_model_remote(
+            name, version, input_type, image, remote_addr, num_replicas=num_replicas, **kwargs)
+        self.register_model(
+            name, version, input_type, batch_size=batch_size, image=image, labels=labels)
+        logger.info("Done deploying model {name}:{version}.".format(
+            name=name, version=version))
+
     def register_model(self,
                        name,
                        version,

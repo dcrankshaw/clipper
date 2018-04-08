@@ -3,6 +3,7 @@ import docker
 import logging
 import os
 import random
+import requests
 from ..container_manager import (
     create_model_container_label, parse_model_container_label,
     ContainerManager, CLIPPER_DOCKER_LABEL, CLIPPER_MODEL_CONTAINER_LABEL,
@@ -11,6 +12,10 @@ from ..container_manager import (
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
 import subprocess32 as subprocess
+from fabric.api import run, env
+from fabric.context_managers import shell_env
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +179,11 @@ class DockerContainerManager(ContainerManager):
         #     "quay.io/my_namespace/my_model_name:my_model_version"
         self.set_num_replicas(name, version, input_type, image, num_replicas, **kwargs)
 
+    def deploy_model_remote(self, name, version, input_type, image, remote_addr, num_replicas=1,
+                            **kwargs):
+        self.set_num_replicas_remote(name, version, input_type, image, remote_addr, num_replicas,
+                                     **kwargs)
+
     def _get_replicas(self, name, version):
         containers = self.docker_client.containers.list(
             filters={
@@ -210,13 +220,13 @@ class DockerContainerManager(ContainerManager):
             # Even if a GPU-supported model isn't being deployed on a GPU,
             # we may still need to launch it using nvidia-docker because
             # the model framework may still depend on libcuda
-            env = os.environ.copy()
+            os_env = os.environ.copy()
             cmd = ["nvidia-docker", "run", "-d",
                    "--network=%s" % self.docker_network]
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
                     name=name, version=version, gpu_num=gpu_num))
-                env["NV_GPU"] = str(gpu_num)
+                os_env["NV_GPU"] = str(gpu_num)
             else:
                 # We're not running on a GPU, so we should mask all available
                 # GPU resources
@@ -235,7 +245,7 @@ class DockerContainerManager(ContainerManager):
             cmd.append("/home/ubuntu/logs:/logs")
             cmd.append(image)
             logger.info("Docker command: \"%s\"" % cmd)
-            subprocess.check_call(cmd, env=env)
+            subprocess.check_call(cmd, env=os_env)
         else:
             self.docker_client.containers.run(
                 image,
@@ -243,6 +253,55 @@ class DockerContainerManager(ContainerManager):
                 labels=labels,
                 cpuset_cpus=cpu_str,
                 **self.extra_container_kwargs)
+
+    def _add_replica_remote(self, name, version, input_type, image, remote_addr,
+                            gpu_num=None, cpu_str=None, use_nvidia_docker=True):
+        query_frontend_hostname = requests.get(
+            "http://169.254.169.254/latest/meta-data/local-ipv4").text
+        env_vars = {
+            "CLIPPER_MODEL_NAME": name,
+            "CLIPPER_MODEL_VERSION": version,
+            # NOTE: assumes this container being launched on same machine
+            # in same docker network as the query frontend
+            "CLIPPER_IP": query_frontend_hostname,
+            "CLIPPER_INPUT_TYPE": input_type,
+        }
+        labels = self.common_labels.copy()
+        labels[CLIPPER_MODEL_CONTAINER_LABEL] = create_model_container_label(
+            name, version)
+        if use_nvidia_docker:
+            # Even if a GPU-supported model isn't being deployed on a GPU,
+            # we may still need to launch it using nvidia-docker because
+            # the model framework may still depend on libcuda
+            remote_env = {}
+            cmd = ["nvidia-docker", "run", "-d"]
+            if gpu_num is not None:
+                logger.info("Starting {name}:{version} on GPU {gpu_num} on {remote_addr}".format(
+                    name=name, version=version, gpu_num=gpu_num, remote_addr=remote_addr))
+                remote_env["NV_GPU"] = str(gpu_num)
+            else:
+                # We're not running on a GPU, so we should mask all available
+                # GPU resources
+                cmd.append("-e")
+                cmd.append("CUDA_VISIBLE_DEVICES=''")
+            for k, v in labels.iteritems():
+                cmd.append("-l")
+                cmd.append("%s=%s" % (k, v))
+            for k, v in env_vars.iteritems():
+                cmd.append("-e")
+                cmd.append("%s=%s" % (k, v))
+            if cpu_str:
+                cmd.append("--cpuset-cpus=%s" % cpu_str)
+            # Mount logs dir
+            cmd.append("-v")
+            cmd.append("/home/ubuntu/logs:/logs")
+            cmd.append(image)
+            logger.info("Docker command: \"%s\"" % cmd)
+            env.hosts = [remote_addr]
+            with shell_env(**remote_env):
+                run(" ".join(cmd))
+        else:
+            raise ClipperException("Remote deployment requires nvidia docker")
 
     def set_num_replicas(self, name, version, input_type, image, num_replicas, **kwargs):
         """
@@ -309,6 +368,50 @@ class DockerContainerManager(ContainerManager):
                 cur_container = current_replicas.pop()
                 cur_container.stop()
 
+    def set_num_replicas_remote(self, name, version, input_type, image, remote_addr, num_replicas,
+                                **kwargs):
+        """
+        optional kwargs
+        ----------
+        allocated_cpus : list
+            The set of PHYSICAL CPUs allocated to replicas of the deployed model
+        cpus_per_replica : int
+            The number of PHYSICAL CPUs allocated to each replica of the model
+        """
+        # current_replicas = self._get_replicas(name, version)
+        # if len(current_replicas) < num_replicas:
+        if True:
+            num_missing = num_replicas
+            if "gpus" in kwargs:
+                available_gpus = list(kwargs["gpus"])
+            use_nvidia_docker = True
+
+            # Enumerated list of cpus that can be allocated (e.g [1, 2, 3, 8, 9])
+            if "allocated_cpus" in kwargs:
+                allocated_cpus = kwargs["allocated_cpus"]
+            if "cpus_per_replica" in kwargs:
+                cpus_per_replica = kwargs["cpus_per_replica"]
+            if (len(allocated_cpus) / cpus_per_replica) < num_missing:
+                raise ClipperException(
+                    "Not enough cpus available. Trying to allocate {reps} replicas \
+                    {cpus_per} CPUs each out of only {alloc_cpus} allocated cpus".format(
+                        reps=num_missing,
+                        cpus_per=cpus_per_replica,
+                        alloc_cpus=len(allocated_cpus)))
+            for i in range(num_missing):
+                if len(available_gpus) > 0:
+                    gpu_num = available_gpus.pop(0)
+                    use_nvidia_docker = True
+                else:
+                    gpu_num = None
+                cpus = allocated_cpus[i*cpus_per_replica: (i+1)*cpus_per_replica]
+                cpus = self.get_virtual_cpus(cpus)
+                cpus = [str(c) for c in cpus]
+                cpu_str = ",".join(cpus)
+
+                self._add_replica_remote(name, version, input_type, image, remote_addr=remote_addr, gpu_num=gpu_num,
+                                  cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
+
     def get_virtual_cpus(self, pcpus):
         """
         Given a list of physical cpus,
@@ -360,7 +463,14 @@ class DockerContainerManager(ContainerManager):
         for c in containers:
             c.stop()
 
-    def stop_all(self):
+    def stop_all(self, remote_addrs=None):
+        """
+
+        Parameters
+        ----------
+        remote_addrs : list(str)
+            List of remote machine addresses to stop docker containers on
+        """
         containers = self.docker_client.containers.list(
             filters={"label": CLIPPER_DOCKER_LABEL})
         for c in containers:
@@ -369,6 +479,9 @@ class DockerContainerManager(ContainerManager):
             self.docker_client.containers.prune()
         except docker.errors.APIError as e:
             pass
+        if remote_addrs is not None:
+            env.hosts = remote_addrs
+            run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
 
     def get_admin_addr(self):
         return "{host}:{port}".format(

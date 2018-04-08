@@ -35,6 +35,7 @@ setup(
         'google-api-python-client',
         'google-auth-httplib2',
         'paramiko',
+        'fabric'
     ],
     extras_require={
         'PySpark': ['pyspark'],
