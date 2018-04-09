@@ -16,7 +16,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-CURR_DIR = os.path.dirname(os.path.realpath(__file__)) 
+CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 
 DEFAULT_OUTPUT = "TIMEOUT"
 CLIPPER_ADDRESS = "localhost"
@@ -33,7 +33,10 @@ TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
 
 TF_LANG_DETECT = "tf-lang-detect"
 TF_NMT = "tf-nmt"
-TF_LSTM  = "tf-lstm"
+TF_LSTM = "tf-lstm"
+
+REMOTE_ADDR = "172.30.0.164"
+
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -41,6 +44,7 @@ def get_heavy_node_config(model_name,
                           cpus_per_replica,
                           allocated_cpus,
                           allocated_gpus,
+                          remote_addr=None,
                           input_size=None):
 
     if model_name == ALEXNET:
@@ -55,7 +59,7 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
-                                            )
+                                            remote_addr=remote_addr)
 
     elif model_name == RES50:
         image = "gcr.io/clipper-model-comp/pytorch-res50:bench"
@@ -69,6 +73,7 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
+                                            remote_addr=remote_addr
                                             )
 
     elif model_name == RES152:
@@ -83,6 +88,7 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
+                                            remote_addr=remote_addr
                                             )
 
     elif model_name == INCEPTION_FEATS:
@@ -96,7 +102,9 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr
+                                            )
 
     elif model_name == TF_RESNET:
         image = "gcr.io/clipper-model-comp/tf-resnet-feats:bench"
@@ -109,7 +117,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_RESNET_VAR:
         image = "gcr.io/clipper-model-comp/tf-resnet-feats-variable-input:bench"
@@ -124,7 +133,8 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
-                                            input_size=input_size)
+                                            input_size=input_size,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_RESNET_SLEEP:
         image = "gcr.io/clipper-model-comp/tf-resnet-feats-sleep:bench"
@@ -139,7 +149,8 @@ def get_heavy_node_config(model_name,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
-                                            input_size=input_size)
+                                            input_size=input_size,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_LOG_REG:
         image = "gcr.io/clipper-model-comp/tf-log-reg:bench"
@@ -152,7 +163,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_KERNEL_SVM:
         image = "gcr.io/clipper-model-comp/tf-kernel-svm:bench"
@@ -165,7 +177,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_LANG_DETECT:
         image = "gcr.io/clipper-model-comp/tf-lang-detect:bench"
@@ -178,7 +191,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_LSTM:
         image = "gcr.io/clipper-model-comp/tf-lstm:bench"
@@ -191,8 +205,8 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
-
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
 
     elif model_name == TF_NMT:
         image = "gcr.io/clipper-model-comp/tf-nmt:bench"
@@ -205,8 +219,10 @@ def get_heavy_node_config(model_name,
                                             batch_size=batch_size,
                                             num_replicas=num_replicas,
                                             use_nvidia_docker=True,
-                                            no_diverge=True)
-        
+                                            no_diverge=True,
+                                            remote_addr=remote_addr)
+
+
 def get_input_size(config):
     if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:
         return 2048
@@ -223,7 +239,7 @@ def get_input_size(config):
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    cl.stop_all()
+    cl.stop_all(remote_addrs=[REMOTE_ADDR])
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
@@ -349,12 +365,12 @@ def load_metrics(client_path, clipper_path):
             clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
         try:
             clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError as e:
+        except ValueError:
             # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
             return None
     return client_metrics, clipper_metrics
@@ -366,7 +382,8 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str, workload_path=None):
+def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str,
+                 workload_path=None):
     clipper_address = setup_clipper([config, ])
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -460,44 +477,43 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 2000 
+    init_throughput = 2000
     run(init_throughput, 3, "warmup", "constant")
     throughput_results = run(init_throughput, 8, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
     latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
-    cl.stop_all()
+    cl.stop_all(remote_addrs=[REMOTE_ADDR])
     return throughput_results, latency_results
 
 
 if __name__ == "__main__":
-    workload_path = os.path.join(CURR_DIR, "nmt_workload", "workload.txt");
+    gpu = 0
+    model = TF_RESNET
+    batch_sizes = [1, 2, 4, 6, 8, 12]
+    for batch_size in batch_sizes:
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=[8],
+            allocated_gpus=[7],
+            remote_addr=REMOTE_ADDR,
+        )
 
-    for gpu in range(0,1):
-        model = TF_NMT 
-        batch_sizes = [1, 2, 4, 6, 8, 10, 12, 16, 24, 32, 48, 64]
-        for batch_size in batch_sizes:
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=1,
-                allocated_cpus=[8],
-                allocated_gpus=[gpu],
-            )
-
-            input_size = get_input_size(config)
-            throughput_results, latency_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler",
-                input_size, "9,25,10,26,11,27,12,28", workload_path=workload_path)
-            fname = "k80-{model}-batch-{batch}-gpu-{gpu}".format(
-                model=model, batch=batch_size, gpu=gpu)
-            results_dir = "{model}-SMP-gpu-{gpu}".format(model=model, gpu=gpu)
-            driver_utils.save_results_cpp_client(
-                [config, ],
-                throughput_results,
-                latency_results,
-                results_dir,
-                prefix=fname)
+        input_size = get_input_size(config)
+        throughput_results, latency_results = run_profiler(
+            config, 2000, "../../release/src/inferline_client/profiler",
+            input_size, "9,25,10,26,11,27,12,28")
+        fname = "k80-remote-{model}-batch-{batch}".format(
+            model=model, batch=batch_size, gpu=gpu)
+        results_dir = "{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            throughput_results,
+            latency_results,
+            results_dir,
+            prefix=fname)
     sys.exit(0)
