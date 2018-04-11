@@ -41,24 +41,28 @@ RESNET_MODEL_PATH = os.path.join(MODELS_DIR, "tf_resnet_model_data")
 def get_heavy_node_configs(batch_size, allocated_cpus, resnet_gpus=[], inception_gpus=[]):
     resnet_config = HeavyNodeConfig(model_name=TF_RESNET_MODEL_NAME,
                                     input_type="floats",
+                                    num_replicas=0,
                                     allocated_cpus=allocated_cpus,
                                     gpus=resnet_gpus,
                                     batch_size=batch_size)
 
     inception_config = HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
                                        input_type="floats",
+                                       num_replicas=0,
                                        allocated_cpus=allocated_cpus,
                                        gpus=inception_gpus,
                                        batch_size=batch_size)
 
     kernel_svm_config = HeavyNodeConfig(model_name=TF_KERNEL_SVM_MODEL_NAME,
                                         input_type="floats",
+                                        num_replicas=0,
                                         allocated_cpus=allocated_cpus,
                                         gpus=[],
                                         batch_size=batch_size)
 
     log_reg_config = HeavyNodeConfig(model_name=TF_LOG_REG_MODEL_NAME,
                                      input_type="floats",
+                                     num_replicas=0,
                                      allocated_cpus=allocated_cpus,
                                      gpus=[],
                                      batch_size=batch_size)

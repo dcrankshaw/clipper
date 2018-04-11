@@ -14,11 +14,13 @@ class HeavyNodeConfig(object):
     def __init__(self,
                  model_name,
                  input_type,
+                 num_replicas,
                  allocated_cpus,
                  gpus=[],
                  batch_size=1):
         self.model_name = model_name
         self.input_type = input_type
+        self.num_replicas = num_replicas
         self.allocated_cpus = allocated_cpus
         self.gpus = gpus
         self.batch_size = batch_size
@@ -26,7 +28,7 @@ class HeavyNodeConfig(object):
     def to_json(self):
         return json.dumps(self.__dict__)
 
-def save_results(configs, client_metrics, results_dir, process_num, arrival_process=None):
+def save_results(configs, client_metrics, results_dir, process_num=None, arrival_process=None):
     """
     Parameters
     ----------
@@ -47,9 +49,14 @@ def save_results(configs, client_metrics, results_dir, process_num, arrival_proc
     }
     if arrival_process:
         results_obj["arrival_process"] = arrival_process
+    
+    if process_num:
+        results_file = os.path.join(results_dir,
+                                    "results-{:%y%m%d_%H%M%S}-{}.json".format(datetime.datetime.now(), process_num))
+    else:
+        results_file = os.path.join(results_dir,
+                                    "results-{:%y%m%d_%H%M%S}.json".format(datetime.datetime.now()))
 
-    results_file = os.path.join(results_dir,
-                                "results-{:%y%m%d_%H%M%S}-{}.json".format(datetime.datetime.now(), process_num))
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
         logger.info("Saved results to {}".format(results_file))

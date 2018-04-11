@@ -40,27 +40,31 @@ RESNET_MODEL_PATH = os.path.join(MODELS_DIR, "tf_resnet_model_data")
 
 ########## Setup ##########
 
-def get_heavy_node_configs(batch_size, allocated_cpus, resnet_gpus=[], inception_gpus=[]):
+def get_heavy_node_configs(num_replicas, batch_size, allocated_cpus, resnet_gpus=[], inception_gpus=[]):
     resnet_config = HeavyNodeConfig(model_name=TF_RESNET_MODEL_NAME,
                                     input_type="floats",
+                                    num_replicas=num_replicas,
                                     allocated_cpus=allocated_cpus,
                                     gpus=resnet_gpus,
                                     batch_size=batch_size)
 
     inception_config = HeavyNodeConfig(model_name=INCEPTION_FEATS_MODEL_NAME,
                                        input_type="floats",
+                                       num_replicas=num_replicas,
                                        allocated_cpus=allocated_cpus,
                                        gpus=inception_gpus,
                                        batch_size=batch_size)
 
     kernel_svm_config = HeavyNodeConfig(model_name=TF_KERNEL_SVM_MODEL_NAME,
                                         input_type="floats",
+                                        num_replicas=num_replicas,
                                         allocated_cpus=allocated_cpus,
                                         gpus=[],
                                         batch_size=batch_size)
 
     log_reg_config = HeavyNodeConfig(model_name=TF_LOG_REG_MODEL_NAME,
                                      input_type="floats",
+                                     num_replicas=num_replicas,
                                      allocated_cpus=allocated_cpus,
                                      gpus=[],
                                      batch_size=batch_size)
@@ -90,11 +94,9 @@ def load_models(resnet_gpu, inception_gpu):
 
 ########## Benchmarking ##########
 
-class Predictor(object):
+class StatsManager(object):
 
-    def __init__(self, models_dict):
-        self.thread_pool = ThreadPoolExecutor(max_workers=2)
-
+    def __init__(self, num_trials, trial_length, save_fn):
         # Stats
         self.init_stats()
         self.stats = {
@@ -102,12 +104,79 @@ class Predictor(object):
             "p99_lats": [],
             "mean_lats": [],
             "all_lats": [],
-            "p99_predict_lats": [],
+            "all_queue_lats": [],
             "p99_queue_lats": [],
-            "mean_batches": [],
-            "mean_queue_lats": []
+            "mean_queue_lats": [],
+            "p99_inbound_queue_lats": []
         }
-        self.total_num_complete = 0
+        self.num_trials = num_trials
+        self.trial_length = trial_length
+        
+        self.trial_num = 0
+        self.trial_num_complete = 0
+
+        self.save_fn = save_fn
+
+    def init_stats(self):
+        self.latencies = []
+        self.queue_latencies = []
+        self.inbound_queue_latencies = []
+        self.trial_num_complete = 0
+        self.start_time = datetime.now()
+
+    def add_entry(self, e2e_latency, queueing_delay, inbound_queueing_delay):
+        self.latencies.append(e2e_latency)
+        self.queue_latencies.append(queueing_delay)
+        self.inbound_queue_latencies.append(inbound_queueing_delay)
+        self.trial_num_complete += 1
+
+        if self.trial_num_complete >= self.trial_length:
+            self.print_stats()
+            self.init_stats()
+            self.trial_num += 1
+
+        if self.trial_num >= self.num_trials:
+            self.save_fn([self.stats])
+            os._exit(0)
+
+    def print_stats(self):
+        lats = np.array(self.latencies)
+        queue_lats = np.array(self.queue_latencies)
+        inbound_queue_lats = np.array(self.inbound_queue_latencies)
+        p99 = np.percentile(lats, 99)
+        mean_lat = np.mean(lats)
+        p99_queue = np.percentile(queue_lats, 99)
+        p99_inbound_queue = np.percentile(inbound_queue_lats, 99)
+        mean_queue = np.mean(queue_lats)
+        end_time = datetime.now()
+        thru = float(self.trial_num_complete) / (end_time - self.start_time).total_seconds()
+        self.stats["thrus"].append(thru)
+        self.stats["all_lats"].append(self.latencies)
+        self.stats["p99_lats"].append(p99)
+        self.stats["mean_lats"].append(mean_lat)
+        self.stats["all_queue_lats"].append(self.queue_latencies)
+        self.stats["p99_queue_lats"].append(p99_queue)
+        self.stats["p99_inbound_queue_lats"].append(p99_inbound_queue)
+        self.stats["mean_queue_lats"].append(mean_queue)
+        logger.info("p99_lat: {p99}, mean_lat: {mean_lat}, p99_queue: {p99_queue}, p99_inbound_queue: {p99_inbound}, " 
+                "mean_queue: {mean_queue}, thruput: {thru}".format(p99=p99,
+                                                                   mean_lat=mean_lat,
+                                                                   p99_queue=p99_queue,
+                                                                   p99_inbound=p99_inbound_queue,
+                                                                   mean_queue=mean_queue,
+                                                                   thru=thru)) 
+
+class Predictor(object):
+
+    def __init__(self, models_dict):
+        self.thread_pool = ThreadPoolExecutor(max_workers=2)
+
+        # Stats
+        self.init_stats()
+        self.replica_stats = {
+            "p99_predict_lats": [],
+            "mean_batches": [],
+        }
 
         # Models
         self.resnet_model = models_dict[TF_RESNET_MODEL_NAME]
@@ -115,46 +184,28 @@ class Predictor(object):
         self.inception_model = models_dict[INCEPTION_FEATS_MODEL_NAME]
         self.log_reg_model = models_dict[TF_LOG_REG_MODEL_NAME]
 
+        self.resnet_inputs, self.inception_inputs = self._generate_inputs()
+
     def init_stats(self):
-        self.latencies = []
         self.predict_latencies = []
-        self.queue_latencies = []
         self.batch_sizes = []
-        self.trial_num_complete = 0
-        self.cur_req_id = 0
-        self.start_time = datetime.now()
+        self.trial_batches_complete = 0
 
     def print_stats(self):
-        lats = np.array(self.latencies)
         predict_lats = np.array(self.predict_latencies)
-        queue_lats = np.array(self.queue_latencies)
         batch_sizes = np.array(self.batch_sizes)
-        p99 = np.percentile(lats, 99)
-        p99_predict = np.percentile(predict_lats, 99)
-        p99_queue = np.percentile(queue_lats, 99)
-        mean_queue = np.mean(queue_lats)
-        mean_batch = np.mean(batch_sizes) 
-        mean_lat = np.mean(lats)
-        end_time = datetime.now()
-        thru = float(self.trial_num_complete) / (end_time - self.start_time).total_seconds()
-        self.stats["thrus"].append(thru)
-        self.stats["all_lats"].append(self.latencies)
-        self.stats["p99_lats"].append(p99)
-        self.stats["mean_lats"].append(mean_lat)
-        self.stats["p99_predict_lats"].append(self.predict_latencies)
-        self.stats["p99_queue_lats"].append(p99_queue)
-        self.stats["mean_queue_lats"].append(mean_queue)
-        logger.info("p99: {p99}, p99_predict: {p99_pred}, p99_queue: {p99_queue}, "  
-                "mean_queue: {mean_queue}, mean_lat: {mean_lat}, mean_batch: {mean_batch}, thruput: {thru}".format(
-                                                                       p99=p99,
-                                                                       mean_lat=mean_lat,
-                                                                       mean_queue=mean_queue,
-                                                                       mean_batch=mean_batch,
-                                                                       thru=thru, 
-                                                                       p99_pred=p99_predict,
-                                                                       p99_queue=p99_queue))
 
-    def predict(self, send_times, resnet_inputs, inception_inputs):
+        p99_predict = np.percentile(predict_lats, 99)
+        mean_batch = np.mean(batch_sizes) 
+        
+        self.replica_stats["p99_predict_lats"].append(self.predict_latencies)
+        self.replica_stats["mean_batches"].append(mean_batch)
+        logger.info("p99_predict: {p99_pred}, mean_batch: {mean_batch}".format(
+                                                                       mean_batch=mean_batch,
+                                                                       p99_pred=p99_predict))
+
+    # def predict(self, send_times, resnet_inputs, inception_inputs):
+    def predict(self, send_times):
         """
         Parameters
         ------------
@@ -169,13 +220,15 @@ class Predictor(object):
         """
         pred_begin = datetime.now()
 
-        assert len(send_times) == len(resnet_inputs) == len(inception_inputs)
+        # assert len(send_times) == len(resnet_inputs) == len(inception_inputs)
 
-        for send_time in send_times:
-            queue_lat = (pred_begin - send_time).total_seconds()
-            self.queue_latencies.append(queue_lat)
+        batch_size = len(send_times)
 
-        batch_size = len(resnet_inputs)
+        idxs = np.random.randint(0, len(self.resnet_inputs), batch_size)
+        resnet_inputs = self.resnet_inputs[idxs]
+        inception_inputs = self.inception_inputs[idxs]
+
+        # batch_size = len(resnet_inputs)
         self.batch_sizes.append(batch_size)
 
         resnet_svm_future = self.thread_pool.submit(
@@ -191,26 +244,48 @@ class Predictor(object):
 
         self.predict_latencies.append((end_time - pred_begin).total_seconds())
 
-        for send_time in send_times:
-            latency = (end_time - send_time).total_seconds()
-            self.latencies.append(latency)
-            self.total_num_complete += 1 
-            self.trial_num_complete += 1
+        TRIAL_LENGTH = 30 
+        self.trial_batches_complete += 1
 
-        TEMP_TRIAL_LENGTH = 100
-
-        if self.trial_num_complete > TEMP_TRIAL_LENGTH:
+        if self.trial_batches_complete > TRIAL_LENGTH:
             self.print_stats()
             self.init_stats()
 
+        outputs = []
+
+        for send_time in send_times:
+            queue_lat = (pred_begin - send_time).total_seconds()
+            outputs.append((send_time, end_time, queue_lat)) 
+
+        return outputs
+
+    def _generate_inputs(self):
+        resnet_inputs = [self._get_resnet_feats_input() for _ in range(1000)]
+        resnet_inputs = [i for _ in range(40) for i in resnet_inputs]
+
+        inception_inputs = [self._get_inception_input() for _ in range(1000)]
+        inception_inputs = [i for _ in range(40) for i in inception_inputs]
+
+        assert len(inception_inputs) == len(resnet_inputs)
+        return np.array(resnet_inputs), np.array(inception_inputs)
+
+    def _get_resnet_feats_input(self):
+        resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
+        return resnet_input.flatten()
+
+    def _get_inception_input(self):
+        inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+        return inception_input.flatten()
+
 class DriverBenchmarker(object):
-    def __init__(self, trial_length, replica_configs, response_queue):
+    def __init__(self, trial_length, replica_configs, node_configs, response_queue):
         self.trial_length = trial_length
         self.replica_configs = replica_configs
+        self.node_configs = node_configs
         self.response_queue = response_queue
 
     def run(self, num_trials, batch_size, process_file=None, request_delay=None):
-        response_thread = Thread(target=self._run_async_response_service, args=())
+        response_thread = Thread(target=self._run_async_response_service, args=(num_trials, process_file))
         response_thread.start()
         if process_file: 
             self._benchmark_arrival_process(num_trials, process_file)
@@ -221,15 +296,33 @@ class DriverBenchmarker(object):
 
         response_thread.join()
 
-    def _run_async_response_service(self):
-        send_time = self.response_queue.get(block=True)
-        recv_time = datetime.now()
-        while self.response_queue.empty():
-            try:
-                send_time = self.response_queue.get_nowait()
-                print((recv_time - send_time).total_seconds())
-            except Queue.Empty:
-                break
+    def _run_async_response_service(self, num_trials, process_file):
+        try:
+            def save_fn(stats):
+                save_results(self.node_configs, stats, "single_proc_arrival_procs", process_file)
+
+            def compute_entry_items(result):
+                recv_time = datetime.now()
+                send_time, pred_end_time, out_queue_time = result 
+                in_queue_time = (recv_time - pred_end_time).total_seconds()
+                queueing_delay = out_queue_time + in_queue_time
+                e2e_latency = (recv_time - send_time).total_seconds()
+                return e2e_latency, queueing_delay, in_queue_time
+
+            stats_manager = StatsManager(num_trials, self.trial_length, save_fn)
+            while True:    
+                result = self.response_queue.get(block=True)
+                e2e_latency, queueing_delay, inbound_queueing_delay = compute_entry_items(result)
+                stats_manager.add_entry(e2e_latency, queueing_delay, inbound_queueing_delay)
+                while (not self.response_queue.empty()):
+                    try:
+                        result = self.response_queue.get_nowait()
+                        e2e_latency, queueing_delay, inbound_queueing_delay = compute_entry_items(result)
+                        stats_manager.add_entry(e2e_latency, queueing_delay, inbound_queueing_delay)
+                    except Queue.Empty:
+                        break
+        except Exception as e:
+            print(e)
 
     def _get_load_balanced_replica_queue(self):
         replica_nums = self.replica_configs.keys()
@@ -274,33 +367,55 @@ class DriverBenchmarker(object):
         
         logger.info("Starting predictions with a fixed request delay of: {} seconds".format(request_delay))
 
+        start_time = datetime.now()
+        num_queries = 0
+
+        deltas_list = []
+
+        t5 = datetime.now()
         for _ in range(len(resnet_inputs)):
-            input_idx = np.random.randint(len(inception_inputs))
-            resnet_input = resnet_inputs[input_idx]
-            inception_input = inception_inputs[input_idx]
+            t1 = datetime.now()
+            for replica_num, queues in self.replica_configs.iteritems():
+                feedback_queue = queues[1]
+                if not feedback_queue.empty():
+                    print(feedback_queue.get())
+
+            # input_idx = np.random.randint(len(inception_inputs))
+            # resnet_input = resnet_inputs[input_idx]
+            # inception_input = inception_inputs[input_idx]
 
             send_time = datetime.now()
-            self._get_load_balanced_replica_queue().put((send_time, resnet_input, inception_input))
+            t2 = send_time
+            # self._get_load_balanced_replica_queue().put((send_time, resnet_input, inception_input))
+            self._get_load_balanced_replica_queue().put(send_time)
+            t3 = datetime.now()
+
+            num_queries += 1
+
+            if num_queries == 1000:
+                end_time = datetime.now()
+
+                throughput = float(num_queries) / (end_time - start_time).total_seconds() 
+                print("Queue ingest rate: {} qps".format(throughput))
+
+                t43, t32, t21, t51 = zip(*deltas_list)
+                # print("2-1", np.mean(t21), np.max(t21))
+                print("3-2", np.mean(t32), np.std(t32), np.percentile(t32, 99), np.max(t32))
+                print("4-3", np.mean(t43), np.std(t43), np.percentile(t43, 99), np.max(t43))
+                # print("5-1", np.mean(t51), np.max(t51))
+
+                deltas_list = []
+
+                start_time = end_time
+                num_queries = 0
+
 
             time.sleep(request_delay)
-    
-    def _generate_inputs(self):
-        resnet_inputs = [self._get_resnet_feats_input() for _ in range(1000)]
-        resnet_inputs = [i for _ in range(40) for i in resnet_inputs]
+            t4 = datetime.now()
 
-        inception_inputs = [self._get_inception_input() for _ in range(1000)]
-        inception_inputs = [i for _ in range(40) for i in inception_inputs]
+            deltas_list.append(((t4 - t3).total_seconds(), (t3 - t2).total_seconds(), (t2 - t1).total_seconds(), (t5 - t1).total_seconds()))
 
-        assert len(inception_inputs) == len(resnet_inputs)
-        return resnet_inputs, inception_inputs
-
-    def _get_resnet_feats_input(self):
-        resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
-        return resnet_input.flatten()
-
-    def _get_inception_input(self):
-        inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        return inception_input.flatten()
+            t5 = datetime.now()
 
 def run_async_query_processor(request_queue, response_queue, feedback_queue, models_dict, batch_size):
     try:
@@ -319,10 +434,10 @@ def run_async_query_processor(request_queue, response_queue, feedback_queue, mod
                     break
 
 
-            send_times, resnet_inputs, inception_inputs = zip(*curr_batch)
-            predictor.predict(send_times, resnet_inputs, inception_inputs)
-            for send_time in send_times:
-                response_queue.put(send_time)
+            # send_times, resnet_inputs, inception_inputs = zip(*curr_batch)
+            outputs = predictor.predict(curr_batch) 
+            for output in outputs:
+                response_queue.put(output)
 
     except Exception as e:
         feedback_queue.put(e)
@@ -340,10 +455,11 @@ def get_gpus(replica_num):
     inception_gpu = (2 * replica_num) + 1
     return resnet_gpu, inception_gpu
 
-def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_file, request_delay):
+def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_file, request_delay, node_configs):
     pool = multiprocessing.Pool(num_replicas)
     manager = multiprocessing.Manager()
     response_queue = manager.Queue()
+    # replica_request_queue = manager.Queue()
    
     replica_configs = {}
 
@@ -355,7 +471,7 @@ def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_
 
     time.sleep(30)
 
-    benchmarker = DriverBenchmarker(trial_length, replica_configs, response_queue)
+    benchmarker = DriverBenchmarker(trial_length, replica_configs, node_configs, response_queue)
     benchmarker.run(num_trials, batch_size, process_file, request_delay)  
 
 if __name__ == "__main__":
@@ -384,8 +500,10 @@ if __name__ == "__main__":
         inception_gpus.append(inception_gpu)
 
     for batch_size in batch_size_confs:
-        configs = get_heavy_node_configs(batch_size=batch_size,
+        node_configs = get_heavy_node_configs(
+                                         num_replicas=args.num_replicas,
+                                         batch_size=batch_size,
                                          allocated_cpus=args.cpus,
                                          resnet_gpus=resnet_gpus,
                                          inception_gpus=inception_gpus)
-        run_experiments(args.num_replicas, batch_size, args.num_trials, args.trial_length, args.process_file, args.request_delay)
+        run_experiments(args.num_replicas, batch_size, args.num_trials, args.trial_length, args.process_file, args.request_delay, node_configs)
