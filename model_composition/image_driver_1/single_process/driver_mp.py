@@ -184,6 +184,7 @@ class Predictor(object):
         self.inception_model = models_dict[INCEPTION_FEATS_MODEL_NAME]
         self.log_reg_model = models_dict[TF_LOG_REG_MODEL_NAME]
 
+        logger.info("Generating random inputs")
         self.resnet_inputs, self.inception_inputs = self._generate_inputs()
 
     def init_stats(self):
@@ -299,7 +300,7 @@ class DriverBenchmarker(object):
     def _run_async_response_service(self, num_trials, process_file):
         try:
             def save_fn(stats):
-                save_results(self.node_configs, stats, "single_proc_arrival_procs", process_file)
+                save_results(self.node_configs, stats, "single_proc_arrival_procs", arrival_process=process_file)
 
             def compute_entry_items(result):
                 recv_time = datetime.now()
@@ -337,9 +338,6 @@ class DriverBenchmarker(object):
         peak_throughput = calculate_peak_throughput(arrival_process)
         logger.info("Mean throughput: {}\nPeak throughput: {}".format(mean_throughput, peak_throughput))
 
-        logger.info("Generating random inputs")
-        resnet_inputs, inception_inputs = self._generate_inputs()
-        
         logger.info("Starting predictions with specified arrival process")
 
         for idx in range(len(arrival_process)):
@@ -348,12 +346,8 @@ class DriverBenchmarker(object):
                 if not feedback_queue.empty():
                     print(feedback_queue.get())
             
-            input_idx = np.random.randint(len(inception_inputs))
-            resnet_input = resnet_inputs[input_idx]
-            inception_input = inception_inputs[input_idx]
-
             send_time = datetime.now()
-            self._get_load_balanced_replica_queue().put((send_time, resnet_input, inception_input))
+            self._get_load_balanced_replica_queue().put(send_time)
 
             request_delay = arrival_process[idx] * .001
 
@@ -361,10 +355,7 @@ class DriverBenchmarker(object):
 
         processor_thread.join()
 
-    def _benchmark_over_under(self, num_trials, request_delay):
-        logger.info("Generating random inputs")
-        resnet_inputs, inception_inputs = self._generate_inputs()
-        
+    def _benchmark_over_under(self, num_trials, request_delay): 
         logger.info("Starting predictions with a fixed request delay of: {} seconds".format(request_delay))
 
         start_time = datetime.now()
