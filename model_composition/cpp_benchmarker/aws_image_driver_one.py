@@ -103,7 +103,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="0,16,1,17,2,18,3,19")
+        query_cpu_str="0,32,1,33,2,34,3,35")
     time.sleep(10)
     for c in configs:
         driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
@@ -414,7 +414,7 @@ def run_manually_specified_exp():
     cv = 1
     throughput_results = run_e2e(
         configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        "11,27,12,28", lam, cv)
+        "4,36,5,37", lam, cv)
     fname = "cpp-aws-SLO-250-lambda-{lam}-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
         lam=lam,
         i=inception_replicas,
@@ -434,8 +434,8 @@ class BenchmarkConfigurationException(Exception):
     pass
 
 def run_experiment_for_config(config):
-    model_cpus = range(4, 11)
-    model_gpus = range(4)
+    model_cpus = range(6, 32)
+    model_gpus = range(8)
 
     def get_cpus(num):
         try:

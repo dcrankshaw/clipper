@@ -423,8 +423,8 @@ class DockerContainerManager(ContainerManager):
         NOTE: This method assumes a p2.8xlarge instance
         """
         vcpus_map = {}
-        for i in range(16):
-            vcpus_map[i] = (i, i + 16)
+        for i in range(32):
+            vcpus_map[i] = (i, i + 32)
 
         vcpus = []
         for pcpu in pcpus:
