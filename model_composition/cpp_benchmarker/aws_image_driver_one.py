@@ -8,6 +8,7 @@ import json
 from clipper_admin import ClipperConnection, DockerContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
+import argparse
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -24,7 +25,8 @@ TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
-REMOTE_ADDR="172.30.0.164"
+REMOTE_ADDR = None
+ALL_REMOTE_ADDRS = None
 
 
 def get_heavy_node_config(model_name,
@@ -96,7 +98,7 @@ def get_heavy_node_config(model_name,
 def setup_clipper(configs):
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
     cl.connect()
-    cl.stop_all(remote_addrs=[REMOTE_ADDR])
+    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
@@ -239,7 +241,7 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_profiler(configs, trial_length, driver_path, profiler_cores_str, throughput):
+def run_e2e(configs, trial_length, driver_path, profiler_cores_str, lam, cv):
     clipper_address = setup_clipper(configs)
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(DockerContainerManager(redis_port=6380))
@@ -254,7 +256,12 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str, through
         time.sleep(10)
         cl.drain_queues()
         time.sleep(10)
-        arrival_delay_file = "/home/ubuntu/plots-model-comp-paper/experiments/cached_arrival_processes/34.deltas"
+        if cv == 1:
+            arrival_file_name = "{lam}.deltas".format(lam=lam)
+        else:
+            arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
+        arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
+                                          "cached_arrival_processes/{f}").format(f=arrival_file_name))
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
@@ -329,16 +336,16 @@ def run_profiler(configs, trial_length, driver_path, profiler_cores_str, through
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    run(throughput, 3, "warmup", "constant")
-    throughput_results = run(throughput, 25, "throughput", "file")
-    cl.stop_all(remote_addrs=[REMOTE_ADDR])
+    run(100, 3, "warmup", "constant")
+    throughput_results = run(0, 25, "throughput", "file")
+    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     return throughput_results
 
 
-if __name__ == "__main__":
-    resnet_batch_size = 4
-    inception_batch_size = 4
-    ksvm_batch_size = 1
+def run_manually_specified_exp():
+    resnet_batch_size = 16
+    inception_batch_size = 8
+    ksvm_batch_size = 3
     log_reg_batch_size = 1
 
     model_cpus = range(4, 11)
@@ -359,8 +366,7 @@ if __name__ == "__main__":
     def get_remote_gpus(num):
         return [remote_gpus.pop() for _ in range(num)]
 
-
-    resnet_replicas = 3
+    resnet_replicas = 1
     inception_replicas = 1
     ksvm_replicas = 1
     log_reg_replicas = 1
@@ -371,9 +377,9 @@ if __name__ == "__main__":
                 batch_size=resnet_batch_size,
                 num_replicas=resnet_replicas,
                 cpus_per_replica=1,
-                allocated_cpus=get_remote_cpus(resnet_replicas),
-                allocated_gpus=get_remote_gpus(resnet_replicas),
-                remote_addr=REMOTE_ADDR,
+                allocated_cpus=get_cpus(resnet_replicas),
+                allocated_gpus=get_gpus(resnet_replicas),
+                # remote_addr=REMOTE_ADDR,
             ),
         get_heavy_node_config(
                 model_name=INCEPTION_FEATS,
@@ -404,10 +410,13 @@ if __name__ == "__main__":
             )
     ]
 
-    throughput_results = run_profiler(
+    lam = 77
+    cv = 1
+    throughput_results = run_e2e(
         configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        "11,27,12,28", 238)
-    fname = "cpp-aws-p2-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
+        "11,27,12,28", lam, cv)
+    fname = "cpp-aws-SLO-250-lambda-{lam}-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
+        lam=lam,
         i=inception_replicas,
         r=resnet_replicas,
         k=ksvm_replicas,
@@ -419,4 +428,77 @@ if __name__ == "__main__":
         None,
         results_dir,
         prefix=fname)
+
+
+class BenchmarkConfigurationException(Exception):
+    pass
+
+def run_experiment_for_config(config):
+    model_cpus = range(4, 11)
+    model_gpus = range(4)
+
+    def get_cpus(num):
+        try:
+            return [model_cpus.pop() for _ in range(num)]
+        except IndexError:
+            msg = "Ran out of out available CPUs"
+            logger.error(msg)
+            raise BenchmarkConfigurationException(msg)
+
+    def get_gpus(num, gpu_type):
+        if gpu_type == "none":
+            return None
+        else:
+            assert gpu_type == "v100"
+            try:
+                return [model_gpus.pop() for _ in range(num)]
+            except IndexError:
+                msg = "Ran out of available GPUs"
+                logger.error(msg)
+                raise BenchmarkConfigurationException(msg)
+
+    try:
+        node_configs = [get_heavy_node_config(model_name=c["name"],
+                                            batch_size=int(c["batch_size"]),
+                                            num_replicas=c["num_replicas"],
+                                            cpus_per_replica=c["num_cpus"],
+                                            allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"]),
+                                            allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"]))
+                        for c in config["node_configs"].values()]
+    except BenchmarkConfigurationException as e:
+        logger.error("Error provisioning for requested configuration. Skipping.\n"
+                     "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
+        return None
+    lam = config["lam"]
+    cv = config["cv"]
+    slo = config["slo"]
+    cost = config["cost"]
+
+    results_dir = "image_driver_one_slo_{slo}_cv_{cv}".format(slo=slo, cv=cv)
+    reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
+                         for c in config["node_configs"].values()])
+    results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
+        lam=lam, cost=cost, reps_str=reps_str)
+
+    throughput_results = run_e2e(
+        node_configs, 2000, "../../release/src/inferline_client/image_driver_one",
+        "11,27,12,28", lam, cv)
+    driver_utils.save_results_cpp_client(
+        node_configs,
+        throughput_results,
+        None,
+        results_dir,
+        prefix=results_fname)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Run Image Driver 1 experiments')
+    parser.add_argument('-c', '--config_path', type=str, help="Path to config JSON file generated by optimizer")
+    args = parser.parse_args()
+
+    with open(os.path.abspath(os.path.expanduser(args.config_path)), "r") as f:
+        provided_configs = json.load(f)
+
+    for config in provided_configs:
+        run_experiment_for_config(config)
     sys.exit(0)

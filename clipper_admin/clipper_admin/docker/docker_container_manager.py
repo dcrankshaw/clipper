@@ -483,6 +483,7 @@ class DockerContainerManager(ContainerManager):
         except docker.errors.APIError as e:
             pass
         if remote_addrs is not None:
+            logger.info("Stopping remote containers")
             for r in remote_addrs:
                 env.host_string = r
                 run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
