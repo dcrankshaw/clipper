@@ -46,9 +46,12 @@ def find_mean_arrival_proc(arrival_procs, target_thru):
 
 if __name__ == "__main__":
     path = sys.argv[1]
+    num_replicas = int(sys.argv[2])
+
     arrival_procs = load_arrival_procs()
     mean_thruput = get_mean_throughput(path)
+    target_thruput = num_replicas * mean_thruput
 
-    peak_delta = find_peak_arrival_proc(arrival_procs, mean_thruput)
+    peak_delta = find_peak_arrival_proc(arrival_procs, target_thruput)
     print(abs(peak_delta))
 

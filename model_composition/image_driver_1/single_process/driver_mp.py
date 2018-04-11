@@ -4,10 +4,10 @@ import argparse
 import numpy as np
 import json
 import logging
-import Queue
 import time
 import multiprocessing
 
+from multiprocessing import Pipe, Queue, Process
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from datetime import timedelta
@@ -205,13 +205,12 @@ class Predictor(object):
                                                                        mean_batch=mean_batch,
                                                                        p99_pred=p99_predict))
 
-    # def predict(self, send_times, resnet_inputs, inception_inputs):
-    def predict(self, send_times):
+    def predict(self, msg_ids):
         """
         Parameters
         ------------
-        send_times : [datetime]
-            A list of timestamps at which each input was sent
+        msg_ids : [int]
+            A list of request message ids         
         resnet_inputs : [np.ndarray]
             A list of image inputs, each represented as a numpy array
             of shape 224 x 224 x 3
@@ -221,16 +220,13 @@ class Predictor(object):
         """
         pred_begin = datetime.now()
 
-        # assert len(send_times) == len(resnet_inputs) == len(inception_inputs)
-
-        batch_size = len(send_times)
+        batch_size = len(msg_ids)
+        self.batch_sizes.append(batch_size)
 
         idxs = np.random.randint(0, len(self.resnet_inputs), batch_size)
         resnet_inputs = self.resnet_inputs[idxs]
         inception_inputs = self.inception_inputs[idxs]
 
-        # batch_size = len(resnet_inputs)
-        self.batch_sizes.append(batch_size)
 
         resnet_svm_future = self.thread_pool.submit(
             lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
@@ -254,11 +250,7 @@ class Predictor(object):
 
         outputs = []
 
-        for send_time in send_times:
-            queue_lat = (pred_begin - send_time).total_seconds()
-            outputs.append((send_time, end_time, queue_lat)) 
-
-        return outputs
+        return msg_ids 
 
     def _generate_inputs(self):
         resnet_inputs = [self._get_resnet_feats_input() for _ in range(1000)]
@@ -286,40 +278,40 @@ class DriverBenchmarker(object):
         self.response_queue = response_queue
 
     def run(self, num_trials, batch_size, process_file=None, request_delay=None):
-        response_thread = Thread(target=self._run_async_response_service, args=(num_trials, process_file))
-        response_thread.start()
+        outbound_dict = {}
+        outbound_dict_lock = Lock()
+        # response_thread = Thread(target=self._run_async_response_service, args=(num_trials, process_file, outbound_dict, outbound_dict_lock))
+        # response_thread.start()
         if process_file: 
             self._benchmark_arrival_process(num_trials, process_file)
         elif request_delay:
-            self._benchmark_over_under(num_trials, request_delay)
+            self._benchmark_over_under(num_trials, request_delay, outbound_dict, outbound_dict_lock)
         else:
             raise
 
-        response_thread.join()
+        # response_thread.join()
 
-    def _run_async_response_service(self, num_trials, process_file):
+    def _run_async_response_service(self, num_trials, process_file, outbound_dict, outbound_dict_lock):
         try:
             def save_fn(stats):
                 save_results(self.node_configs, stats, "single_proc_arrival_procs", arrival_process=process_file)
 
-            def compute_entry_items(result):
+            def compute_entry_items(i):
                 recv_time = datetime.now()
-                send_time, pred_end_time, out_queue_time = result 
-                in_queue_time = (recv_time - pred_end_time).total_seconds()
-                queueing_delay = out_queue_time + in_queue_time
-                e2e_latency = (recv_time - send_time).total_seconds()
-                return e2e_latency, queueing_delay, in_queue_time
+                outbound_dict_lock.acquire()
+                send_time = outbound_dict[i]
+                del outbound_dict[i]
+                outbound_dict_lock.release()
+                return (recv_time - send_time).total_seconds()
 
             stats_manager = StatsManager(num_trials, self.trial_length, save_fn)
             while True:    
                 result = self.response_queue.get(block=True)
-                e2e_latency, queueing_delay, inbound_queueing_delay = compute_entry_items(result)
-                stats_manager.add_entry(e2e_latency, queueing_delay, inbound_queueing_delay)
+                stats_manager.add_entry(compute_entry_items(result), 0, 0)
                 while (not self.response_queue.empty()):
                     try:
                         result = self.response_queue.get_nowait()
-                        e2e_latency, queueing_delay, inbound_queueing_delay = compute_entry_items(result)
-                        stats_manager.add_entry(e2e_latency, queueing_delay, inbound_queueing_delay)
+                        stats_manager.add_entry(compute_entry_items(result), 0, 0)
                     except Queue.Empty:
                         break
         except Exception as e:
@@ -340,44 +332,23 @@ class DriverBenchmarker(object):
 
         logger.info("Starting predictions with specified arrival process")
 
-        for idx in range(len(arrival_process)):
-            for replica_num, queues in self.replica_configs.iteritems():
-                feedback_queue = queues[1]
-                if not feedback_queue.empty():
-                    print(feedback_queue.get())
-            
-            send_time = datetime.now()
-            self._get_load_balanced_replica_queue().put(send_time)
-
-            request_delay = arrival_process[idx] * .001
-
-            time.sleep(request_delay)
-
-        processor_thread.join()
-
-    def _benchmark_over_under(self, num_trials, request_delay): 
-        logger.info("Starting predictions with a fixed request delay of: {} seconds".format(request_delay))
-
         start_time = datetime.now()
         num_queries = 0
 
         deltas_list = []
 
         t5 = datetime.now()
-        for _ in range(len(resnet_inputs)):
+        for idx in range(len(arrival_process)):
             t1 = datetime.now()
-            for replica_num, queues in self.replica_configs.iteritems():
-                feedback_queue = queues[1]
-                if not feedback_queue.empty():
-                    print(feedback_queue.get())
-
-            # input_idx = np.random.randint(len(inception_inputs))
-            # resnet_input = resnet_inputs[input_idx]
-            # inception_input = inception_inputs[input_idx]
-
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # for replica_num, queues in self.replica_configs.iteritems():
+            #     feedback_queue = queues[1]
+            #     if not feedback_queue.empty():
+            #         print(feedback_queue.get())
+            
             send_time = datetime.now()
             t2 = send_time
-            # self._get_load_balanced_replica_queue().put((send_time, resnet_input, inception_input))
             self._get_load_balanced_replica_queue().put(send_time)
             t3 = datetime.now()
 
@@ -390,23 +361,85 @@ class DriverBenchmarker(object):
                 print("Queue ingest rate: {} qps".format(throughput))
 
                 t43, t32, t21, t51 = zip(*deltas_list)
-                # print("2-1", np.mean(t21), np.max(t21))
+                print("2-1", np.mean(t21), np.max(t21))
                 print("3-2", np.mean(t32), np.std(t32), np.percentile(t32, 99), np.max(t32))
                 print("4-3", np.mean(t43), np.std(t43), np.percentile(t43, 99), np.max(t43))
-                # print("5-1", np.mean(t51), np.max(t51))
+                print("5-1", np.mean(t51), np.max(t51))
 
                 deltas_list = []
 
                 start_time = end_time
                 num_queries = 0
 
-
-            time.sleep(request_delay)
+            request_delay = arrival_process[idx] * .001
             t4 = datetime.now()
 
             deltas_list.append(((t4 - t3).total_seconds(), (t3 - t2).total_seconds(), (t2 - t1).total_seconds(), (t5 - t1).total_seconds()))
 
             t5 = datetime.now()
+
+            time.sleep(request_delay)
+
+    def _benchmark_over_under(self, num_trials, request_delay, outbound_dict, outbound_dict_lock):
+        logger.info("Starting predictions with a fixed request delay of: {} seconds".format(request_delay))
+
+        start_time = datetime.now()
+        num_queries = 0
+
+        # deltas_list = []
+
+        # t5 = datetime.now()
+        for i in range(100000):
+            # t1 = datetime.now(i)
+
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
+            # for replica_num, queues in self.replica_configs.iteritems():
+            #     feedback_queue = queues[1]
+            #     if not feedback_queue.empty():
+            #         print(feedback_queue.get())
+
+            send_time = datetime.now()
+            outbound_dict_lock.acquire()
+            outbound_dict[i] = send_time
+            outbound_dict_lock.release()
+            # t2 = send_time
+            self._get_load_balanced_replica_queue().send(i)
+            # t3 = datetime.now()
+
+            num_queries += 1
+            #
+            if num_queries == 1000:
+                end_time = datetime.now()
+            #
+                throughput = float(num_queries) / (end_time - start_time).total_seconds() 
+                print("Queue ingest rate: {} qps".format(throughput))
+            #
+            #     t43, t32, t21, t51 = zip(*deltas_list)
+            #     print("2-1", np.mean(t21), np.max(t21))
+            #     print("3-2", np.mean(t32), np.std(t32), np.percentile(t32, 99), np.max(t32))
+            #     print("4-3", np.mean(t43), np.std(t43), np.percentile(t43, 99), np.max(t43))
+            #     print("5-1", np.mean(t51), np.max(t51))
+            #
+            #     deltas_list = []
+            #
+                start_time = end_time
+                num_queries = 0
+            #
+            # tx = datetime.now()
+
+            target_time = datetime.now() + timedelta(seconds=request_delay)
+            while datetime.now() < target_time:
+                continue
+
+            # time.sleep(request_delay)
+            # t4 = datetime.now()
+            #
+            # deltas_list.append(((t4 - tx).total_seconds(), (t3 - t2).total_seconds(), (t2 - t1).total_seconds(), (t5 - t1).total_seconds()))
+            #
+            # t5 = datetime.now()
 
 def run_async_query_processor(request_queue, response_queue, feedback_queue, models_dict, batch_size):
     try:
@@ -415,17 +448,13 @@ def run_async_query_processor(request_queue, response_queue, feedback_queue, mod
         queue_sizes = []
         while True:
             curr_batch = []
-            batch_item = request_queue.get(block=True)
+            batch_item = request_queue.recv()
             curr_batch.append(batch_item)
-            while len(curr_batch) < batch_size and (not request_queue.empty()):
-                try:
-                    batch_item = request_queue.get_nowait()
-                    curr_batch.append(batch_item)
-                except Queue.Empty:
-                    break
 
+            while request_queue.poll(0) and len(curr_batch) < batch_size:
+                batch_item = request_queue.recv()
+                curr_batch.append(batch_item)
 
-            # send_times, resnet_inputs, inception_inputs = zip(*curr_batch)
             outputs = predictor.predict(curr_batch) 
             for output in outputs:
                 response_queue.put(output)
@@ -447,20 +476,20 @@ def get_gpus(replica_num):
     return resnet_gpu, inception_gpu
 
 def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_file, request_delay, node_configs):
-    pool = multiprocessing.Pool(num_replicas)
     manager = multiprocessing.Manager()
     response_queue = manager.Queue()
-    # replica_request_queue = manager.Queue()
    
     replica_configs = {}
 
     for replica_num in range(num_replicas):
-        replica_request_queue = manager.Queue()
+        replica_request_recv, replica_request_send = Pipe(duplex=False)
         replica_feedback_queue = manager.Queue()
-        result = pool.apply_async(start_replica, (replica_num, batch_size, replica_request_queue, response_queue, replica_feedback_queue))
-        replica_configs[replica_num] = (replica_request_queue, replica_feedback_queue)
+        process = Process(target=start_replica, args=(replica_num, batch_size, replica_request_recv, response_queue, replica_feedback_queue))
+        process.start()
+        replica_request_recv.close()
+        replica_configs[replica_num] = (replica_request_send, replica_feedback_queue)
 
-    time.sleep(30)
+    time.sleep(60)
 
     benchmarker = DriverBenchmarker(trial_length, replica_configs, node_configs, response_queue)
     benchmarker.run(num_trials, batch_size, process_file, request_delay)  
