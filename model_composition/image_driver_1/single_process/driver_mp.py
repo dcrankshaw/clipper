@@ -355,12 +355,10 @@ class DriverBenchmarker(object):
             outbound_dict_lock.acquire()
             outbound_dict[i] = send_time
             outbound_dict_lock.release()
-            self._get_load_balanced_replica_queue().send(i)
             
             self._get_load_balanced_replica_queue().send(i)
 
             num_queries += 1
-
             if num_queries == 1000:
                 end_time = datetime.now()
                 throughput = float(num_queries) / (end_time - start_time).total_seconds() 
