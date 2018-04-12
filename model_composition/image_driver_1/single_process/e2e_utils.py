@@ -4,6 +4,50 @@ import numpy as np
 import argparse
 
 MILLISECONDS_PER_SECOND = 1000
+REPLICA_NUM_GENERATOR_SEED = 1200
+
+def seed_generator():
+    np.random.seed(REPLICA_NUM_GENERATOR_SEED)
+
+def tag_arrival_process(process_path, output_path, num_replicas):
+    def validate(tagged_process):
+        replica_request_counts = {}
+        for _, replica_num in tagged_process:
+            if replica_num in replica_request_counts:
+                replica_request_counts[replica_num] += 1
+            else:
+                replica_request_counts[replica_num] = 1
+
+        for replica_num, request_count in replica_request_counts.iteritems():
+            count_proportion = float(request_count) / len(tagged_process)
+            print(replica_num, count_proportion)
+
+    seed_generator()
+
+    arrival_process = load_arrival_deltas(process_path)
+    tagged_process = []
+    for delta in arrival_process:
+        replica_num = np.random.randint(num_replicas)
+        tagged_process.append((delta, replica_num))
+
+    validate(tagged_process)
+
+    with open(output_path, "w+") as f:
+        for delta, replica_num in tagged_process:
+            f.write("{},{}\n".format(delta, replica_num))
+
+def load_tagged_arrival_deltas(path):
+    with open(path, "r") as f:
+        arrival_lines = f.readlines()
+        raw_tagged_deltas = [line.rstrip() for line in arrival_lines]
+        tagged_deltas = []
+        for delta_line in raw_tagged_deltas:
+            delta, replica_num = delta_line.split(",")
+            delta = float(delta)
+            replica_num = int(replica_num)
+            tagged_deltas.append((delta, replica_num))
+
+        return tagged_deltas
 
 def load_arrival_deltas(path):
     with open(path, "r") as f:
