@@ -175,7 +175,13 @@ class Predictor(object):
             new_inception[bs] = self.inception_inputs[xrange(bs)]
         self.resnet_inputs = new_resnet
         self.inception_inputs = new_inception
-            
+
+        logger.info("Warming up")
+        self.warm_up()
+
+    def warm_up(self):
+        for _ in range(100):
+            self.predict(range(10))
 
     def init_stats(self):
         self.predict_latencies = []
@@ -272,20 +278,21 @@ class DriverBenchmarker(object):
         self.active = True
         outbound_dict = {}
         outbound_dict_lock = Lock()
-        self.response_thread = Thread(target=self._run_async_response_service, args=(num_trials, slo_millis, process_file, outbound_dict, outbound_dict_lock))
-        self.response_thread.start()
+        response_thread = Thread(target=self._run_async_response_service, args=(num_trials, slo_millis, process_file, outbound_dict, outbound_dict_lock))
+
         if process_file: 
-            self._benchmark_arrival_process(num_trials, process_file, outbound_dict, outbound_dict_lock)
+            work_thread = Thread(target=self._benchmark_arrival_process, args=(num_trials, process_file, outbound_dict, outbound_dict_lock))
+            # self._benchmark_arrival_process(num_trials, process_file, outbound_dict, outbound_dict_lock)
         elif request_delay:
-            self._benchmark_over_under(num_trials, request_delay, outbound_dict, outbound_dict_lock)
+            work_thread = Thread(target=self._benchmark_over_under, args=(num_trials, request_delay, outbound_dict, outbound_dict_lock))
+            # self._benchmark_over_under(num_trials, request_delay, outbound_dict, outbound_dict_lock)
         else:
             raise
 
-        self.response_thread.join()
+        response_thread.start()
+        work_thread.start()
 
-    def stop(self, replica_configs):
-        for replica_queue in replica_configs.values():
-            replica_queue.queue.clear()
+        return work_thread, response_thread
 
     def _run_async_response_service(self, num_trials, slo_millis, process_file, outbound_dict, outbound_dict_lock):
         try:
@@ -296,7 +303,7 @@ class DriverBenchmarker(object):
 
             stats_manager = StatsManager(num_trials, self.trial_length, save_fn)
 
-            while True:
+            while self.active:
                 msg_ids = self.response_queue.get(block=True)
                 recv_time = datetime.now()
                 stats_executor.submit(self._update_stats, stats_manager, recv_time, msg_ids, outbound_dict, outbound_dict_lock)
@@ -343,6 +350,8 @@ class DriverBenchmarker(object):
         num_queries = 0
 
         for i in range(len(arrival_process)):
+            if not self.active:
+                break
             t1 = datetime.now()
             # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
             # USE THIS FOR DEBUGGING, ELSE COMMENT IT OUT
@@ -459,9 +468,13 @@ def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_
         replica_configs[replica_num] = (replica_request_send, replica_feedback_queue)
 
     time.sleep(90)
+    # time.sleep(20)
 
     benchmarker = DriverBenchmarker(trial_length, replica_configs, node_configs, response_queue)
-    benchmarker.run(num_trials, batch_size, slo_millis, process_file, request_delay)  
+
+    work_thread, response_thread = benchmarker.run(num_trials, batch_size, slo_millis, process_file, request_delay)
+    work_thread.join()
+    response_thread.join()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Set up and benchmark models for Single Process Image Driver 1')

@@ -52,6 +52,9 @@ if __name__ == "__main__":
     mean_thruput = get_mean_throughput(path)
     target_thruput = num_replicas * mean_thruput
 
-    peak_delta = find_peak_arrival_proc(arrival_procs, target_thruput)
-    print(abs(peak_delta))
+    # peak_delta = find_peak_arrival_proc(arrival_procs, target_thruput)
+    # print(abs(peak_delta))
+
+    mean_delta = find_mean_arrival_proc(arrival_procs, target_thruput)
+    print(abs(mean_delta))
 
