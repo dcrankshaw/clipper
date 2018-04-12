@@ -458,7 +458,7 @@ def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_
         replica_request_recv.close()
         replica_configs[replica_num] = (replica_request_send, replica_feedback_queue)
 
-    time.sleep(60)
+    time.sleep(90)
 
     benchmarker = DriverBenchmarker(trial_length, replica_configs, node_configs, response_queue)
     benchmarker.run(num_trials, batch_size, slo_millis, process_file, request_delay)  
