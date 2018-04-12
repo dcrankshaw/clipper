@@ -103,7 +103,7 @@ def setup_clipper(configs):
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
         mgmt_cpu_str="0",
-        query_cpu_str="0,32,1,33,2,34,3,35")
+        query_cpu_str="0,16,1,17,2,18,3,19")
     time.sleep(10)
     for c in configs:
         driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
@@ -434,8 +434,8 @@ class BenchmarkConfigurationException(Exception):
     pass
 
 def run_experiment_for_config(config):
-    model_cpus = range(6, 32)
-    model_gpus = range(8)
+    model_cpus = range(6, 16)
+    model_gpus = range(4)
 
     def get_cpus(num):
         try:
@@ -482,7 +482,7 @@ def run_experiment_for_config(config):
 
     throughput_results = run_e2e(
         node_configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        "11,27,12,28", lam, cv)
+        "4,20,5,21", lam, cv)
     driver_utils.save_results_cpp_client(
         node_configs,
         throughput_results,
