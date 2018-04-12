@@ -9,6 +9,7 @@ import time
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from datetime import timedelta 
 from threading import Thread, Lock
 
 from single_proc_utils import HeavyNodeConfig, save_results
@@ -89,6 +90,26 @@ def load_models(resnet_gpu, inception_gpu):
     }
     return models_dict
 
+########## Input Generation ##########
+
+def generate_inputs():
+    resnet_inputs = [get_resnet_feats_input() for _ in range(1000)]
+    resnet_inputs = [i for _ in range(40) for i in resnet_inputs]
+
+    inception_inputs = [get_inception_input() for _ in range(1000)]
+    inception_inputs = [i for _ in range(40) for i in inception_inputs]
+
+    assert len(inception_inputs) == len(resnet_inputs)
+    return np.array(resnet_inputs), np.array(inception_inputs)
+
+def get_resnet_feats_input():
+    resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
+    return resnet_input.flatten()
+
+def get_inception_input():
+    inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
+    return inception_input.flatten()
+
 ########## Benchmarking ##########
 
 class Predictor(object):
@@ -120,7 +141,7 @@ class Predictor(object):
 
         # Input generation
         logger.info("Generating random inputs")
-        self.resnet_inputs, self.inception_inputs = self._generate_inputs()
+        self.resnet_inputs, self.inception_inputs = generate_inputs()
         new_resnet = {}
         new_inception = {}
         for bs in range(200):
@@ -134,7 +155,8 @@ class Predictor(object):
 
     def warm_up(self):
         for _ in range(100):
-            self.predict(range(10))
+            time = datetime.now()
+            self.predict([(msg_id, time) for msg_id in range(10)])
 
     def init_stats(self):
         self.latencies = []
@@ -185,10 +207,10 @@ class Predictor(object):
         resnet_inputs = self.resnet_inputs[batch_size]
         inception_inputs = self.inception_inputs[batch_size]
 
-        resnet_svm_future = self.thread_pool.submit(
+        resnet_svm_future = self.task_execution_thread_pool.submit(
             lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
         
-        inception_log_reg_future = self.thread_pool.submit(
+        inception_log_reg_future = self.task_execution_thread_pool.submit(
             lambda inputs : self.log_reg_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
         resnet_svm_classes = resnet_svm_future.result()
@@ -198,36 +220,24 @@ class Predictor(object):
 
         self.stats_thread_pool.submit(self._update_stats, requests, pred_begin, pred_end, batch_size)
 
-
     def _update_stats(self, requests, pred_begin_time, pred_end_time, batch_size):
-        self.batch_predict_latencies.append((pred_end_time - pred_begin_time).total_seconds())
-        self.batch_sizes.append(batch_size)
-        for msg_id, send_time in requests:
-            e2e_latency = (pred_end_time - send_time).total_seconds()
-            self.latencies.push_back(e2e_latency)
-            self.stats["per_message_lats"][msg_id] = e2e_latency
+        try:
+            self.batch_predict_latencies.append((pred_end_time - pred_begin_time).total_seconds())
+            self.batch_sizes.append(batch_size)
+            for msg_id, send_time in requests:
+                e2e_latency = (pred_end_time - send_time).total_seconds()
+                self.latencies.append(e2e_latency)
+                self.stats["per_message_lats"][msg_id] = e2e_latency
 
-        if self.trial_num_complete > self.trial_length:
-            self.print_stats()
-            self.init_stats()
+            self.trial_num_complete += batch_size
+
+            if self.trial_num_complete >= self.trial_length:
+                self.print_stats()
+                self.init_stats()
+                self.trial_num_complete = 0
+        except Exception as e:
+            print(e)
     
-    def _generate_inputs(self):
-        resnet_inputs = [self._get_resnet_feats_input() for _ in range(1000)]
-        resnet_inputs = [i for _ in range(40) for i in resnet_inputs]
-
-        inception_inputs = [self._get_inception_input() for _ in range(1000)]
-        inception_inputs = [i for _ in range(40) for i in inception_inputs]
-
-        assert len(inception_inputs) == len(resnet_inputs)
-        return np.array(resnet_inputs), np.array(inception_inputs)
-
-    def _get_resnet_feats_input(self):
-        resnet_input = np.array(np.random.rand(224, 224, 3) * 255, dtype=np.float32)
-        return resnet_input.flatten()
-
-    def _get_inception_input(self):
-        inception_input = np.array(np.random.rand(299, 299, 3) * 255, dtype=np.float32)
-        return inception_input.flatten()
 
 class DriverBenchmarker(object):
     def __init__(self, models_dict, trial_length):
@@ -239,7 +249,7 @@ class DriverBenchmarker(object):
         self.configs = configs
 
     def run(self, num_trials, batch_size, num_cpus, replica_num, slo_millis, process_file=None, request_delay=None):
-        if process_file: 
+        if process_file:
             self._benchmark_arrival_process(replica_num, num_trials, batch_size, slo_millis, process_file)
         elif request_delay:
             self._benchmark_over_under(replica_num, num_trials, batch_size, slo_millis, request_delay)
@@ -247,6 +257,9 @@ class DriverBenchmarker(object):
             self._benchmark_batches(replica_num, num_trials, batch_size, slo_millis)
 
     def _benchmark_batches(self, replica_num, num_trials, batch_size, slo_millis):
+        logger.info("Generating random inputs")
+        resnet_inputs, inception_inputs = generate_inputs()
+
         logger.info("Starting predictions")
 
         predictor = Predictor(self.models_dict, trial_length=self.trial_length)
@@ -269,13 +282,15 @@ class DriverBenchmarker(object):
         logger.info("Initializing processor thread")
         processor_thread = Thread(target=self._run_async_query_processor, args=(replica_num, num_trials, batch_size, slo_millis, None))
         processor_thread.start()
+        time.sleep(60)
         
         logger.info("Starting predictions")
 
         for i in range(10000):
             send_time = datetime.now()
             self.request_queue.put((msg_id, send_time))
-            spin_sleep(request_delay_seconds)
+            time.sleep(request_delay_seconds)
+            # self._spin_sleep(request_delay_seconds)
 
         processor_thread.join()
 
@@ -283,11 +298,10 @@ class DriverBenchmarker(object):
         logger.info("Parsing arrival process")
         arrival_process = load_tagged_arrival_deltas(process_file)
 
-        logger.info("Mean throughput: {}\nPeak throughput: {}".format(mean_throughput, peak_throughput))
-
         logger.info("Initializing processor thread")
         processor_thread = Thread(target=self._run_async_query_processor, args=(replica_num, num_trials, batch_size, slo_millis, process_file))
         processor_thread.start()
+        time.sleep(60)
         
         logger.info("Starting predictions")
 
@@ -300,11 +314,12 @@ class DriverBenchmarker(object):
                 msg_id = idx
                 self.request_queue.put((msg_id, send_time))
 
-            spin_sleep(request_delay_seconds)
+            time.sleep(request_delay_seconds)
+            # self._spin_sleep(request_delay_seconds)
 
         processor_thread.join()
 
-    def _spin_sleep(request_delay_seconds):
+    def _spin_sleep(self, request_delay_seconds):
         sleep_end_time = datetime.now() + timedelta(seconds=request_delay_seconds)
         while datetime.now() < sleep_end_time:
             continue
@@ -314,7 +329,6 @@ class DriverBenchmarker(object):
         loop_lats = []
         prev_stats_len = 0
         while True:
-            begin = datetime.now()
             curr_batch = []
             batch_item = self.request_queue.get(block=True)
             curr_batch.append(batch_item)
@@ -325,20 +339,10 @@ class DriverBenchmarker(object):
                 except Queue.Empty:
                     break
 
-            send_times, resnet_inputs, inception_inputs = zip(*curr_batch)
-            predictor.predict(send_times, resnet_inputs, inception_inputs)
-
-            end = datetime.now()
-            loop_lats.append((end - begin).total_seconds())
-
-            if len(predictor.stats["thrus"]) > prev_stats_len:
-                prev_stats_len = len(predictor.stats["thrus"])
-                print(np.percentile(np.array(loop_lats), 99))
-                loop_lats = []
+            predictor.predict(curr_batch)
 
             if len(predictor.stats["thrus"]) > num_trials:
                 break
-
 
         save_results(self.configs, [predictor.stats], "single_proc_arrival_procs", slo_millis, process_num=replica_num, arrival_process=process_file)
         sys.exit(0)
@@ -378,4 +382,4 @@ if __name__ == "__main__":
                                          resnet_gpus=[args.resnet_gpu],
                                          inception_gpus=[args.inception_gpu])
         benchmarker.set_configs(configs)
-        benchmarker.run(args.num_trials, batch_size, num_cpus, args.replica_num, args.process_file, args.request_delay)
+        benchmarker.run(args.num_trials, batch_size, num_cpus, args.replica_num, args.slo_millis, args.process_file, args.request_delay)

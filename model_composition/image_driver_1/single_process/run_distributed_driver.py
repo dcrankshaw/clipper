@@ -2,6 +2,8 @@ import sys
 import os
 import json
 
+from subprocess import Popen
+
 CONFIG_KEY_BATCH_SIZE = "batch_size"
 CONFIG_KEY_CPU_AFFINITIES = "cpu_affinities"
 CONFIG_KEY_TAGGED_PROCESS_PATH = "tagged_process_path"
@@ -52,7 +54,8 @@ def launch_processes(config):
                               proc_file=process_path,
                               slo=slo_millis)
 
-        os.system(process_cmd)
+        print("Running: {}".format(process_cmd))
+        Popen(process_cmd, shell=True)
 
 if __name__ == "__main__":
     config_path = sys.argv[1]

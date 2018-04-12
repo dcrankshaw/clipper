@@ -459,11 +459,14 @@ def run_experiments(num_replicas, batch_size, num_trials, trial_length, process_
    
     replica_configs = {}
 
+    replica_cpu_affinities = ["0,16,1,17,2,18,3,19", "4,20,5,21,6,22,7,23"]
+
     for replica_num in range(num_replicas):
         replica_request_recv, replica_request_send = Pipe(duplex=False)
         replica_feedback_queue = manager.Queue()
         process = Process(target=start_replica, args=(replica_num, batch_size, replica_request_recv, response_queue, replica_feedback_queue))
         process.start()
+        os.system("taskset -p -c {} {}".format(replica_cpu_affinities, process.pid))
         replica_request_recv.close()
         replica_configs[replica_num] = (replica_request_send, replica_feedback_queue)
 
