@@ -28,7 +28,7 @@ class HeavyNodeConfig(object):
     def to_json(self):
         return json.dumps(self.__dict__)
 
-def save_results(configs, client_metrics, results_dir, process_num=None, arrival_process=None):
+def save_results(configs, client_metrics, results_dir, slo, process_num=None, arrival_process=None):
     """
     Parameters
     ----------
@@ -47,15 +47,22 @@ def save_results(configs, client_metrics, results_dir, process_num=None, arrival
         "node_configs": [c.__dict__ for c in configs],
         "client_metrics": client_metrics,
     }
+
+    batch_size = configs[0].batch_size
+    num_replicas = configs[0].num_replicas
+
     if arrival_process:
         results_obj["arrival_process"] = arrival_process
+
+    results_path_base = "results-bs-{}-reps-{}-slo-{}".format(batch_size, num_replicas, slo)
     
     if process_num:
         results_file = os.path.join(results_dir,
-                                    "results-{:%y%m%d_%H%M%S}-{}.json".format(datetime.datetime.now(), process_num))
+                                    (results_path_base + "-{:%y%m%d_%H%M%S}-{}.json").format(datetime.datetime.now(), process_num))
     else:
         results_file = os.path.join(results_dir,
-                                    "results-{:%y%m%d_%H%M%S}.json".format(datetime.datetime.now()))
+                                    (results_path_base + "-{:%y%m%d_%H%M%S}.json").format(datetime.datetime.now()))
+
 
     with open(results_file, "w") as f:
         json.dump(results_obj, f, indent=4)
