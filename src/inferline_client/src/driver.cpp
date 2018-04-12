@@ -20,9 +20,9 @@ constexpr int SEND_PORT = 4456;
 constexpr int RECV_PORT = 4455;
 
 Driver::Driver(
-    std::function<void(FrontendRPCClient &, ClientFeatureVector, std::atomic<int> &)> predict_func,
+    std::function<void(FrontendRPCClient &, FrontendRPCClient &, ClientFeatureVector, std::atomic<int> &)> predict_func,
     std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
-    int trial_length, int num_trials, std::string log_file, std::string clipper_address,
+    int trial_length, int num_trials, std::string log_file, std::string clipper_address_resnet, std::string clipper_address_inception,
     int batch_size, std::vector<float> delay_ms)
     : predict_func_(predict_func),
       inputs_(inputs),
@@ -31,13 +31,16 @@ Driver::Driver(
       trial_length_(trial_length),
       num_trials_(num_trials),
       log_file_(log_file),
-      client_{2},
+      resnet_client_{2},
+      inception_client_{2},
       done_(false),
       prediction_counter_(0),
-      clipper_address_(clipper_address),
+      clipper_address_resnet_(clipper_address_resnet),
+      clipper_address_inception_(clipper_address_inception),
       batch_size_(batch_size),
       delay_ms_(delay_ms) {
-  client_.start(clipper_address, SEND_PORT, RECV_PORT);
+  resnet_client_.start(clipper_address_resnet, SEND_PORT, RECV_PORT);
+  inception_client_.start(clipper_address_inception, SEND_PORT, RECV_PORT);
 }
 
 void spin_sleep(long duration_micros) {
@@ -62,7 +65,7 @@ void Driver::start() {
     int cur_idx = 0;
 
     // Send a query to flush the system
-    predict_func_(client_, inputs_[cur_idx], prediction_counter_);
+    predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
     cur_idx += 1;
     spin_sleep(1000 * 1000L);
 
@@ -71,7 +74,7 @@ void Driver::start() {
       int cur_pred_counter = prediction_counter_;
       // Send a batch
       for (int j = 0; j < batch_size_; ++j) {
-        predict_func_(client_, inputs_[cur_idx], prediction_counter_);
+        predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
         cur_idx += 1;
         if (cur_idx >= inputs_.size()) {
           cur_idx = 0;
@@ -92,7 +95,7 @@ void Driver::start() {
         if (done_) {
           break;
         }
-        predict_func_(client_, f, prediction_counter_);
+        predict_func_(resnet_client_, inception_client_, f, prediction_counter_);
 
         if (distribution_ == "poisson") {
           float delay_secs = exp_dist(gen);
@@ -112,19 +115,19 @@ void Driver::start() {
       }
     }
   }
-  client_.stop();
+  resnet_client_.stop();
+  inception_client_.stop();
   monitor_thread.join();
 }
 
 void Driver::monitor_results() {
   int num_completed_trials = 0;
   std::ofstream client_metrics_file;
-  std::ofstream clipper_metrics_file;
+  // std::ofstream clipper_metrics_file;
   client_metrics_file.open(log_file_ + "-client_metrics.json");
-  clipper_metrics_file.open(log_file_ + "-clipper_metrics.json");
+  // clipper_metrics_file.open(log_file_ + "-clipper_metrics.json");
   client_metrics_file << "[" << std::endl;
-  clipper_metrics_file << "[" << std::endl;
-  // httplib::Client http_client(clipper_address_.c_str(), 1337);
+  // clipper_metrics_file << "[" << std::endl;
 
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
 
@@ -138,16 +141,16 @@ void Driver::monitor_results() {
           registry.report_metrics(true);
       client_metrics_file << metrics_report;
       client_metrics_file << "," << std::endl;
-      std::string address = "http://" + clipper_address_ + ":" + std::to_string(1337) + "/metrics";
-      std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
-      std::system(cmd_str.c_str());
-      std::ifstream curl_output("curl_out.txt");
-      std::stringstream curl_str_buf;
-      curl_output >> curl_str_buf.rdbuf();
-      std::string curl_str = curl_str_buf.str();
-      clipper_metrics_file << curl_str;
-      clipper_metrics_file << "," << std::endl;
-      curl_output.close();
+      // std::string address = "http://" + clipper_address_ + ":" + std::to_string(1337) + "/metrics";
+      // std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
+      // std::system(cmd_str.c_str());
+      // std::ifstream curl_output("curl_out.txt");
+      // std::stringstream curl_str_buf;
+      // curl_output >> curl_str_buf.rdbuf();
+      // std::string curl_str = curl_str_buf.str();
+      // clipper_metrics_file << curl_str;
+      // clipper_metrics_file << "," << std::endl;
+      // curl_output.close();
     }
 
     if (num_completed_trials >= num_trials_) {
@@ -160,7 +163,7 @@ void Driver::monitor_results() {
   // client_metrics_file << "]";
   client_metrics_file.close();
   // clipper_metrics_file << "]";
-  clipper_metrics_file.close();
+  // clipper_metrics_file.close();
   return;
 }
 }

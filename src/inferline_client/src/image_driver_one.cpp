@@ -107,7 +107,7 @@ class ImageDriverOneMetrics {
   std::shared_ptr<clipper::metrics::Counter> log_reg_num_predictions_;
 };
 
-void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOneMetrics metrics,
+void predict(FrontendRPCClient& resnet_client, FrontendRPCClient& inception_client, ClientFeatureVector input, ImageDriverOneMetrics metrics,
              std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
@@ -128,7 +128,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     prediction_counter += 1;
   };
 
-  auto ksvm_callback = [&client, metrics, branches_completed, completion_callback,
+  auto ksvm_callback = [&resnet_client, metrics, branches_completed, completion_callback,
                         &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -175,7 +175,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     }
   };
 
-  auto log_reg_callback = [&client, metrics, branches_completed, &completion_callback,
+  auto log_reg_callback = [&inception_client, metrics, branches_completed, &completion_callback,
                            &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -222,7 +222,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     }
   };
 
-  auto inception_callback = [&client, metrics, start_time, log_reg_callback, &lineage_file_map,
+  auto inception_callback = [&inception_client, metrics, start_time, log_reg_callback, &lineage_file_map,
                              &lineage_mutex_map](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -233,7 +233,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    client.send_request(TF_LOG_REG, output,
+    inception_client.send_request(TF_LOG_REG, output,
                         [cur_time, log_reg_callback](ClientFeatureVector output,
                                                      std::shared_ptr<QueryLineage> lineage) {
                           log_reg_callback(output, lineage, cur_time);
@@ -268,7 +268,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     query_lineage_file << "}" << std::endl;
   };
 
-  auto resnet_callback = [&client, metrics, start_time, ksvm_callback, &lineage_file_map,
+  auto resnet_callback = [&resnet_client, metrics, start_time, ksvm_callback, &lineage_file_map,
                           &lineage_mutex_map](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -279,7 +279,7 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    client.send_request(TF_KERNEL_SVM, output,
+    resnet_client.send_request(TF_KERNEL_SVM, output,
                         [cur_time, ksvm_callback](ClientFeatureVector output,
                                                   std::shared_ptr<QueryLineage> lineage) {
                           ksvm_callback(output, lineage, cur_time);
@@ -314,8 +314,8 @@ void predict(FrontendRPCClient& client, ClientFeatureVector input, ImageDriverOn
     query_lineage_file << "}" << std::endl;
   };
 
-  client.send_request(INCEPTION_FEATS, input, inception_callback);
-  client.send_request(TF_RESNET, resnet_input, resnet_callback);
+  inception_client.send_request(INCEPTION_FEATS, input, inception_callback);
+  resnet_client.send_request(TF_RESNET, resnet_input, resnet_callback);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -351,7 +351,9 @@ int main(int argc, char* argv[]) {
        cxxopts::value<int>())
       ("log_file", "location of log file",
        cxxopts::value<std::string>())
-      ("clipper_address", "IP address or hostname of ZMQ frontend",
+      ("clipper_address_resnet", "IP address or hostname of ZMQ frontend to use for the resnet branch",
+       cxxopts::value<std::string>())
+      ("clipper_address_inception", "IP address or hostname of ZMQ frontend to user for the inception branch",
        cxxopts::value<std::string>())
       ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
        cxxopts::value<std::string>())
@@ -387,8 +389,9 @@ int main(int argc, char* argv[]) {
   }
 
   auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
-      FrontendRPCClient& client, ClientFeatureVector input, std::atomic<int>& prediction_counter) {
-    predict(client, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
+      FrontendRPCClient& resnet_client, FrontendRPCClient& inception_client, ClientFeatureVector input,
+      std::atomic<int>& prediction_counter) {
+    predict(resnet_client, inception_client, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
   };
   std::vector<float> delays_ms;
   if (distribution == "file") {
@@ -402,7 +405,8 @@ int main(int argc, char* argv[]) {
   }
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
-                options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
+                options["log_file"].as<std::string>(), options["clipper_address_resnet"].as<std::string>(),
+                options["clipper_address_inception"].as<std::string>(),
                 -1, delays_ms);
   std::cout << "Starting driver" << std::endl;
   driver.start();
