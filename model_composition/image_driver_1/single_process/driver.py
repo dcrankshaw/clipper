@@ -14,8 +14,7 @@ from threading import Thread, Lock
 from single_proc_utils import HeavyNodeConfig, save_results
 from models import tf_resnet_model, inception_feats_model, tf_kernel_svm_model, tf_log_reg_model
 
-from e2e_utils import load_arrival_deltas, calculate_mean_throughput, calculate_peak_throughput
-
+from e2e_utils import load_tagged_arrival_deltas, load_arrival_deltas 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%y-%m-%d:%H:%M:%S',
@@ -160,8 +159,8 @@ class Predictor(object):
         self.stats["mean_lats"].append(mean)
         self.stats["p99_batch_predict_lats"].append(self.batch_predict_latencies)
         self.stats["mean_batch_sizes"].append(mean_batch_size)
-        logger.info("p99_lat: {p99}, mean_lat: {mean}, p99_batch_predict: {p99_batch_pred},
-                thruput: {thru}, mean_batch: {mb}".format(p99=p99,
+        logger.info("p99_lat: {p99}, mean_lat: {mean}, p99_batch_predict: {p99_batch_pred},"
+                    " thruput: {thru}, mean_batch: {mb}".format(p99=p99,
                                                           mean=mean,
                                                           thru=thru, 
                                                           p99_batch_pred=p99_batch_predict,
@@ -282,9 +281,7 @@ class DriverBenchmarker(object):
 
     def _benchmark_arrival_process(self, replica_num, num_trials, batch_size, slo_millis, process_file):
         logger.info("Parsing arrival process")
-        arrival_process = load_arrival_deltas(process_file)
-        mean_throughput = calculate_mean_throughput(arrival_process)
-        peak_throughput = calculate_peak_throughput(arrival_process)
+        arrival_process = load_tagged_arrival_deltas(process_file)
 
         logger.info("Mean throughput: {}\nPeak throughput: {}".format(mean_throughput, peak_throughput))
 
