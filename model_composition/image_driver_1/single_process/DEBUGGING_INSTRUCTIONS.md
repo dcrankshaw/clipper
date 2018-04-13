@@ -36,7 +36,8 @@ The following steps can be used to reproduce the discussed, problematic behavior
    * As the experiment runs, pay attention to the "p99_batch_predict" latencies that are
      emitted. These will be in the range of 300-400 milliseconds, printed in second resolution (.3 - .4).
      These are latencies for the **critical path** calls to `resnet.predict` and `inception.predict`. You can
-     see how they are calculated on lines
+     see how they are calculated here: https://github.com/Corey-Zumar/clipper-1/blob/d8bb75ca5c76f06818002da49673ee6de8e09e6a/model_composition/image_driver_1/single_process/driver.py#L225
+     
 
 2. Run the experimental configuration located at "DEBUGGING/363_2_rep_config.json"
    This will launch two replicas and benchmark them using an arrival process with a lambda of 363
@@ -44,4 +45,6 @@ The following steps can be used to reproduce the discussed, problematic behavior
    cores 0-3. The second replica will be launched on GPUs 2 and 3 and **physical** cores 4-7. Both
    replicas will use a batch size of 80.
 
-   * As the experiment runs, note that, despite the fact that we are running separate python processes 
+   * As the experiment runs, note that, despite the fact that we are running separate python processes on 
+     separate GPUs and physical CPUs, "p99_batch_predict" latencies increase dramatically (on the order of 600 milliseconds)
+     for each replica.
