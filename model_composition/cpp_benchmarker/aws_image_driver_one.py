@@ -5,7 +5,7 @@ import sys
 import time
 import logging
 import json
-from clipper_admin import ClipperConnection, DockerContainerManager
+from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
 import argparse
@@ -18,15 +18,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT = "TIMEOUT"
-CLIPPER_ADDRESS = "localhost"
+# CLIPPER_ADDRESS = "localhost"
 
 INCEPTION_FEATS = "inception"
 TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
-REMOTE_ADDR = None
-ALL_REMOTE_ADDRS = None
+# REMOTE_ADDR = None
+# ALL_REMOTE_ADDRS = None
+
+RESNET_CLIPPER_ADDR = "localhost"
+INCEPTION_CLIPPER_ADDR = "1.2.3.4"
 
 
 def get_heavy_node_config(model_name,
@@ -95,21 +98,22 @@ def get_heavy_node_config(model_name,
                                             remote_addr=remote_addr)
 
 
-def setup_clipper(configs):
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-    cl.connect()
-    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
-    cl.start_clipper(
-        query_frontend_image="clipper/zmq_frontend:develop",
-        redis_cpu_str="0",
-        mgmt_cpu_str="0",
-        query_cpu_str="0,16,1,17,2,18,3,19")
-    time.sleep(10)
-    for c in configs:
-        driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
+def setup_clipper(addr_config_map):
+    for addr, configs in addr_config_map.iteritems():
+        cl = ClipperConnection(AWSContainerManager(host=addr, redis_port=6380))
+        cl.connect()
+        cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
+        cl.start_clipper(
+            query_frontend_image="clipper/zmq_frontend:develop",
+            redis_cpu_str="0",
+            mgmt_cpu_str="0",
+            query_cpu_str="0,16,1,17,2,18,3,19")
+        time.sleep(10)
+        for c in configs:
+            driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
-    return CLIPPER_ADDRESS
+        # return CLIPPER_ADDRESS
 
 
 def get_clipper_batch_sizes(metrics_json):
@@ -241,20 +245,25 @@ def load_lineage(lineage_path):
     return parsed
 
 
-def run_e2e(configs, trial_length, driver_path, profiler_cores_str, lam, cv):
-    clipper_address = setup_clipper(configs)
-    clipper_address = CLIPPER_ADDRESS
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
-    cl.connect()
+def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam, cv):
+    assert len(addr_config_map) == 2
+    clipper_address = setup_clipper(addr_config_map)
+    # clipper_address = CLIPPER_ADDRESS
+    cls = [ClipperConnection(AWSContainerManager(host=addr, redis_port=6380)) for addr in addr_config_map]
+    for cl in cls:
+        cl.connect()
+
     time.sleep(30)
     log_dir = "/tmp/image_driver_one_profiler_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
     def run(target_throughput, num_trials, name, arrival_process):
-        cl.drain_queues()
+        for cl in cls:
+            cl.drain_queues()
         time.sleep(10)
-        cl.drain_queues()
+        for cl in cls:
+            cl.drain_queues()
         time.sleep(10)
         if cv == 1:
             arrival_file_name = "{lam}.deltas".format(lam=lam)
@@ -272,7 +281,8 @@ def run_e2e(configs, trial_length, driver_path, profiler_cores_str, lam, cv):
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address={}".format(clipper_address),
+               "--clipper_address_resnet={}".format(list(addr_config_map.keys())[0]),
+               "--clipper_address_inception={}".format(list(addr_config_map.keys())[1]),
                "--request_delay_file={}".format(arrival_delay_file)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
@@ -338,96 +348,98 @@ def run_e2e(configs, trial_length, driver_path, profiler_cores_str, lam, cv):
 
     run(100, 3, "warmup", "constant")
     throughput_results = run(0, 25, "throughput", "file")
-    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
+
+    for cl in cls:
+        cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     return throughput_results
 
 
-def run_manually_specified_exp():
-    resnet_batch_size = 16
-    inception_batch_size = 8
-    ksvm_batch_size = 3
-    log_reg_batch_size = 1
-
-    model_cpus = range(4, 11)
-    model_gpus = range(4)
-    # model_gpus = range(8)
-    remote_cpus = range(16)
-    remote_gpus = range(8)
-
-    def get_cpus(num):
-        return [model_cpus.pop() for _ in range(num)]
-
-    def get_gpus(num):
-        return [model_gpus.pop() for _ in range(num)]
-
-    def get_remote_cpus(num):
-        return [remote_cpus.pop() for _ in range(num)]
-
-    def get_remote_gpus(num):
-        return [remote_gpus.pop() for _ in range(num)]
-
-    resnet_replicas = 1
-    inception_replicas = 1
-    ksvm_replicas = 1
-    log_reg_replicas = 1
-
-    configs = [
-        get_heavy_node_config(
-                model_name=TF_RESNET,
-                batch_size=resnet_batch_size,
-                num_replicas=resnet_replicas,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(resnet_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
-                # remote_addr=REMOTE_ADDR,
-            ),
-        get_heavy_node_config(
-                model_name=INCEPTION_FEATS,
-                batch_size=inception_batch_size,
-                num_replicas=inception_replicas,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(inception_replicas),
-                allocated_gpus=get_gpus(resnet_replicas),
-                # remote_addr=REMOTE_ADDR,
-            ),
-        get_heavy_node_config(
-                model_name=TF_KERNEL_SVM,
-                batch_size=ksvm_batch_size,
-                num_replicas=ksvm_replicas,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(ksvm_replicas),
-                allocated_gpus=None,
-                # remote_addr=REMOTE_ADDR,
-            ),
-        get_heavy_node_config(
-                model_name=TF_LOG_REG,
-                batch_size=log_reg_batch_size,
-                num_replicas=log_reg_replicas,
-                cpus_per_replica=1,
-                allocated_cpus=get_cpus(log_reg_replicas),
-                allocated_gpus=None,
-                # remote_addr=REMOTE_ADDR,
-            )
-    ]
-
-    lam = 77
-    cv = 1
-    throughput_results = run_e2e(
-        configs, 2000, "../../release/src/inferline_client/image_driver_one",
-        "4,36,5,37", lam, cv)
-    fname = "cpp-aws-SLO-250-lambda-{lam}-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
-        lam=lam,
-        i=inception_replicas,
-        r=resnet_replicas,
-        k=ksvm_replicas,
-        lr=log_reg_replicas)
-    results_dir = "image_driver_one_e2e"
-    driver_utils.save_results_cpp_client(
-        configs,
-        throughput_results,
-        None,
-        results_dir,
-        prefix=fname)
+# def run_manually_specified_exp():
+#     resnet_batch_size = 16
+#     inception_batch_size = 8
+#     ksvm_batch_size = 3
+#     log_reg_batch_size = 1
+#
+#     model_cpus = range(4, 11)
+#     model_gpus = range(4)
+#     # model_gpus = range(8)
+#     remote_cpus = range(16)
+#     remote_gpus = range(8)
+#
+#     def get_cpus(num):
+#         return [model_cpus.pop() for _ in range(num)]
+#
+#     def get_gpus(num):
+#         return [model_gpus.pop() for _ in range(num)]
+#
+#     def get_remote_cpus(num):
+#         return [remote_cpus.pop() for _ in range(num)]
+#
+#     def get_remote_gpus(num):
+#         return [remote_gpus.pop() for _ in range(num)]
+#
+#     resnet_replicas = 1
+#     inception_replicas = 1
+#     ksvm_replicas = 1
+#     log_reg_replicas = 1
+#
+#     configs = [
+#         get_heavy_node_config(
+#                 model_name=TF_RESNET,
+#                 batch_size=resnet_batch_size,
+#                 num_replicas=resnet_replicas,
+#                 cpus_per_replica=1,
+#                 allocated_cpus=get_cpus(resnet_replicas),
+#                 allocated_gpus=get_gpus(resnet_replicas),
+#                 # remote_addr=REMOTE_ADDR,
+#             ),
+#         get_heavy_node_config(
+#                 model_name=INCEPTION_FEATS,
+#                 batch_size=inception_batch_size,
+#                 num_replicas=inception_replicas,
+#                 cpus_per_replica=1,
+#                 allocated_cpus=get_cpus(inception_replicas),
+#                 allocated_gpus=get_gpus(resnet_replicas),
+#                 # remote_addr=REMOTE_ADDR,
+#             ),
+#         get_heavy_node_config(
+#                 model_name=TF_KERNEL_SVM,
+#                 batch_size=ksvm_batch_size,
+#                 num_replicas=ksvm_replicas,
+#                 cpus_per_replica=1,
+#                 allocated_cpus=get_cpus(ksvm_replicas),
+#                 allocated_gpus=None,
+#                 # remote_addr=REMOTE_ADDR,
+#             ),
+#         get_heavy_node_config(
+#                 model_name=TF_LOG_REG,
+#                 batch_size=log_reg_batch_size,
+#                 num_replicas=log_reg_replicas,
+#                 cpus_per_replica=1,
+#                 allocated_cpus=get_cpus(log_reg_replicas),
+#                 allocated_gpus=None,
+#                 # remote_addr=REMOTE_ADDR,
+#             )
+#     ]
+#
+#     lam = 77
+#     cv = 1
+#     throughput_results = run_e2e(
+#         configs, 2000, "../../release/src/inferline_client/image_driver_one",
+#         "4,36,5,37", lam, cv)
+#     fname = "cpp-aws-SLO-250-lambda-{lam}-{i}-inception-{r}-resnet-{k}-ksvm-{lr}-logreg".format(
+#         lam=lam,
+#         i=inception_replicas,
+#         r=resnet_replicas,
+#         k=ksvm_replicas,
+#         lr=log_reg_replicas)
+#     results_dir = "image_driver_one_e2e"
+#     driver_utils.save_results_cpp_client(
+#         configs,
+#         throughput_results,
+#         None,
+#         results_dir,
+#         prefix=fname)
 
 
 class BenchmarkConfigurationException(Exception):
