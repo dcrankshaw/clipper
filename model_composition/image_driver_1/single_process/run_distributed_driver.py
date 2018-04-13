@@ -6,6 +6,7 @@ from subprocess import Popen
 
 CONFIG_KEY_BATCH_SIZE = "batch_size"
 CONFIG_KEY_CPU_AFFINITIES = "cpu_affinities"
+CONFIG_KEY_GPU_AFFINITIES = "gpu_affinities"
 CONFIG_KEY_TAGGED_PROCESS_PATH = "tagged_process_path"
 CONFIG_KEY_NUM_REPLICAS = "num_replicas"
 CONFIG_KEY_TRIAL_LENGTH = "trial_length"
@@ -18,11 +19,6 @@ def load_config(config_path):
 
     return config
 
-def get_gpus(replica_num):
-    resnet_gpu = 2 * replica_num
-    inception_gpu = (2 * replica_num) + 1
-    return resnet_gpu, inception_gpu
-
 def launch_processes(config):
     batch_size = config[CONFIG_KEY_BATCH_SIZE]
     cpu_affinities = config[CONFIG_KEY_CPU_AFFINITIES]
@@ -31,14 +27,16 @@ def launch_processes(config):
     trial_length = config[CONFIG_KEY_TRIAL_LENGTH]
     num_trials = config[CONFIG_KEY_NUM_TRIALS]
     slo_millis = config[CONFIG_KEY_SLO_MILLIS]
+    gpu_affinities = config[CONFIG_KEY_GPU_AFFINITIES]
 
 
     for replica_num in range(num_replicas): 
-        resnet_gpu, inception_gpu = get_gpus(replica_num)
-
         cpu_affinity = cpu_affinities[replica_num]
         cpu_aff_list = cpu_affinity.split(" ")
         comma_delimited_cpu_aff = ",".join(cpu_aff_list)
+
+        gpu_affinity = gpu_affinities[replica_num]
+        resnet_gpu, inception_gpu = gpu_affinity.split(" ")
 
         process_cmd = "(export CUDA_VISIBLE_DEVICES=\"{res_gpu},{incep_gpu}\";" \
                       " numactl -C {cd_cpu_aff} python driver.py -b {bs} -c {cpu_aff}" \
