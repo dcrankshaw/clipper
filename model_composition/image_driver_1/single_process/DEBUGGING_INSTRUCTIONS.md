@@ -5,7 +5,7 @@ specifying a few **SPD** control parameters: replication factor and batch size, 
 the set of CPU and GPU affinities for each replica (if 2 replicas are used, the first and second
 elements of the "cpu_affinities" and "gpu_affinities" lists correspond to the resource allocations
 for the first and second replicas, respectively). Other control parameters for the **experiment**
-include: the number of trias, the trial length, and a path to the arrival process to be used.
+include: the number of trials, the trial length, and a path to the arrival process to be used.
 Note that the SLO is only included for result file logging purposes; it has no impact on the 
 experiment.
 
