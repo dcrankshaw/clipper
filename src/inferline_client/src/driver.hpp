@@ -36,6 +36,7 @@ class Driver {
   std::string log_file_;
   FrontendRPCClient resnet_client_;
   FrontendRPCClient inception_client_;
+  bool different_clients_;
   std::atomic_bool done_;
   std::atomic<int> prediction_counter_;
   std::string clipper_address_resnet_;

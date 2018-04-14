@@ -40,7 +40,13 @@ Driver::Driver(
       batch_size_(batch_size),
       delay_ms_(delay_ms) {
   resnet_client_.start(clipper_address_resnet, SEND_PORT, RECV_PORT);
-  inception_client_.start(clipper_address_inception, SEND_PORT, RECV_PORT);
+  if (clipper_address_resnet == clipper_address_inception) {
+    std::cout << "Using same client for resnet and inception" << std::endl;
+    different_clients_ = false;
+  } else {
+    inception_client_.start(clipper_address_inception, SEND_PORT, RECV_PORT);
+    different_clients_ = true;
+  }
 }
 
 void spin_sleep(long duration_micros) {
@@ -65,7 +71,11 @@ void Driver::start() {
     int cur_idx = 0;
 
     // Send a query to flush the system
-    predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
+    if (different_clients_) {
+      predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
+    } else {
+      predict_func_(resnet_client_, resnet_client_, inputs_[cur_idx], prediction_counter_);
+    }
     cur_idx += 1;
     spin_sleep(1000 * 1000L);
 
@@ -74,7 +84,11 @@ void Driver::start() {
       int cur_pred_counter = prediction_counter_;
       // Send a batch
       for (int j = 0; j < batch_size_; ++j) {
-        predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
+        if (different_clients_) {
+          predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
+        } else {
+          predict_func_(resnet_client_, resnet_client_, inputs_[cur_idx], prediction_counter_);
+        }
         cur_idx += 1;
         if (cur_idx >= inputs_.size()) {
           cur_idx = 0;
@@ -95,7 +109,11 @@ void Driver::start() {
         if (done_) {
           break;
         }
-        predict_func_(resnet_client_, inception_client_, f, prediction_counter_);
+        if (different_clients_) {
+          predict_func_(resnet_client_, inception_client_, f, prediction_counter_);
+        } else {
+          predict_func_(resnet_client_, resnet_client_, f, prediction_counter_);
+        }
 
         if (distribution_ == "poisson") {
           float delay_secs = exp_dist(gen);
@@ -116,7 +134,9 @@ void Driver::start() {
     }
   }
   resnet_client_.stop();
-  inception_client_.stop();
+  if (different_clients_) {
+    inception_client_.stop();
+  }
   monitor_thread.join();
 }
 
