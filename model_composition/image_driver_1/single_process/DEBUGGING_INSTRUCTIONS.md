@@ -14,8 +14,8 @@ experiment.
     <request_delay_in_milliseconds>,<replica_number>
 
 The nth replica will only processes requests on lines corresponding to replica n.
-For debugging purposes, there are two processes: "363_tagged_1.deltas" that is tagged
-for a single replica (all lines end in replica number "0") and "363_tagged_2.deltas"
+For debugging purposes, there are two processes: [363_tagged_1.deltas](363_tagged_1.deltas) that is tagged
+for a single replica (all lines end in replica number "0") and [363_tagged_2.deltas](363_tagged_2.deltas)
 that is tagged for two replicas (lines end with either "0" or "1").
 
 * To execute an experiment with a configuration, run the following:
