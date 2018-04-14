@@ -1,6 +1,6 @@
 ### Setup ###
 
-* In the DEBUGGING subdirectory, you will find a set of experimental configurations
+* In the [DEBUGGING](DEBUGGING) subdirectory, you will find a set of experimental configurations (files ending in .json)
 specifying a few **SPD** control parameters: replication factor and batch size, as well as 
 the set of CPU and GPU affinities for each replica (if 2 replicas are used, the first and second
 elements of the "cpu_affinities" and "gpu_affinities" lists correspond to the resource allocations
