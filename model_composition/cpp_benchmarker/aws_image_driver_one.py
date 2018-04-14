@@ -480,7 +480,7 @@ class BenchmarkConfigurationException(Exception):
     pass
 
 def run_experiment_for_config(config):
-    model_cpus = range(6, 16)
+    model_cpus = range(8, 16)
     model_gpus = range(4)
 
     def get_cpus(num):
@@ -538,7 +538,7 @@ def run_experiment_for_config(config):
 
     throughput_results = run_e2e(
         addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
-        "4,20,5,21", lam, cv)
+        "4,20,5,21,6,22,7,23", lam, cv)
     driver_utils.save_results_cpp_client(
         node_configs,
         throughput_results,
