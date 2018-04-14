@@ -12,7 +12,7 @@ from ..container_manager import (
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
 # import subprocess32 as subprocess
-from fabric.api import run, env, shell_env
+from fabric.api import run, env, shell_env, warn_only, local
 # from fabric.context_managers import shell_env
 
 env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
@@ -32,6 +32,7 @@ class AWSContainerManager(ContainerManager):
                  redis_port=6379,
                  docker_network="clipper_network",
                  extra_container_kwargs={}):
+
         """
         Parameters
         ----------
@@ -101,7 +102,7 @@ class AWSContainerManager(ContainerManager):
         #
         # self.extra_container_kwargs.update(container_args)
 
-    def _host_is_local():
+    def _host_is_local(self):
         return self.host == "localhost"
 
     def _execute(self, *args, **kwargs):
@@ -149,11 +150,11 @@ class AWSContainerManager(ContainerManager):
                 warn_only=True)
 
         if not self.external_redis:
-            redis_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in self.common_labels.iteritems()])
+            redis_labels_str = " ".join(["-l {k}=\"{v}\"".format(k=k, v=v) for k, v in self.common_labels.iteritems()])
             logger.info("Starting managed Redis instance in Docker")
             redis_name = "redis-{}".format(random.randint(0, 100000))
             redis_docker_cmd = ("docker run -d --network {nw} {labels} "
-                " --cpuset-cpus=\"{cpus}\""
+                " --cpuset-cpus=\"{cpus}\" "
                             "--name {name} {ports} redis:alpine "
                             "redis-server --port {redis_port}").format(
                                 nw=self.docker_network,
@@ -168,7 +169,7 @@ class AWSContainerManager(ContainerManager):
 
         mgmt_labels = self.common_labels.copy()
         mgmt_labels[CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL] = ""
-        mgmt_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in self.mgmt_labels.iteritems()])
+        mgmt_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in mgmt_labels.iteritems()])
         mgmt_name = "mgmt_frontend-{}".format(random.randint(0, 100000))
         mgmt_cmd = "--redis_ip={redis_ip} --redis_port={redis_port}".format(
             redis_ip=self.redis_ip, redis_port=self.redis_port)
@@ -187,8 +188,8 @@ class AWSContainerManager(ContainerManager):
         logger.info(mgmt_docker_cmd)
         self._execute(mgmt_docker_cmd)
 
-        
-        
+
+
 
         # mgmt_labels = self.common_labels.copy()
         # mgmt_labels[CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL] = ""
@@ -212,7 +213,7 @@ class AWSContainerManager(ContainerManager):
         query_ports_str = " ".join(["-p {p}:{p}".format(p=p) for p in query_ports])
         query_labels = self.common_labels.copy()
         query_labels[CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL] = ""
-        query_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in self.query_labels.iteritems()])
+        query_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in query_labels.iteritems()])
         query_name="query_frontend-{}".format(random.randint(0, 100000))
         query_docker_cmd = ("docker run -d --network {nw} {labels} "
                     "--cpuset-cpus=\"{cpus}\" --name {name} {ports} "
@@ -315,6 +316,7 @@ class AWSContainerManager(ContainerManager):
             # os_env = os.environ.copy()
             cmd = ["nvidia-docker", "run", "-d",
                    "--network=%s" % self.docker_network]
+            shell_env_vars = {}
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
                     name=name, version=version, gpu_num=gpu_num))
@@ -414,13 +416,13 @@ class AWSContainerManager(ContainerManager):
             The number of PHYSICAL CPUs allocated to each replica of the model
         """
         num_missing = num_replicas
-        logger.info(
-            "Found {cur} replicas for {name}:{version}. Adding {missing}".
-            format(
-                cur=len(current_replicas),
-                name=name,
-                version=version,
-                missing=(num_missing)))
+        # logger.info(
+        #     "Found {cur} replicas for {name}:{version}. Adding {missing}".
+        #     format(
+        #         cur=len(current_replicas),
+        #         name=name,
+        #         version=version,
+        #         missing=(num_missing)))
         if "gpus" in kwargs:
             available_gpus = list(kwargs["gpus"])
         if "use_nvidia_docker" in kwargs:
@@ -573,7 +575,7 @@ class AWSContainerManager(ContainerManager):
         remote_addrs : list(str)
             List of remote machine addresses to stop docker containers on
         """
-        self._execute("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
+        self._execute("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL), warn_only=True)
         # containers = self.docker_client.containers.list(
         #     filters={"label": CLIPPER_DOCKER_LABEL})
         # for c in containers:
@@ -587,7 +589,7 @@ class AWSContainerManager(ContainerManager):
             for r in remote_addrs:
                 env.host_string = r
                 run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
-        
+
         env.host_string = self.host
 
     def get_admin_addr(self):

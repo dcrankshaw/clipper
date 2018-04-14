@@ -26,10 +26,10 @@ TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
 # REMOTE_ADDR = None
-# ALL_REMOTE_ADDRS = None
+ALL_REMOTE_ADDRS = None
 
 RESNET_CLIPPER_ADDR = "localhost"
-INCEPTION_CLIPPER_ADDR = "1.2.3.4"
+INCEPTION_CLIPPER_ADDR = "localhost"
 
 
 def get_heavy_node_config(model_name,
@@ -113,7 +113,6 @@ def setup_clipper(addr_config_map):
             driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
-        # return CLIPPER_ADDRESS
 
 
 def get_clipper_batch_sizes(metrics_json):
@@ -195,48 +194,67 @@ def get_profiler_stats(metrics_json):
     return (mean_latencies, p99_latencies, thrus, counts)
 
 
-def print_stats(client_metrics, clipper_metrics):
-    results_dict = {}
-    results_dict["batch_sizes"] = get_clipper_batch_sizes(clipper_metrics)
-    results_dict["queue_sizes"] = get_clipper_queue_sizes(clipper_metrics)
-    results_dict["clipper_thrus"] = get_clipper_thruputs(clipper_metrics)
-    results_dict["clipper_counts"] = get_clipper_counts(clipper_metrics)
-    results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
-        results_dict["client_thrus"], results_dict["client_counts"] = \
-        get_profiler_stats(client_metrics)
-    # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
-    #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
-    #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
-    #              "\nqueue sizes: {queue_sizes}, "
-    #              "batch sizes: {batch_sizes}\n").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
-                 "\nMean lat: {client_mean_lats} "
-                 "\nBatches: {batch_sizes}\nQueues: {queue_sizes}\n").format(**results_dict))
-    return results_dict
+def print_stats(client_metrics, clipper_metrics=None):
+    if clipper_metrics is None:
+        results_dict = {}
+        results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
+            results_dict["client_thrus"], results_dict["client_counts"] = \
+            get_profiler_stats(client_metrics)
+        # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+        #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+        #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+        #              "\nqueue sizes: {queue_sizes}, "
+        #              "batch sizes: {batch_sizes}\n").format(**results_dict))
+        logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
+                    "\nMean lat: {client_mean_lats}").format(**results_dict))
+        return results_dict
+    else:
+        results_dict = {}
+        results_dict["batch_sizes"] = get_clipper_batch_sizes(clipper_metrics)
+        results_dict["queue_sizes"] = get_clipper_queue_sizes(clipper_metrics)
+        results_dict["clipper_thrus"] = get_clipper_thruputs(clipper_metrics)
+        results_dict["clipper_counts"] = get_clipper_counts(clipper_metrics)
+        results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
+            results_dict["client_thrus"], results_dict["client_counts"] = \
+            get_profiler_stats(client_metrics)
+        logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
+                     "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
+                     "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
+                     "\nqueue sizes: {queue_sizes}, "
+                     "batch sizes: {batch_sizes}\n").format(**results_dict))
+        # logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
+        #             "\nMean lat: {client_mean_lats} "
+        #             "\nBatches: {batch_sizes}\nQueues: {queue_sizes}\n").format(**results_dict))
+        return results_dict
 
 
-def load_metrics(client_path, clipper_path):
-    with open(client_path, "r") as client_file, \
-            open(clipper_path, "r") as clipper_file:
+# def load_metrics(client_path, clipper_path):
+def load_metrics(client_path, clipper_path=None):
+    with open(client_path, "r") as client_file:
+
         client_metrics_str = client_file.read().strip()
-        clipper_metrics_str = clipper_file.read().strip()
         if client_metrics_str[-1] == ",":
             client_metrics_str = client_metrics_str.rstrip(",")
             client_metrics_str += "]"
-        if clipper_metrics_str[-1] == ",":
-            clipper_metrics_str = clipper_metrics_str.rstrip(",")
-            clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
         except ValueError:
             # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
-        try:
-            clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError:
-            # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
-            return None
-    return client_metrics, clipper_metrics
+    if clipper_path is not None:
+        with open(clipper_path, "r") as clipper_file:
+            clipper_metrics_str = clipper_file.read().strip()
+            if clipper_metrics_str[-1] == ",":
+                clipper_metrics_str = clipper_metrics_str.rstrip(",")
+                clipper_metrics_str += "]"
+            try:
+                clipper_metrics = json.loads(clipper_metrics_str)
+            except ValueError:
+                # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
+                return None
+        return client_metrics, clipper_metrics
+    else:
+        return client_metrics
 
 
 def load_lineage(lineage_path):
@@ -246,8 +264,8 @@ def load_lineage(lineage_path):
 
 
 def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam, cv):
-    assert len(addr_config_map) == 2
-    clipper_address = setup_clipper(addr_config_map)
+    assert len(addr_config_map) >= 1
+    setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
     cls = [ClipperConnection(AWSContainerManager(host=addr, redis_port=6380)) for addr in addr_config_map]
     for cl in cls:
@@ -274,6 +292,14 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
+        resnet_clipper_addr = list(addr_config_map.keys())[0]
+        if len(addr_config_map) == 2:
+            inception_clipper_addr = list(addr_config_map.keys())[1]
+        elif len(addr_config_map) == 1:
+            inception_clipper_addr = resnet_clipper_addr
+        else:
+            raise Exception("Too many addrs in addr_config_map")
+
         cmd = ["numactl", "-C", profiler_cores_str,
                os.path.abspath(driver_path),
                "--target_throughput={}".format(target_throughput),
@@ -281,13 +307,13 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address_resnet={}".format(list(addr_config_map.keys())[0]),
-               "--clipper_address_inception={}".format(list(addr_config_map.keys())[1]),
+               "--clipper_address_resnet={}".format(resnet_clipper_addr),
+               "--clipper_address_inception={}".format(inception_clipper_addr),
                "--request_delay_file={}".format(arrival_delay_file)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
-        clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        # clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
         lineage_paths = {m: "{p}-{m}-query_lineage.txt".format(m=m, p=log_path)
                          for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
@@ -304,25 +330,29 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
                     #     logger.warn("Driver process finished without enough trials. "
                     #                 "Expected {num}, recorded {rec}".format(num=num_trials,
                     #                                                         rec=recorded_trials))
-                if not (os.path.exists(client_path) and os.path.exists(clipper_path)):
+                # if not (os.path.exists(client_path) and os.path.exists(clipper_path)):
+                if not (os.path.exists(client_path)):
                     logger.info("metrics don't exist yet")
                     continue
-                loaded_metrics = load_metrics(client_path, clipper_path)
+                # loaded_metrics = load_metrics(client_path, clipper_path)
+                # if loaded_metrics is not None:
+                #     client_metrics, clipper_metrics = loaded_metrics
+                loaded_metrics = load_metrics(client_path)
                 if loaded_metrics is not None:
-                    client_metrics, clipper_metrics = loaded_metrics
+                    client_metrics = loaded_metrics
                 else:
                     continue
                 client_trials = len(client_metrics)
-                clipper_trials = len(clipper_metrics)
-                if clipper_trials != client_trials:
-                    logger.warn(("Clipper trials ({}) and client trials ({}) not the "
-                                 "same length").format(clipper_trials, client_trials))
-                else:
-                    new_recorded_trials = clipper_trials
-                    if new_recorded_trials > recorded_trials:
-                        recorded_trials = new_recorded_trials
-                        summary_results.append(print_stats(client_metrics[-1],
-                                                           clipper_metrics[-1]))
+                # clipper_trials = len(clipper_metrics)
+                # if clipper_trials != client_trials:
+                #     logger.warn(("Clipper trials ({}) and client trials ({}) not the "
+                #                  "same length").format(clipper_trials, client_trials))
+                # else:
+                new_recorded_trials = client_trials
+                if new_recorded_trials > recorded_trials:
+                    recorded_trials = new_recorded_trials
+                    summary_results.append(print_stats(client_metrics[-1]))
+                                                        # clipper_metrics[-1]))
 
             # prof_stdout = proc.stdout.read().strip()
             # if len(prof_stdout) > 0:
@@ -331,13 +361,15 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
             if len(prof_stderr) > 0:
                 logger.info("stderr: {}".format(prof_stderr))
             try:
-                loaded_metrics = load_metrics(client_path, clipper_path)
+                # loaded_metrics = load_metrics(client_path, clipper_path)
+                loaded_metrics = load_metrics(client_path)
                 # lineage = load_lineage(lineage_path)
                 lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
                 if loaded_metrics is not None:
-                    client_metrics, clipper_metrics = loaded_metrics
+                    # client_metrics, clipper_metrics = loaded_metrics
+                    client_metrics = loaded_metrics
                     return driver_utils.Results(client_metrics,
-                                                clipper_metrics,
+                                                None,
                                                 summary_results,
                                                 lineages)
                 else:
@@ -477,6 +509,15 @@ def run_experiment_for_config(config):
                                             allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"]),
                                             allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"]))
                         for c in config["node_configs"].values()]
+        addr_config_map = {RESNET_CLIPPER_ADDR: [], INCEPTION_CLIPPER_ADDR: []}
+        for n in node_configs:
+            if n.name in [TF_RESNET, TF_KERNEL_SVM]:
+                addr_config_map[RESNET_CLIPPER_ADDR].append(n)
+            elif n.name in [INCEPTION_FEATS, TF_LOG_REG]:
+                addr_config_map[INCEPTION_CLIPPER_ADDR].append(n)
+        print(addr_config_map)
+
+
     except BenchmarkConfigurationException as e:
         logger.error("Error provisioning for requested configuration. Skipping.\n"
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
@@ -486,14 +527,14 @@ def run_experiment_for_config(config):
     slo = config["slo"]
     cost = config["cost"]
 
-    results_dir = "image_driver_one_slo_{slo}_cv_{cv}".format(slo=slo, cv=cv)
+    results_dir = "image_driver_one_slo_{slo}_cv_{cv}-DEBUG".format(slo=slo, cv=cv)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
 
     throughput_results = run_e2e(
-        node_configs, 2000, "../../release/src/inferline_client/image_driver_one",
+        addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
         "4,20,5,21", lam, cv)
     driver_utils.save_results_cpp_client(
         node_configs,
@@ -513,4 +554,5 @@ if __name__ == "__main__":
 
     for config in provided_configs:
         run_experiment_for_config(config)
+        break
     sys.exit(0)
