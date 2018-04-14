@@ -29,7 +29,7 @@ FrontendRPCClient::FrontendRPCClient(int num_threads)
           QUEUE_SIZE)),
       active_(false),
       closure_map_{},
-      closure_threadpool_("frontend_rpc", 1),
+      closure_threadpool_("frontend_rpc", num_threads),
       client_id_(-1),
       request_id_(0),
       connected_(false) {}

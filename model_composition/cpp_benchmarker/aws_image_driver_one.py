@@ -480,8 +480,12 @@ class BenchmarkConfigurationException(Exception):
     pass
 
 def run_experiment_for_config(config):
-    model_cpus = range(8, 16)
+    if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
+        model_cpus = range(6, 16)
+    else:
+        model_cpus = range(10, 16)
     model_gpus = range(4)
+
 
     def get_cpus(num):
         try:
@@ -503,21 +507,68 @@ def run_experiment_for_config(config):
                 logger.error(msg)
                 raise BenchmarkConfigurationException(msg)
 
+    remote_model_cpus = range(6, 16)
+    remote_model_gpus = range(4)
+
+    def remote_get_cpus(num):
+        try:
+            return [remote_model_cpus.pop() for _ in range(num)]
+        except IndexError:
+            msg = "Ran out of out available CPUs on remote node"
+            logger.error(msg)
+            raise BenchmarkConfigurationException(msg)
+
+    def remote_get_gpus(num, gpu_type):
+        if gpu_type == "none":
+            return None
+        else:
+            assert gpu_type == "v100"
+            try:
+                return [remote_model_gpus.pop() for _ in range(num)]
+            except IndexError:
+                msg = "Ran out of available GPUs"
+                logger.error(msg)
+                raise BenchmarkConfigurationException(msg)
+
     try:
-        node_configs = [get_heavy_node_config(model_name=c["name"],
-                                            batch_size=int(c["batch_size"]),
-                                            num_replicas=c["num_replicas"],
-                                            cpus_per_replica=c["num_cpus"],
-                                            allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"]),
-                                            allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"]))
-                        for c in config["node_configs"].values()]
+        node_configs = []
         addr_config_map = {RESNET_CLIPPER_ADDR: [], INCEPTION_CLIPPER_ADDR: []}
-        for n in node_configs:
-            if n.name in [TF_RESNET, TF_KERNEL_SVM]:
-                addr_config_map[RESNET_CLIPPER_ADDR].append(n)
-            elif n.name in [INCEPTION_FEATS, TF_LOG_REG]:
-                addr_config_map[INCEPTION_CLIPPER_ADDR].append(n)
-        print(addr_config_map)
+        for name, c in config["node_configs"].iteritems():
+            if name in [TF_RESNET, TF_KERNEL_SVM]:
+                node = get_heavy_node_config(model_name=c["name"],
+                                    batch_size=int(c["batch_size"]),
+                                    num_replicas=c["num_replicas"],
+                                    cpus_per_replica=c["num_cpus"],
+                                    allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"]),
+                                    allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"]))
+                node_configs.append(node)
+                addr_config_map[RESNET_CLIPPER_ADDR].append(node)
+            if name in [INCEPTION_FEATS, TF_LOG_REG]:
+                if INCEPTION_CLIPPER_ADDR == RESNET_CLIPPER_ADDR:
+                    cpus = get_cpus(c["num_cpus"]*c["num_replicas"])
+                    gpus = get_gpus(c["num_replicas"], c["gpu_type"])
+                else:
+                    cpus = remote_get_cpus(c["num_cpus"]*c["num_replicas"])
+                    gpus = remote_get_gpus(c["num_replicas"], c["gpu_type"])
+                node = get_heavy_node_config(model_name=c["name"],
+                                    batch_size=int(c["batch_size"]),
+                                    num_replicas=c["num_replicas"],
+                                    cpus_per_replica=c["num_cpus"],
+                                    allocated_cpus=cpus,
+                                    allocated_gpus=gpus)
+                node_configs.append(node)
+                addr_config_map[INCEPTION_CLIPPER_ADDR].append(node)
+
+
+        # node_configs = [
+        #                 for c in config["node_configs"].values()]
+        # addr_config_map = {RESNET_CLIPPER_ADDR: [], INCEPTION_CLIPPER_ADDR: []}
+        # for n in node_configs:
+        #     if n.name in [TF_RESNET, TF_KERNEL_SVM]:
+        #         addr_config_map[RESNET_CLIPPER_ADDR].append(n)
+        #     elif n.name in [INCEPTION_FEATS, TF_LOG_REG]:
+        #         addr_config_map[INCEPTION_CLIPPER_ADDR].append(n)
+        # print(addr_config_map)
 
 
     except BenchmarkConfigurationException as e:
@@ -535,10 +586,14 @@ def run_experiment_for_config(config):
     results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
 
+    if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
+        client_cpu_str = "4,20,5,21"
+    else:
+        client_cpu_str = "4,5,6,7,8,9,20,21,22,23,24,25"
 
     throughput_results = run_e2e(
         addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
-        "4,20,5,21,6,22,7,23", lam, cv)
+        client_cpu_str, lam, cv)
     driver_utils.save_results_cpp_client(
         node_configs,
         throughput_results,
