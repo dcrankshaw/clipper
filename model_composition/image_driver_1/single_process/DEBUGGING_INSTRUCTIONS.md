@@ -28,7 +28,7 @@ that is tagged for two replicas (lines end with either "0" or "1").
 
 The following steps can be used to reproduce the discussed, problematic behavior:
 
-1. Run the experimental configuration located at "DEBUGGING/363_1_rep_config_A.json".
+1. Run the experimental configuration located at [DEBUGGING/363_1_rep_config_A.json](DEBUGGING/363_1_rep_config_A.json).
    This will launch a single replica and benchmark it using an arrival process with a lambda
    of 363. The replica will be launched on GPUs 0 and 1 and **physical** cores 0-3. It will use
    a batch size of 80.
@@ -39,7 +39,7 @@ The following steps can be used to reproduce the discussed, problematic behavior
      see how they are calculated here: https://github.com/Corey-Zumar/clipper-1/blob/d8bb75ca5c76f06818002da49673ee6de8e09e6a/model_composition/image_driver_1/single_process/driver.py#L225
      
 
-2. Run the experimental configuration located at "DEBUGGING/363_2_rep_config.json"
+2. Run the experimental configuration located at [DEBUGGING/363_2_rep_config.json]("DEBUGGING/363_2_rep_config.json")
    This will launch two replicas and benchmark them using an arrival process with a lambda of 363
    that is tagged for two replicas. The first replica will be launched on GPUs 0 and 1 and **physical**
    cores 0-3. The second replica will be launched on GPUs 2 and 3 and **physical** cores 4-7. Both
@@ -48,3 +48,7 @@ The following steps can be used to reproduce the discussed, problematic behavior
    * As the experiment runs, note that, despite the fact that we are running separate python processes on 
      separate GPUs and physical CPUs, "p99_batch_predict" latencies increase dramatically (on the order of 600 milliseconds)
      for each replica.
+     
+3. Simultaneously run both of the following experimental configurations: [DEBUGGING/363_1_rep_config_A.json](DEBUGGING/363_1_rep_config_A.json) and [DEBUGGING/363_1_rep_config_B.json](DEBUGGING/363_1_rep_config_B.json). Each experiment will launch one replica and use the arrival process from step (1). The first experiment is run on GPUs 0 and 1 and **physical** cores 0-3. The second experiment is run on GPUs 2 and 3 and **physical** cores 4-7.
+
+    * As the experiment runs, note that "p99_batch_predict" latencies are consistent with the latencies seen in **step (1)** (300 - 400     milliseconds). We do not observe an increase in critical path latency like we do in step (2). 
