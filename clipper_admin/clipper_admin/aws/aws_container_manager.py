@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function
-import docker
+# import docker
 import logging
 import os
 import random
@@ -11,7 +11,7 @@ from ..container_manager import (
     CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL, CLIPPER_INTERNAL_RPC_PORT,
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
-import subprocess32 as subprocess
+# import subprocess32 as subprocess
 from fabric.api import run, env, shell_env, warn_only, local, show, hide, output as fab_output
 # from fabric.context_managers import shell_env
 
@@ -89,7 +89,6 @@ class AWSContainerManager(ContainerManager):
                 "\"host\" docker network. Please pick a different network name")
         self.docker_network = docker_network
 
-        # self.docker_client = docker.from_env()
         self.extra_container_kwargs = extra_container_kwargs.copy()
 
         # Merge Clipper-specific labels with any user-provided labels
@@ -99,6 +98,7 @@ class AWSContainerManager(ContainerManager):
         else:
             self.common_labels = {CLIPPER_DOCKER_LABEL: ""}
 
+        # self.docker_client = docker.from_env()
         # container_args = {
         #     "network": self.docker_network,
         #     "detach": True,
@@ -138,7 +138,6 @@ class AWSContainerManager(ContainerManager):
             with show("everything"):
                 result = local(*args, **kwargs)
         return result
-
 
     def start_clipper(self, query_frontend_image, mgmt_frontend_image,
                       cache_size, redis_cpu_str="0", mgmt_cpu_str="1", query_cpu_str="2-11"):
@@ -223,8 +222,14 @@ class AWSContainerManager(ContainerManager):
         query_labels[CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL] = ""
         query_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in query_labels.iteritems()])
         query_name="query_frontend-{}".format(random.randint(0, 100000))
-        query_docker_cmd = ("docker run -d --network {nw} {labels} "
-                    "--cpuset-cpus=\"{cpus}\" --name {name} {ports} "
+
+        # NOTE(crankshaw): I have no idea why this matters, but it's critical to run
+        # the query frontend with the --privileged flag and the sys_ptrace capability
+        # to get good performance. Running without those flags significantly reduces
+        # performance.
+        query_docker_cmd = ("docker run -d --privileged --cap-add=SYS_PTRACE "
+                            "--network {nw} {labels} "
+                            "--cpuset-cpus=\"{cpus}\" --name {name} {ports} "
                     "{image} {cmd}").format(
                         nw=self.docker_network,
                         labels=query_labels_str,

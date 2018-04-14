@@ -5,7 +5,7 @@ import sys
 import time
 import logging
 import json
-from clipper_admin import ClipperConnection, AWSContainerManager, DockerContainerManager
+from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
 import argparse
@@ -29,7 +29,7 @@ TF_RESNET = "tf-resnet-feats"
 ALL_REMOTE_ADDRS = None
 
 RESNET_CLIPPER_ADDR = "localhost"
-INCEPTION_CLIPPER_ADDR = "localhost"
+INCEPTION_CLIPPER_ADDR = "172.30.2.124"
 
 
 def get_heavy_node_config(model_name,
@@ -294,13 +294,13 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
         log_path = os.path.join(log_dir, "{n}-{t}-{p}".format(n=name,
                                                               t=target_throughput,
                                                               p=arrival_process))
-        resnet_clipper_addr = list(addr_config_map.keys())[0]
-        if len(addr_config_map) == 2:
-            inception_clipper_addr = list(addr_config_map.keys())[1]
-        elif len(addr_config_map) == 1:
-            inception_clipper_addr = resnet_clipper_addr
-        else:
-            raise Exception("Too many addrs in addr_config_map")
+        # resnet_clipper_addr = list(addr_config_map.keys())[0]
+        # if len(addr_config_map) == 2:
+        #     inception_clipper_addr = list(addr_config_map.keys())[1]
+        # elif len(addr_config_map) == 1:
+        #     inception_clipper_addr = resnet_clipper_addr
+        # else:
+        #     raise Exception("Too many addrs in addr_config_map")
 
         cmd = ["numactl", "-C", profiler_cores_str,
                os.path.abspath(driver_path),
@@ -309,8 +309,8 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
                "--trial_length={}".format(trial_length),
                "--num_trials={}".format(num_trials),
                "--log_file={}".format(log_path),
-               "--clipper_address_resnet={}".format(resnet_clipper_addr),
-               "--clipper_address_inception={}".format(inception_clipper_addr),
+               "--clipper_address_resnet={}".format(RESNET_CLIPPER_ADDR),
+               "--clipper_address_inception={}".format(INCEPTION_CLIPPER_ADDR),
                "--request_delay_file={}".format(arrival_delay_file)]
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
@@ -534,6 +534,7 @@ def run_experiment_for_config(config):
                          for c in config["node_configs"].values()])
     results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
+
 
     throughput_results = run_e2e(
         addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
