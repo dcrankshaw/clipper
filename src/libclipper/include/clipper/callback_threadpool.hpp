@@ -59,15 +59,19 @@ class CallbackThreadPool {
   };
 
  public:
-  CallbackThreadPool(const std::string name, const std::uint32_t numThreads)
+  CallbackThreadPool(const std::string name, const std::uint32_t num_threads)
       : done_{false},
         queue_{100000},
         threads_{},
+        num_threads_(num_threads),
         queue_submit_latency_hist_(
             metrics::MetricsRegistry::get_metrics().create_histogram(
                 name + ":queue_submit_latency", "microseconds", 4096)) {
+  }
+
+  void start() {
     try {
-      for (std::uint32_t i = 0u; i < numThreads; ++i) {
+      for (std::uint32_t i = 0u; i < num_threads_; ++i) {
         threads_.emplace_back(&CallbackThreadPool::worker, this);
       }
     } catch (...) {
@@ -154,6 +158,7 @@ class CallbackThreadPool {
   // ThreadSafeQueue<std::unique_ptr<IThreadTask>> queue_;
   moodycamel::BlockingConcurrentQueue<std::unique_ptr<IThreadTask>> queue_;
   std::vector<std::thread> threads_;
+  std::uint32_t num_threads_;
   std::shared_ptr<metrics::Histogram> queue_submit_latency_hist_;
 };
 }

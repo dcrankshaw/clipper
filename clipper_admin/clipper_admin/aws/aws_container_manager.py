@@ -11,8 +11,8 @@ from ..container_manager import (
     CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL, CLIPPER_INTERNAL_RPC_PORT,
     CLIPPER_INTERNAL_MANAGEMENT_PORT)
 from ..exceptions import ClipperException
-# import subprocess32 as subprocess
-from fabric.api import run, env, shell_env, warn_only, local
+import subprocess32 as subprocess
+from fabric.api import run, env, shell_env, warn_only, local, show, hide, output as fab_output
 # from fabric.context_managers import shell_env
 
 env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
@@ -63,6 +63,10 @@ class AWSContainerManager(ContainerManager):
         self.host = host
         env.host_string = self.host
         env.key_filename = key_path
+        env.colorize_errors = True
+        env.disable_known_hosts = True
+        fab_output["running"] = True
+        fab_output["debug"] = True
 
 
 
@@ -109,7 +113,8 @@ class AWSContainerManager(ContainerManager):
         if self._host_is_local():
             self._execute_local(*args, **kwargs)
         else:
-            run(*args, **kwargs)
+            with show("everything"):
+                run(*args, **kwargs)
 
     def _execute_local(self, *args, **kwargs):
         # local is not currently capable of simultaneously printing and
@@ -121,14 +126,17 @@ class AWSContainerManager(ContainerManager):
         # fabric.local() does not accept the "warn_only"
         # key word argument, so we must remove it before
         # calling
+        print(fab_output)
         if "warn_only" in kwargs:
             del kwargs["warn_only"]
             # Forces execution to continue in the face of an error,
             # just like warn_only=True
             with warn_only():
-                result = local(*args, **kwargs)
+                with show("everything"):
+                    result = local(*args, **kwargs)
         else:
-            result = local(*args, **kwargs)
+            with show("everything"):
+                result = local(*args, **kwargs)
         return result
 
 
@@ -226,6 +234,9 @@ class AWSContainerManager(ContainerManager):
                         image=query_frontend_image,
                         cmd=query_cmd)
         logger.info(query_docker_cmd)
+
+        # subprocess.check_call(query_docker_cmd.split())
+
         self._execute(query_docker_cmd)
         self.query_frontend_name = query_name
 
@@ -316,11 +327,13 @@ class AWSContainerManager(ContainerManager):
             # os_env = os.environ.copy()
             cmd = ["nvidia-docker", "run", "-d",
                    "--network=%s" % self.docker_network]
-            shell_env_vars = {}
+            os_env = os.environ.copy()
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num}".format(
                     name=name, version=version, gpu_num=gpu_num))
-                shell_env_vars["NV_GPU"] = str(gpu_num)
+                cmd.insert(0, "NV_GPU={}".format(str(gpu_num)))
+                os_env["NV_GPU"] = str(gpu_num)
+
             else:
                 # We're not running on a GPU, so we should mask all available
                 # GPU resources
@@ -340,8 +353,7 @@ class AWSContainerManager(ContainerManager):
             cmd.append(image)
             cmd_str = " ".join(cmd)
             logger.info("Docker command: \"%s\"" % cmd_str)
-            with shell_env(**shell_env_vars):
-                self._execute(cmd_str)
+            self._execute(cmd_str)
             # subprocess.check_call(cmd, env=os_env)
         else:
             raise ClipperException("Model deployment requires nvidia docker")

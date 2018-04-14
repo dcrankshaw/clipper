@@ -36,6 +36,7 @@ FrontendRPCClient::FrontendRPCClient(int num_threads)
 
 void FrontendRPCClient::start(const std::string address, int send_port,
                               int recv_port) {
+  closure_threadpool_.start();
   active_ = true;
   rpc_send_thread_ = std::thread([this, address, send_port]() {
     manage_send_service(address, send_port);

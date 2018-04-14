@@ -5,7 +5,7 @@ import sys
 import time
 import logging
 import json
-from clipper_admin import ClipperConnection, AWSContainerManager
+from clipper_admin import ClipperConnection, AWSContainerManager, DockerContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
 import argparse
@@ -13,7 +13,7 @@ import argparse
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
     datefmt='%y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+    level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,7 @@ def get_heavy_node_config(model_name,
 def setup_clipper(addr_config_map):
     for addr, configs in addr_config_map.iteritems():
         cl = ClipperConnection(AWSContainerManager(host=addr, redis_port=6380))
+        # cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
         cl.start_clipper(
@@ -268,6 +269,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_str, lam,
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
     cls = [ClipperConnection(AWSContainerManager(host=addr, redis_port=6380)) for addr in addr_config_map]
+    # cls = [ClipperConnection(DockerContainerManager(redis_port=6380)) for addr in addr_config_map]
     for cl in cls:
         cl.connect()
 
