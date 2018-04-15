@@ -14,6 +14,15 @@ from threading import Thread, Lock
 
 from single_proc_utils import HeavyNodeConfig, save_results
 from models import tf_resnet_model, inception_feats_model, tf_kernel_svm_model, tf_log_reg_model
+# import gc
+# gc.set_debug(gc.DEBUG_STATS | gc.DEBUG_LEAK)
+# gc.DEBUG_STATS
+# gc.DEBUG_COLLECTABLE
+# gc.DEBUG_UNCOLLECTABLE
+# gc.DEBUG_INSTANCES
+# gc.DEBUG_OBJECTS
+# gc.DEBUG_SAVEALL
+# gc.DEBUG_LEAK
 
 from e2e_utils import load_tagged_arrival_deltas, load_arrival_deltas 
 logging.basicConfig(
@@ -115,8 +124,17 @@ def get_inception_input():
 class Predictor(object):
 
     def __init__(self, models_dict, trial_length):
-        self.task_execution_thread_pool = ThreadPoolExecutor(max_workers=2)
-        self.stats_thread_pool = ThreadPoolExecutor(max_workers=2)
+
+        self.use_resnet = True
+        self.use_inception = True
+        num_workers = 0
+        if self.use_resnet:
+            num_workers += 1
+        if self.use_inception:
+            num_workers += 1
+
+        self.task_execution_thread_pool = ThreadPoolExecutor(max_workers=num_workers)
+        self.stats_thread_pool = ThreadPoolExecutor(max_workers=num_workers)
 
         # Stats
         self.init_stats()
@@ -126,6 +144,7 @@ class Predictor(object):
             "mean_lats": [],
             "all_lats": [],
             "p99_batch_predict_lats": [],
+            "p99_res_predict_lats": [],
             "p99_queue_lats": [],
             "mean_batch_sizes": [],
             "per_message_lats": {}
@@ -161,6 +180,7 @@ class Predictor(object):
     def init_stats(self):
         self.latencies = []
         self.batch_predict_latencies = []
+        self.res_predict_latencies = []
         self.batch_sizes = []
         self.trial_num_complete = 0
         self.cur_req_id = 0
@@ -169,8 +189,10 @@ class Predictor(object):
     def print_stats(self):
         lats = np.array(self.latencies)
         batch_predict_lats = np.array(self.batch_predict_latencies)
+        res_predict_lats = np.array(self.res_predict_latencies)
         p99 = np.percentile(lats, 99)
         p99_batch_predict = np.percentile(batch_predict_lats, 99)
+        p99_res_predict = np.percentile(res_predict_lats, 99)
         mean_batch_size = np.mean(self.batch_sizes)
         mean = np.mean(lats)
         end_time = datetime.now()
@@ -180,12 +202,14 @@ class Predictor(object):
         self.stats["p99_lats"].append(p99)
         self.stats["mean_lats"].append(mean)
         self.stats["p99_batch_predict_lats"].append(self.batch_predict_latencies)
+        self.stats["p99_res_predict_lats"].append(self.res_predict_latencies)
         self.stats["mean_batch_sizes"].append(mean_batch_size)
-        logger.info("p99_lat: {p99}, mean_lat: {mean}, p99_batch_predict: {p99_batch_pred},"
+        logger.info("p99_lat: {p99}, mean_lat: {mean}, p99_batch_predict: {p99_batch_pred}, p99_res_predict: {p99_res_pred},"
                     " thruput: {thru}, mean_batch: {mb}".format(p99=p99,
                                                           mean=mean,
                                                           thru=thru, 
                                                           p99_batch_pred=p99_batch_predict,
+                                                          p99_res_pred=p99_res_predict,
                                                           mb=mean_batch_size))
 
     def predict(self, requests):
@@ -211,22 +235,33 @@ class Predictor(object):
         # inception_inputs = self.inception_inputs[batch_size]
         inception_inputs = self.inception_inputs[idxs]
 
-        # resnet_svm_future = self.task_execution_thread_pool.submit(
-        #     lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
-        
-        inception_log_reg_future = self.task_execution_thread_pool.submit(
-            lambda inputs : self.log_reg_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
-        # resnet_svm_classes = resnet_svm_future.result()
-        inception_log_reg_classes = inception_log_reg_future.result()
+        
+        if self.use_inception:
+            inception_log_reg_future = self.task_execution_thread_pool.submit(
+                lambda inputs : self.log_reg_model.predict(self.inception_model.predict(inputs)), inception_inputs)
+
+        if self.use_resnet:
+            resnet_svm_future = self.task_execution_thread_pool.submit(
+                lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
+
+        if self.use_inception:
+            inception_log_reg_classes = inception_log_reg_future.result()
+
+        res_end = datetime.now()
+
+        if self.use_resnet:
+            resnet_svm_classes = resnet_svm_future.result()
+
 
         pred_end = datetime.now()
 
-        self.stats_thread_pool.submit(self._update_stats, requests, pred_begin, pred_end, batch_size)
+        self.stats_thread_pool.submit(self._update_stats, requests, pred_begin, pred_end, res_end, batch_size)
 
-    def _update_stats(self, requests, pred_begin_time, pred_end_time, batch_size):
+    def _update_stats(self, requests, pred_begin_time, pred_end_time, res_end_time, batch_size):
         try:
             self.batch_predict_latencies.append((pred_end_time - pred_begin_time).total_seconds())
+            self.res_predict_latencies.append((res_end_time - pred_begin_time).total_seconds())
             self.batch_sizes.append(batch_size)
             for msg_id, send_time in requests:
                 e2e_latency = (pred_end_time - send_time).total_seconds()
@@ -308,6 +343,7 @@ class DriverBenchmarker(object):
         time.sleep(60)
         
         logger.info("Starting predictions")
+        queue_size = 10000
 
         for idx in range(len(arrival_process)):
             request_delay_millis, request_replica_num = arrival_process[idx]
@@ -325,6 +361,17 @@ class DriverBenchmarker(object):
             # time.sleep(request_delay_seconds) # FAST
             time.sleep(request_delay_seconds*2) # SLOW
             # self._spin_sleep(request_delay_seconds) # VERY SLOW BECAUSE OF GIL
+        #     if idx > queue_size:
+        #         break
+        # logger.info("Done sending")
+
+        # for idx in range(len(arrival_process)):
+        #     request_delay_millis, request_replica_num = arrival_process[idx]
+        #     request_delay_seconds = request_delay_millis * .001
+        #
+        #     # time.sleep(5)
+        #     # time.sleep(request_delay_seconds) # FAST
+        #     time.sleep(request_delay_seconds*2) # SLOW
 
         processor_thread.join()
 
