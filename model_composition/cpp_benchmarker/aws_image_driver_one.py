@@ -1,7 +1,7 @@
 import subprocess32 as subprocess
 import os
 import sys
-# import numpy as np
+import numpy as np
 import time
 import logging
 import json
@@ -164,15 +164,17 @@ def get_profiler_stats(metrics_json):
     thrus = {}
     counts = {}
 
-    hists = metrics_json["histograms"]
-    for h in hists:
-        if "prediction_latency" in h.keys()[0]:
-            name = h.keys()[0]
+    data_lists = metrics_json["data_lists"]
+    for l in data_lists:
+        if "prediction_latencies" in l.keys()[0]:
+            name = l.keys()[0]
             model = name.split(":")[0]
-            mean = float(h[name]["mean"]) / 1000.0
-            p99 = float(h[name]["p99"]) / 1000.0
-            mean_latencies[model] = round(float(mean), 3)
-            p99_latencies[model] = round(float(p99), 3)
+            cur_lats = [float(list(i.values())[0]) for i in l[name]["items"]]
+            # convert to seconds
+            cur_lats = np.array(cur_lats) / 1000.0 / 1000.0
+            mean_latencies[model] = np.mean(cur_lats)
+            p99_latencies[model] = np.percentile(cur_lats, 99)
+
     meters = metrics_json["meters"]
     for m in meters:
         if "prediction_throughput" in m.keys()[0]:
