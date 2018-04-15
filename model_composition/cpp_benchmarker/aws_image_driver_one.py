@@ -29,7 +29,7 @@ TF_RESNET = "tf-resnet-feats"
 ALL_REMOTE_ADDRS = None
 
 RESNET_CLIPPER_ADDR = "localhost"
-INCEPTION_CLIPPER_ADDR = "172.30.2.124"
+INCEPTION_CLIPPER_ADDR = "172.30.3.156"
 
 
 def get_heavy_node_config(model_name,
@@ -576,6 +576,7 @@ def run_experiment_for_config(config):
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
         return None
     lam = config["lam"]
+    # lam = 609
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]
