@@ -142,13 +142,13 @@ class Predictor(object):
         # Input generation
         logger.info("Generating random inputs")
         self.resnet_inputs, self.inception_inputs = generate_inputs()
-        new_resnet = {}
-        new_inception = {}
-        for bs in range(200):
-            new_resnet[bs] = self.resnet_inputs[xrange(bs)]
-            new_inception[bs] = self.inception_inputs[xrange(bs)]
-        self.resnet_inputs = new_resnet
-        self.inception_inputs = new_inception
+        # new_resnet = {}
+        # new_inception = {}
+        # for bs in range(200):
+        #     new_resnet[bs] = self.resnet_inputs[xrange(bs)]
+        #     new_inception[bs] = self.inception_inputs[xrange(bs)]
+        # self.resnet_inputs = new_resnet
+        # self.inception_inputs = new_inception
 
         logger.info("Warming up")
         self.warm_up()
@@ -204,16 +204,20 @@ class Predictor(object):
         pred_begin = datetime.now()
 
         batch_size = len(requests)
-        resnet_inputs = self.resnet_inputs[batch_size]
-        inception_inputs = self.inception_inputs[batch_size]
+        idxs = np.random.randint(0, len(self.resnet_inputs), batch_size)
 
-        resnet_svm_future = self.task_execution_thread_pool.submit(
-            lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
+        # resnet_inputs = self.resnet_inputs[batch_size]
+        resnet_inputs = self.resnet_inputs[idxs]
+        # inception_inputs = self.inception_inputs[batch_size]
+        inception_inputs = self.inception_inputs[idxs]
+
+        # resnet_svm_future = self.task_execution_thread_pool.submit(
+        #     lambda inputs : self.kernel_svm_model.predict(self.resnet_model.predict(inputs)), resnet_inputs)
         
         inception_log_reg_future = self.task_execution_thread_pool.submit(
             lambda inputs : self.log_reg_model.predict(self.inception_model.predict(inputs)), inception_inputs)
 
-        resnet_svm_classes = resnet_svm_future.result()
+        # resnet_svm_classes = resnet_svm_future.result()
         inception_log_reg_classes = inception_log_reg_future.result()
 
         pred_end = datetime.now()
@@ -309,13 +313,18 @@ class DriverBenchmarker(object):
             request_delay_millis, request_replica_num = arrival_process[idx]
             request_delay_seconds = request_delay_millis * .001
 
-            if request_replica_num == replica_num:
+            # if request_replica_num == replica_num: # SLOW
+            # if True: # FAST
+            # if idx % 2 == 0: # SLOW
+            if True:
+                # time.sleep(request_delay_seconds) # SLOW
                 send_time = datetime.now()
                 msg_id = idx
                 self.request_queue.put((msg_id, send_time))
 
-            time.sleep(request_delay_seconds)
-            # self._spin_sleep(request_delay_seconds)
+            # time.sleep(request_delay_seconds) # FAST
+            time.sleep(request_delay_seconds*2) # SLOW
+            # self._spin_sleep(request_delay_seconds) # VERY SLOW BECAUSE OF GIL
 
         processor_thread.join()
 
