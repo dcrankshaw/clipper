@@ -1,4 +1,4 @@
-FROM model-comp/tf-rpc:latest
+FROM model-comp/tf-rpc-nogpu:latest
 
 WORKDIR /container
 
