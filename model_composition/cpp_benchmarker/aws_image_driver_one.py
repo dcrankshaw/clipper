@@ -128,6 +128,20 @@ def get_clipper_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_clipper_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    p99_latencies = {}
+    mean_latencies = {}
+    for h in hists:
+        if "prediction_latency" in h.keys()[0] and "model" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            p99 = float(h[name]["p99"]) / 1000.0 / 1000.0
+            mean = float(h[name]["mean"]) / 1000.0 / 1000.0
+            p99_latencies[model] = p99
+            mean_latencies[model] = mean
+    return (mean_latencies, p99_latencies)
+
 
 def get_clipper_queue_sizes(metrics_json):
     hists = metrics_json["histograms"]
@@ -239,8 +253,11 @@ def print_clipper_metrics(clipper_metrics):
     results_dict["queue_sizes"] = get_clipper_queue_sizes(clipper_metrics)
     results_dict["clipper_thrus"] = get_clipper_thruputs(clipper_metrics)
     results_dict["clipper_counts"] = get_clipper_counts(clipper_metrics)
+    results_dict["mean_lats"], results_dict["p99_lats"] = get_clipper_latencies(clipper_metrics)
     logger.info(("\nqueue sizes: {queue_sizes}"
-                 "\nbatch sizes: {batch_sizes}\n").format(**results_dict))
+                 "\nbatch sizes: {batch_sizes}"
+                 "\nclipper p99 lats: {p99_lats}"
+                 "\nclipper mean lats: {mean_lats}\n").format(**results_dict))
 
 
 def print_stats(cur_client_metrics, trial_num):
@@ -426,7 +443,8 @@ class BenchmarkConfigurationException(Exception):
 
 
 def run_experiment_for_config(config):
-    res_cpus = range(4, 16)
+    # res_cpus = range(4, 16)
+    res_cpus = range(8, 16)
     res_gpus = range(4)
 
     incept_cpus = range(4, 16)
@@ -505,7 +523,6 @@ def run_experiment_for_config(config):
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
         return None
     lam = config["lam"]
-    # lam = 609
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]
