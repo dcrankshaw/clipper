@@ -412,7 +412,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                     logger.info("stderr: {}".format(prof_stderr))
                 try:
                     loaded_metrics = load_metrics(client_path)
-                    # lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
+                    lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
                     if loaded_metrics is not None:
                         all_client_metrics.append(loaded_metrics)
                     else:
@@ -423,7 +423,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
             return driver_utils.Results(all_client_metrics,
                                         None,
                                         summary_results,
-                                        None)
+                                        lineages)
         except Exception as e:
             logger.exception(e)
         finally:
