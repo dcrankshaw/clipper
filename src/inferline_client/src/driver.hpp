@@ -19,7 +19,7 @@ class Driver {
          std::string distribution, int trial_length, int num_trials,
          std::string log_file, std::string clipper_address_resnet,
          std::string clipper_address_inception, int batch_size,
-         std::vector<float> delay_ms);
+         std::vector<float> delay_ms, bool collect_clipper_metrics);
 
   void start();
 
@@ -43,6 +43,7 @@ class Driver {
   std::string clipper_address_inception_;
   int batch_size_;
   std::vector<float> delay_ms_;
+  bool get_clipper_metrics_;
 };
 
 }  // namespace zmq_client

@@ -220,6 +220,29 @@ def get_profiler_stats(cur_client_metrics):
     return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts)
 
 
+def load_clipper_metrics(clipper_path):
+    with open(clipper_path, "r") as clipper_file:
+        clipper_metrics_str = clipper_file.read().strip()
+        if clipper_metrics_str[-1] == ",":
+            clipper_metrics_str = clipper_metrics_str.rstrip(",")
+            clipper_metrics_str += "]"
+        try:
+            clipper_metrics = json.loads(clipper_metrics_str)
+        except ValueError:
+            # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
+            return None
+    return clipper_metrics
+
+def print_clipper_metrics(clipper_metrics):
+    results_dict = {}
+    results_dict["batch_sizes"] = get_clipper_batch_sizes(clipper_metrics)
+    results_dict["queue_sizes"] = get_clipper_queue_sizes(clipper_metrics)
+    results_dict["clipper_thrus"] = get_clipper_thruputs(clipper_metrics)
+    results_dict["clipper_counts"] = get_clipper_counts(clipper_metrics)
+    logger.info(("\nqueue sizes: {queue_sizes}"
+                 "\nbatch sizes: {batch_sizes}\n").format(**results_dict))
+
+
 def print_stats(cur_client_metrics, trial_num):
     cur_client_metrics = [c[trial_num] for c in cur_client_metrics]
     results_dict = {}
@@ -314,6 +337,8 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                     "--clipper_address_resnet={}".format(RESNET_CLIPPER_ADDR),
                     "--clipper_address_inception={}".format(INCEPTION_CLIPPER_ADDR),
                     "--request_delay_file={}".format(arrival_delay_file)]
+                if client_num == 0:
+                    cmd.append("--get_clipper_metrics")
 
                 logger.info("Driver command: {}".format(" ".join(cmd)))
                 client_path = "{p}-client_metrics.json".format(p=log_path)
@@ -321,6 +346,9 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                                 for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 procs[client_num] = (proc, log_path, client_path, lineage_paths)
+            clipper_paths = ["{p}-clipper_metrics_resnet.json".format(p=log_path)]
+            if len(addr_config_map) == 2:
+                clipper_paths.append("{p}-clipper_metrics_incept.json".format(p=log_path))
 
             recorded_trials = 0
             summary_results = []
@@ -342,11 +370,22 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                     client_metrics = load_metrics(client_path)
                     if client_metrics is not None:
                         cur_client_metrics.append(client_metrics)
+                print_stats_this_iter = False
                 if len(cur_client_metrics) == num_clients:
                     new_recorded_trials = min([len(c) for c in cur_client_metrics])
                     if new_recorded_trials > recorded_trials:
                         recorded_trials = new_recorded_trials
                         summary_results.append(print_stats(cur_client_metrics, new_recorded_trials - 1))
+                        print_stats_this_iter = True
+
+                if print_stats_this_iter:
+                    for clipper_path in clipper_paths:
+                        if not (os.path.exists(clipper_path)):
+                            logger.info("Clipper metrics don't exist yet")
+                            continue
+                        clipper_metrics = load_clipper_metrics(clipper_path)
+                        if clipper_metrics and len(clipper_metrics) >= recorded_trials:
+                            print_clipper_metrics(clipper_metrics[recorded_trials - 1])
 
             all_client_metrics = []
             for client_num in procs:

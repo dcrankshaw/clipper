@@ -23,7 +23,7 @@ Driver::Driver(
     std::function<void(FrontendRPCClient &, FrontendRPCClient &, ClientFeatureVector, std::atomic<int> &)> predict_func,
     std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
     int trial_length, int num_trials, std::string log_file, std::string clipper_address_resnet, std::string clipper_address_inception,
-    int batch_size, std::vector<float> delay_ms)
+    int batch_size, std::vector<float> delay_ms, bool get_clipper_metrics)
     : predict_func_(predict_func),
       inputs_(inputs),
       target_throughput_(target_throughput),
@@ -38,7 +38,8 @@ Driver::Driver(
       clipper_address_resnet_(clipper_address_resnet),
       clipper_address_inception_(clipper_address_inception),
       batch_size_(batch_size),
-      delay_ms_(delay_ms) {
+      delay_ms_(delay_ms),
+      get_clipper_metrics_(get_clipper_metrics) {
   resnet_client_.start(clipper_address_resnet, SEND_PORT, RECV_PORT);
   if (clipper_address_resnet == clipper_address_inception) {
     std::cout << "Using same client for resnet and inception" << std::endl;
@@ -140,14 +141,36 @@ void Driver::start() {
   monitor_thread.join();
 }
 
+void get_clipper_metrics(std::ofstream& clipper_metrics_file, std::string clipper_address) {
+      std::string address = "http://" + clipper_address + ":" + std::to_string(1337) + "/metrics";
+      std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
+      std::system(cmd_str.c_str());
+      std::ifstream curl_output("curl_out.txt");
+      std::stringstream curl_str_buf;
+      curl_output >> curl_str_buf.rdbuf();
+      std::string curl_str = curl_str_buf.str();
+      clipper_metrics_file << curl_str;
+      clipper_metrics_file << "," << std::endl;
+      curl_output.close();
+}
+
 void Driver::monitor_results() {
   int num_completed_trials = 0;
   std::ofstream client_metrics_file;
-  // std::ofstream clipper_metrics_file;
   client_metrics_file.open(log_file_ + "-client_metrics.json");
-  // clipper_metrics_file.open(log_file_ + "-clipper_metrics.json");
   client_metrics_file << "[" << std::endl;
-  // clipper_metrics_file << "[" << std::endl;
+
+  std::ofstream resnet_clipper_metrics_file;
+  if (get_clipper_metrics_) {
+    resnet_clipper_metrics_file.open(log_file_ + "-clipper_metrics_resnet.json");
+    resnet_clipper_metrics_file << "[" << std::endl;
+  }
+  std::ofstream incept_clipper_metrics_file;
+  if (get_clipper_metrics_ && different_clients_) {
+    incept_clipper_metrics_file.open(log_file_ + "-clipper_metrics_incept.json");
+    incept_clipper_metrics_file << "[" << std::endl;
+
+  }
 
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
 
@@ -161,16 +184,13 @@ void Driver::monitor_results() {
           registry.report_metrics(true);
       client_metrics_file << metrics_report;
       client_metrics_file << "," << std::endl;
-      // std::string address = "http://" + clipper_address_ + ":" + std::to_string(1337) + "/metrics";
-      // std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
-      // std::system(cmd_str.c_str());
-      // std::ifstream curl_output("curl_out.txt");
-      // std::stringstream curl_str_buf;
-      // curl_output >> curl_str_buf.rdbuf();
-      // std::string curl_str = curl_str_buf.str();
-      // clipper_metrics_file << curl_str;
-      // clipper_metrics_file << "," << std::endl;
-      // curl_output.close();
+
+      if (get_clipper_metrics_) {
+        get_clipper_metrics(resnet_clipper_metrics_file, clipper_address_resnet_);
+        if (different_clients_) {
+          get_clipper_metrics(incept_clipper_metrics_file, clipper_address_inception_);
+        }
+      }
     }
 
     if (num_completed_trials >= num_trials_) {
@@ -183,7 +203,14 @@ void Driver::monitor_results() {
   // client_metrics_file << "]";
   client_metrics_file.close();
   // clipper_metrics_file << "]";
-  // clipper_metrics_file.close();
+  if (get_clipper_metrics_) {
+    resnet_clipper_metrics_file.close();
+    if (different_clients_) {
+      incept_clipper_metrics_file.close();
+    }
+  }
   return;
 }
+
+
 }

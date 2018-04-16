@@ -357,6 +357,8 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
        cxxopts::value<std::string>())
+      ("get_clipper_metrics", "Collect Clipper metrics",
+       cxxopts::value<bool>())
        ;
   // clang-format on
   options.parse(argc, argv);
@@ -407,7 +409,7 @@ int main(int argc, char* argv[]) {
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), options["clipper_address_resnet"].as<std::string>(),
                 options["clipper_address_inception"].as<std::string>(),
-                -1, delays_ms);
+                -1, delays_ms, options["get_clipper_metrics"].as<bool>());
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;
