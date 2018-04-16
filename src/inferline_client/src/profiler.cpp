@@ -206,14 +206,16 @@ int main(int argc, char* argv[]) {
   std::mutex query_file_mutex;
   query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
   auto predict_func = [metrics, model_name, &query_lineage_file, &query_file_mutex](
-      FrontendRPCClient& client, ClientFeatureVector input, std::atomic<int>& prediction_counter) {
-    predict(client, model_name, input, metrics, prediction_counter, query_lineage_file,
-            query_file_mutex);
+      FrontendRPCClient& client, FrontendRPCClient& /*other_client*/, ClientFeatureVector input,
+      std::atomic<int>& prediction_counter) {
+    predict(client, model_name, input, metrics, prediction_counter,
+        query_lineage_file, query_file_mutex);
   };
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), options["clipper_address"].as<std::string>(),
-                options["batch_size"].as<int>(), {});
+                options["clipper_address"].as<std::string>(),
+                options["batch_size"].as<int>(), {}, true);
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;

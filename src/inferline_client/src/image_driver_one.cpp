@@ -128,7 +128,7 @@ void predict(FrontendRPCClient& resnet_client, FrontendRPCClient& inception_clie
     prediction_counter += 1;
   };
 
-  auto ksvm_callback = [&resnet_client, metrics, branches_completed, completion_callback,
+  auto ksvm_callback = [metrics, branches_completed, completion_callback,
                         &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -175,7 +175,7 @@ void predict(FrontendRPCClient& resnet_client, FrontendRPCClient& inception_clie
     }
   };
 
-  auto log_reg_callback = [&inception_client, metrics, branches_completed, &completion_callback,
+  auto log_reg_callback = [metrics, branches_completed, &completion_callback,
                            &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -393,7 +393,8 @@ int main(int argc, char* argv[]) {
   auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
       FrontendRPCClient& resnet_client, FrontendRPCClient& inception_client, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
-    predict(resnet_client, inception_client, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
+    predict(resnet_client, inception_client, input, metrics, prediction_counter,
+        lineage_file_map, lineage_mutex_map);
   };
   std::vector<float> delays_ms;
   if (distribution == "file") {

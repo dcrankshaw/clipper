@@ -1,11 +1,11 @@
 import subprocess32 as subprocess
 import os
 import sys
-# import numpy as np
+import numpy as np
 import time
 import logging
 import json
-from clipper_admin import ClipperConnection, DockerContainerManager
+from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
 
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 
 DEFAULT_OUTPUT = "TIMEOUT"
-CLIPPER_ADDRESS = "localhost"
+# CLIPPER_ADDRESS = "localhost"
+CLIPPER_ADDRESS = "172.30.3.111"
 
 RES50 = "res50"
 RES152 = "res152"
@@ -35,8 +36,7 @@ TF_LANG_DETECT = "tf-lang-detect"
 TF_NMT = "tf-nmt"
 TF_LSTM = "tf-lstm"
 
-REMOTE_ADDR = "172.30.0.164"
-
+ALL_REMOTE_ADDRS = None
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -237,9 +237,9 @@ def get_input_size(config):
 
 
 def setup_clipper(configs):
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+    cl = ClipperConnection(AWSContainerManager(host=CLIPPER_ADDRESS, redis_port=6380))
     cl.connect()
-    cl.stop_all(remote_addrs=[REMOTE_ADDR])
+    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     cl.start_clipper(
         query_frontend_image="clipper/zmq_frontend:develop",
         redis_cpu_str="0",
@@ -264,6 +264,20 @@ def get_clipper_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+def get_clipper_latencies(metrics_json):
+    hists = metrics_json["histograms"]
+    p99_latencies = {}
+    mean_latencies = {}
+    for h in hists:
+        if "prediction_latency" in h.keys()[0] and "model" in h.keys()[0]:
+            name = h.keys()[0]
+            model = name.split(":")[1]
+            p99 = float(h[name]["p99"]) / 1000.0 / 1000.0
+            mean = float(h[name]["mean"]) / 1000.0 / 1000.0
+            p99_latencies[model] = p99
+            mean_latencies[model] = mean
+    return (mean_latencies, p99_latencies)
+
 
 def get_clipper_queue_sizes(metrics_json):
     hists = metrics_json["histograms"]
@@ -275,6 +289,7 @@ def get_clipper_queue_sizes(metrics_json):
             mean = float(h[name]["mean"])
             mean_queue_sizes[model] = round(float(mean), 2)
     return mean_queue_sizes
+
 
 
 def get_clipper_thruputs(metrics_json):
@@ -305,15 +320,26 @@ def get_profiler_stats(metrics_json):
     thrus = {}
     counts = {}
 
-    hists = metrics_json["histograms"]
-    for h in hists:
-        if "prediction_latency" in h.keys()[0]:
-            name = h.keys()[0]
+    data_lists = metrics_json["data_lists"]
+    for l in data_lists:
+        if "prediction_latencies" in l.keys()[0]:
+            name = l.keys()[0]
             model = name.split(":")[0]
-            mean = float(h[name]["mean"]) / 1000.0
-            p99 = float(h[name]["p99"]) / 1000.0
-            mean_latencies[model] = round(float(mean), 3)
-            p99_latencies[model] = round(float(p99), 3)
+            cur_lats = [float(list(i.values())[0]) for i in l[name]["items"]]
+            # convert to seconds
+            cur_lats = np.array(cur_lats) / 1000.0 / 1000.0
+            mean_latencies[model] = np.mean(cur_lats)
+            p99_latencies[model] = np.percentile(cur_lats, 99)
+
+    # hists = metrics_json["histograms"]
+    # for h in hists:
+    #     if "prediction_latency" in h.keys()[0]:
+    #         name = h.keys()[0]
+    #         model = name.split(":")[0]
+    #         mean = float(h[name]["mean"]) / 1000.0
+    #         p99 = float(h[name]["p99"]) / 1000.0
+    #         mean_latencies[model] = round(float(mean), 3)
+    #         p99_latencies[model] = round(float(p99), 3)
     meters = metrics_json["meters"]
     for m in meters:
         if "prediction_throughput" in m.keys()[0]:
@@ -386,7 +412,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                  workload_path=None):
     clipper_address = setup_clipper([config, ])
     clipper_address = CLIPPER_ADDRESS
-    cl = ClipperConnection(DockerContainerManager(redis_port=6380))
+    cl = ClipperConnection(AWSContainerManager(host=CLIPPER_ADDRESS, redis_port=6380))
     cl.connect()
     time.sleep(30)
     log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
@@ -420,7 +446,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
-        clipper_path = "{p}-clipper_metrics.json".format(p=log_path)
+        clipper_path = "{p}-clipper_metrics_resnet.json".format(p=log_path)
         lineage_path = "{p}-query_lineage.txt".format(p=log_path)
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
@@ -479,41 +505,40 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
     init_throughput = 2000
     run(init_throughput, 3, "warmup", "constant")
-    throughput_results = run(init_throughput, 8, "throughput", "constant")
+    throughput_results = run(init_throughput, 10, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
-    latency_results = run(0, 8, "latency", "batch", batch_size=config.batch_size)
-    cl.stop_all(remote_addrs=[REMOTE_ADDR])
+    latency_results = run(0, 10, "latency", "batch", batch_size=config.batch_size)
+    cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     return throughput_results, latency_results
 
 
 if __name__ == "__main__":
-    gpu = 0
-    model = TF_RESNET
-    batch_sizes = [1, 2, 4, 6, 8, 12]
-    for batch_size in batch_sizes:
-        config = get_heavy_node_config(
-            model_name=model,
-            batch_size=batch_size,
-            num_replicas=1,
-            cpus_per_replica=1,
-            allocated_cpus=[8],
-            allocated_gpus=[7],
-            remote_addr=REMOTE_ADDR,
-        )
+    model = TF_KERNEL_SVM
+    gpu = 3
+    batch_size = 8
+    config = get_heavy_node_config(
+        model_name=model,
+        batch_size=batch_size,
+        num_replicas=1,
+        cpus_per_replica=1,
+        allocated_cpus=[13],
+        allocated_gpus=None
+    )
 
-        input_size = get_input_size(config)
-        throughput_results, latency_results = run_profiler(
-            config, 2000, "../../release/src/inferline_client/profiler",
-            input_size, "9,25,10,26,11,27,12,28")
-        fname = "k80-remote-{model}-batch-{batch}".format(
-            model=model, batch=batch_size, gpu=gpu)
-        results_dir = "{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
-        driver_utils.save_results_cpp_client(
-            [config, ],
-            throughput_results,
-            latency_results,
-            results_dir,
-            prefix=fname)
+    input_size = get_input_size(config)
+    throughput_results, latency_results = run_profiler(
+        config, 2000, "../../release/src/inferline_client/profiler",
+        input_size,
+        "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
+    fname = "v100-remote-{model}-batch-{batch}".format(
+        model=model, batch=batch_size, gpu=gpu)
+    results_dir = "{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
+    driver_utils.save_results_cpp_client(
+        [config, ],
+        throughput_results,
+        latency_results,
+        results_dir,
+        prefix=fname)
     sys.exit(0)
