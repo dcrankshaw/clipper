@@ -371,9 +371,11 @@ class AWSContainerManager(ContainerManager):
 
     def _add_replica_remote(self, name, version, input_type, image, remote_addr,
                             gpu_num=None, cpu_str=None, use_nvidia_docker=True):
-        # query_frontend_hostname = requests.get(
-        #     "http://169.254.169.254/latest/meta-data/local-ipv4").text
-        query_frontend_hostname = self.host
+        if self.host == "localhost":
+            query_frontend_hostname = requests.get(
+                "http://169.254.169.254/latest/meta-data/local-ipv4").text
+        else:
+            query_frontend_hostname = self.host
         env_vars = {
             "CLIPPER_MODEL_NAME": name,
             "CLIPPER_MODEL_VERSION": version,
@@ -389,12 +391,13 @@ class AWSContainerManager(ContainerManager):
             # Even if a GPU-supported model isn't being deployed on a GPU,
             # we may still need to launch it using nvidia-docker because
             # the model framework may still depend on libcuda
-            remote_env = {}
+            # remote_env = {}
             cmd = ["nvidia-docker", "run", "-d"]
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num} on {remote_addr}".format(
                     name=name, version=version, gpu_num=gpu_num, remote_addr=remote_addr))
-                remote_env["NV_GPU"] = str(gpu_num)
+                cmd.insert(0, "NV_GPU={}".format(str(gpu_num)))
+                # remote_env["NV_GPU"] = str(gpu_num)
             else:
                 # We're not running on a GPU, so we should mask all available
                 # GPU resources
@@ -416,8 +419,11 @@ class AWSContainerManager(ContainerManager):
             env.host_string = remote_addr
             env.disable_known_hosts = True
             print(env.host_string)
-            with shell_env(**remote_env):
-                run(" ".join(cmd))
+            cmd_str = " ".join(cmd)
+            # Don't use self._execute() here because if the query frontend host is local,
+            # this will execute the command locally instead of remotely
+            with show("everything"):
+                run(cmd_str)
             # Don't forget to set hoststring back after launching the remote replica
             env.host_string = self.host
         else:

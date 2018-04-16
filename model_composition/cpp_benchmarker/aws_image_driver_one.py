@@ -25,10 +25,10 @@ TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
-# REMOTE_ADDR = None
-ALL_REMOTE_ADDRS = None
+REMOTE_ADDR = "172.30.3.111"
+ALL_REMOTE_ADDRS = [REMOTE_ADDR]
 
-RESNET_CLIPPER_ADDR = "172.30.3.111"
+RESNET_CLIPPER_ADDR = "localhost"
 INCEPTION_CLIPPER_ADDR = RESNET_CLIPPER_ADDR
 # INCEPTION_CLIPPER_ADDR = "172.30.3.156"
 
@@ -109,7 +109,8 @@ def setup_clipper(addr_config_map):
             query_frontend_image="clipper/zmq_frontend:develop",
             redis_cpu_str="0",
             mgmt_cpu_str="0",
-            query_cpu_str="0,16,1,17,2,18,3,19")
+            # query_cpu_str="0,16,1,17,2,18,3,19")
+            query_cpu_str="16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55")
         time.sleep(10)
         for c in configs:
             driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
@@ -443,8 +444,8 @@ class BenchmarkConfigurationException(Exception):
 
 
 def run_experiment_for_config(config):
-    # res_cpus = range(4, 16)
-    res_cpus = range(8, 16)
+    res_cpus = range(0, 16)
+    # res_cpus = range(8, 16)
     res_gpus = range(4)
 
     incept_cpus = range(4, 16)
@@ -493,7 +494,8 @@ def run_experiment_for_config(config):
                                     num_replicas=c["num_replicas"],
                                     cpus_per_replica=c["num_cpus"],
                                     allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"], name),
-                                    allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"], name))
+                                    allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"], name),
+                                    remote_addr=REMOTE_ADDR)
                 node_configs.append(node)
                 addr_config_map[RESNET_CLIPPER_ADDR].append(node)
             if name in [INCEPTION_FEATS, TF_LOG_REG]:
@@ -502,7 +504,8 @@ def run_experiment_for_config(config):
                                     num_replicas=c["num_replicas"],
                                     cpus_per_replica=c["num_cpus"],
                                     allocated_cpus=get_cpus(c["num_cpus"]*c["num_replicas"], name),
-                                    allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"], name))
+                                    allocated_gpus=get_gpus(c["num_replicas"], c["gpu_type"], name),
+                                    remote_addr=REMOTE_ADDR)
                 node_configs.append(node)
                 addr_config_map[INCEPTION_CLIPPER_ADDR].append(node)
 
@@ -541,7 +544,7 @@ def run_experiment_for_config(config):
     # For client on standalone machine
     client_cpu_strs = [
         "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
+        # "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
     ]
 
     # num_clients = 2
