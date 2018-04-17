@@ -216,7 +216,8 @@ class AWSContainerManager(ContainerManager):
 
         query_cmd = "--redis_ip={redis_ip} --redis_port={redis_port}".format(
             redis_ip=self.redis_ip, redis_port=self.redis_port)
-        query_ports = [4455, 4456, 9999, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
+        # query_ports = [4455, 4456, 9999, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
+        query_ports = [4455, 4456, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
         query_ports_str = " ".join(["-p {p}:{p}".format(p=p) for p in query_ports])
         query_labels = self.common_labels.copy()
         query_labels[CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL] = ""

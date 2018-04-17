@@ -25,7 +25,7 @@ TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 
-REMOTE_ADDR = "172.30.3.111"
+REMOTE_ADDR = "172.10.0.90"
 ALL_REMOTE_ADDRS = [REMOTE_ADDR]
 
 RESNET_CLIPPER_ADDR = "localhost"

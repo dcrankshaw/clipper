@@ -8,6 +8,7 @@ import json
 from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
+from fabric.api import env, run, get
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -18,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 
+IPERF_PORT = 9999
+
 DEFAULT_OUTPUT = "TIMEOUT"
 # CLIPPER_ADDRESS = "localhost"
-CLIPPER_ADDRESS = "172.30.3.111"
+CLIPPER_ADDRESS = "172.10.0.90"
 
 RES50 = "res50"
 RES152 = "res152"
@@ -37,6 +40,7 @@ TF_NMT = "tf-nmt"
 TF_LSTM = "tf-lstm"
 
 ALL_REMOTE_ADDRS = None
+
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -264,6 +268,7 @@ def get_clipper_batch_sizes(metrics_json):
             mean_batch_sizes[model] = round(float(mean), 2)
     return mean_batch_sizes
 
+
 def get_clipper_latencies(metrics_json):
     hists = metrics_json["histograms"]
     p99_latencies = {}
@@ -289,7 +294,6 @@ def get_clipper_queue_sizes(metrics_json):
             mean = float(h[name]["mean"])
             mean_queue_sizes[model] = round(float(mean), 2)
     return mean_queue_sizes
-
 
 
 def get_clipper_thruputs(metrics_json):
@@ -379,6 +383,10 @@ def print_stats(client_metrics, clipper_metrics):
 
 
 def load_metrics(client_path, clipper_path):
+    # if CLIPPER_ADDRESS is not "localhost":
+    #     env.host_string = CLIPPER_ADDRESS
+    #     get(clipper_path, clipper_path, warn_only=True)
+    #
     with open(client_path, "r") as client_file, \
             open(clipper_path, "r") as clipper_file:
         client_metrics_str = client_file.read().strip()
@@ -515,30 +523,64 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 
 if __name__ == "__main__":
-    model = TF_KERNEL_SVM
-    gpu = 3
-    batch_size = 8
-    config = get_heavy_node_config(
-        model_name=model,
-        batch_size=batch_size,
-        num_replicas=1,
-        cpus_per_replica=1,
-        allocated_cpus=[13],
-        allocated_gpus=None
-    )
 
-    input_size = get_input_size(config)
-    throughput_results, latency_results = run_profiler(
-        config, 2000, "../../release/src/inferline_client/profiler",
-        input_size,
-        "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
-    fname = "v100-remote-{model}-batch-{batch}".format(
-        model=model, batch=batch_size, gpu=gpu)
-    results_dir = "{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
-    driver_utils.save_results_cpp_client(
-        [config, ],
-        throughput_results,
-        latency_results,
-        results_dir,
-        prefix=fname)
+    env.host_string = CLIPPER_ADDRESS
+    env.disable_known_hosts = True
+    env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
+    env.colorize_errors = True
+    bws = [0.1, 100, 500, 1000, 2000, 3000, 5000, 8000]
+    for target_bandwidth_Mbps in bws:
+        # Start iperf on server
+        logger.info("Starting iperf server")
+        run("killall iperf3", warn_only=True)
+        run("iperf3 -s -p {port} -D".format(port=IPERF_PORT))
+        logger.info("Iperf started")
+
+        if target_bandwidth_Mbps > 0:
+            iperf_cmd = "iperf3 -c {address} -t 3000 -p {port} -P 1 -b {bw}M".format(
+                address=CLIPPER_ADDRESS, port=IPERF_PORT, bw=target_bandwidth_Mbps)
+            iperf_cmd_list = iperf_cmd.split(" ")
+            iperf_proc = subprocess.Popen(iperf_cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            time.sleep(5)
+            if iperf_proc.poll() is not None:
+                logger.error("iperf exited with code {code}.\nSTDERR: {stderr}".format(
+                    code=iperf_proc.returncode, stderr=iperf_proc.stderr.read().strip()))
+                raise
+
+        try:
+
+            model = INCEPTION_FEATS
+            gpu = 3
+            batch_size = 16
+            config = get_heavy_node_config(
+                model_name=model,
+                batch_size=batch_size,
+                num_replicas=1,
+                cpus_per_replica=1,
+                allocated_cpus=[13],
+                allocated_gpus=[3]
+            )
+
+            input_size = get_input_size(config)
+            throughput_results, latency_results = run_profiler(
+                config, 2000, "../../release/src/inferline_client/profiler",
+                input_size,
+                "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
+            throughput_results.background_bandwidth = target_bandwidth_Mbps
+            latency_results.background_bandwidth = target_bandwidth_Mbps
+            fname = "varied-bw-v100-remote-{model}-batch-{batch}-bw-{bw}".format(
+                model=model, batch=batch_size, gpu=gpu, bw=target_bandwidth_Mbps)
+            results_dir = "varied-bandwidth-{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
+            driver_utils.save_results_cpp_client(
+                [config, ],
+                throughput_results,
+                latency_results,
+                results_dir,
+                prefix=fname)
+        except Exception as e:
+            logger.exception(e)
+        finally:
+            if target_bandwidth_Mbps > 0:
+                iperf_proc.terminate()
+
     sys.exit(0)
