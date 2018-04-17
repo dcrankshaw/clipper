@@ -158,7 +158,9 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             queue_get_times.append((t2 - t1).microseconds)
 
             handle_start_times.append(time.time()*1000)
+            before_predict_lineage_point = datetime.now()
             outputs = predict_fn(prediction_request.inputs)
+            after_predict_lineage_point = datetime.now()
             pred_count += len(prediction_request.inputs)
             t3 = datetime.now()
             handle_times.append((t3 - t2).microseconds)
@@ -194,7 +196,9 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             for output in outputs:
                 response.add_output(output)
 
-            response_queue.put((response, recv_time))
+            response_queue.put((response, recv_time,
+                                before_predict_lineage_point,
+                                after_predict_lineage_point))
 
             if len(loop_times) > 1000:
                 print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
@@ -308,10 +312,11 @@ class Server(threading.Thread):
     def send_response(self):
         # if not self.response_queue.empty() or self.full_buffers == 2:
         if not self.response_queue.empty() or self.full_buffers == 1:
-            response, recv_time = self.response_queue.get()
+            response, recv_time, \
+                before_predict_lineage_point, after_predict_lineage_point = self.response_queue.get()
             self.full_buffers -= 1
             # t3 = datetime.now()
-            response.send(self.send_socket, self.connection_id, recv_time)
+            response.send(self.send_socket, self.connection_id, recv_time, before_predict_lineage_point, after_predict_lineage_point)
             sys.stdout.flush()
             sys.stderr.flush()
 
@@ -458,7 +463,8 @@ class PredictionResponse:
                      self.content_end_position + output_len] = output
         self.content_end_position += output_len
 
-    def send(self, socket, connection_id, recv_time):
+    def send(self, socket, connection_id, recv_time, before_prediction_lineage_point,
+             after_prediction_lineage_point):
         send_time = datetime.now()
         socket.send("", flags=zmq.SNDMORE)
         socket.send(
@@ -474,6 +480,10 @@ class PredictionResponse:
         socket.send(self.output_buffer[0:self.content_end_position], flags=zmq.SNDMORE)
         recv_time_epoch = (recv_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
         socket.send(struct.pack("<d", recv_time_epoch), flags=zmq.SNDMORE)
+        before_predict_time_epoch = (before_prediction_lineage_point - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", before_predict_time_epoch), flags=zmq.SNDMORE)
+        after_predict_time_epoch = (after_prediction_lineage_point - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
+        socket.send(struct.pack("<d", after_predict_time_epoch), flags=zmq.SNDMORE)
         send_time_epoch = (send_time - EPOCH_TIME).total_seconds() * 1000.0 * 1000.0
         socket.send(struct.pack("<d", send_time_epoch))
 

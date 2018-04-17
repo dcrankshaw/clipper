@@ -55,7 +55,7 @@ RPCService::~RPCService() { stop(); }
 void RPCService::start(
     const string ip, int send_port, int recv_port,
     std::function<void(VersionedModelId, int)> &&container_ready_callback,
-    std::function<void(RPCResponse, long long, long long, long long)>
+    std::function<void(RPCResponse, long long, long long, long long, long long, long long)>
         &&new_response_callback) {
   container_ready_callback_ = container_ready_callback;
   new_response_callback_ = new_response_callback;
@@ -298,13 +298,21 @@ void RPCService::receive_message(socket_t &socket) {
   socket.recv(msg_content_buffer.get(), content_size, 0);
 
   message_t msg_container_recv;
+  message_t msg_before_predict_lineage;
+  message_t msg_after_predict_lineage;
   message_t msg_container_send;
 
   socket.recv(&msg_container_recv, 0);
+  socket.recv(&msg_before_predict_lineage, 0);
+  socket.recv(&msg_after_predict_lineage, 0);
   socket.recv(&msg_container_send, 0);
 
   long long container_recv =
       std::llround(static_cast<double *>(msg_container_recv.data())[0]);
+  long long before_predict_lineage =
+      std::llround(static_cast<double *>(msg_before_predict_lineage.data())[0]);
+  long long after_predict_lineage =
+      std::llround(static_cast<double *>(msg_after_predict_lineage.data())[0]);
   long long container_send =
       std::llround(static_cast<double *>(msg_container_send.data())[0]);
 
@@ -348,7 +356,7 @@ void RPCService::receive_message(socket_t &socket) {
   VersionedModelId vm = container_info.first;
   int replica_id = container_info.second;
   TaskExecutionThreadPool::submit_job(vm, replica_id, new_response_callback_,
-      response, container_recv, container_send,
+      response, container_recv, before_predict_lineage, after_predict_lineage, container_send,
       std::chrono::duration_cast<std::chrono::microseconds>(
         clipper_recv_time.time_since_epoch())
       .count());

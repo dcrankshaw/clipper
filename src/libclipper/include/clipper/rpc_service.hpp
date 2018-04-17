@@ -70,7 +70,7 @@ class RPCService {
   void start(
       const string ip, int send_port, int recv_port,
       std::function<void(VersionedModelId, int)> &&container_ready_callback,
-      std::function<void(RPCResponse, long long, long long, long long)>
+      std::function<void(RPCResponse, long long, long long,  long long, long long, long long)>
           &&new_response_callback);
   /**
    * Stops the RPC Service. This is called implicitly within the RPCService
@@ -114,7 +114,7 @@ class RPCService {
   //     msg_id_timestamp_map_;
 
   std::function<void(VersionedModelId, int)> container_ready_callback_;
-  std::function<void(RPCResponse, long long, long long, long long)>
+  std::function<void(RPCResponse, long long, long long, long long, long long, long long)>
       new_response_callback_;
 
   // Mapping from zmq_connection_id to routing id (for sending)

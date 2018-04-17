@@ -315,9 +315,12 @@ class TaskExecutor {
           }
         },
         [ this, task_executor_valid = active_ ](rpc::RPCResponse response, long long container_recv,
-                                                long long container_send, long long clipper_recv) {
+                                                long long before_predict_lineage,
+                                                long long after_predict_lineage,
+                                                long long container_send,
+                                                long long clipper_recv) {
           if (*task_executor_valid) {
-            on_response_recv(std::move(response), container_recv, container_send, clipper_recv);
+            on_response_recv(std::move(response), container_recv, before_predict_lineage, after_predict_lineage, container_send, clipper_recv);
           } else {
             log_info(LOGGING_TAG_TASK_EXECUTOR,
                      "Not running on_response_recv callback because "
@@ -555,6 +558,7 @@ class TaskExecutor {
   }
 
   void on_response_recv(rpc::RPCResponse response, long long container_recv,
+      long long before_predict_lineage, long long after_predict_lineage,
                         long long container_send, long long clipper_recv) {
     auto on_response_recv_timestamp = std::chrono::system_clock::now();
     std::unique_lock<std::mutex> l(inflight_messages_mutex_);
@@ -605,6 +609,8 @@ class TaskExecutor {
       for (int batch_num = 0; batch_num < batch_size; ++batch_num) {
         InflightMessage completed_msg = keys[batch_num];
         completed_msg.lineage_->add_timestamp("container::recv", container_recv);
+        completed_msg.lineage_->add_timestamp("container::before_predict", before_predict_lineage);
+        completed_msg.lineage_->add_timestamp("container::after_predict", after_predict_lineage);
         completed_msg.lineage_->add_timestamp("container::send", container_send);
         completed_msg.lineage_->add_timestamp("clipper::rpc_recv", clipper_recv);
         completed_msg.lineage_->add_timestamp("clipper::task_executor_recv",
