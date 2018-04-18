@@ -19,13 +19,13 @@ using namespace clipper;
 constexpr int SEND_PORT = 4456;
 constexpr int RECV_PORT = 4455;
 
-Driver::Driver(
-    std::function<void(std::unordered_map<std::string, FrontendRPCClient> &, ClientFeatureVector,
-      std::atomic<int> &)> predict_func,
-    std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
-    int trial_length, int num_trials, std::string log_file,
-    std::unordered_map<std::string, std::string> addresses,
-    int batch_size, std::vector<float> delay_ms, bool collect_clipper_metrics)
+Driver::Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient> &,
+                                  ClientFeatureVector, std::atomic<int> &)>
+                   predict_func,
+               std::vector<ClientFeatureVector> inputs, float target_throughput,
+               std::string distribution, int trial_length, int num_trials, std::string log_file,
+               std::unordered_map<std::string, std::string> addresses, int batch_size,
+               std::vector<float> delay_ms, bool collect_clipper_metrics)
     : predict_func_(predict_func),
       inputs_(inputs),
       target_throughput_(target_throughput),
@@ -39,15 +39,17 @@ Driver::Driver(
       batch_size_(batch_size),
       delay_ms_(delay_ms),
       collect_clipper_metrics_{collect_clipper_metrics} {
-  for (address : addresses_) {
+  for (auto address : addresses_) {
     auto addr_find = clients_.find(address.first);
     if (addr_find == clients_.end()) {
-      FrontendRPCClient client(2);
-      client.start(address.second, SEND_PORT, RECV_PORT);
-      clients_.emplace(address.first, std::move(client));
+      clients_.emplace(address.first, 2);
+      clients_[address.first].start(address.second, SEND_PORT, RECV_PORT);
+      // FrontendRPCClient client(3);
+      // client.start(address.second, SEND_PORT, RECV_PORT);
+      // clients_.emplace(address.first, std::move(client));
     }
   }
-  std::cout << "Starting " << std::tostring(clients_.size()) << " ZMQ clients." << std::endl;
+  std::cout << "Starting " << std::to_string(clients_.size()) << " ZMQ clients." << std::endl;
 }
 
 void spin_sleep(long duration_micros) {
@@ -121,23 +123,23 @@ void Driver::start() {
       }
     }
   }
-  for (client : clients_) {
+  for (auto &client : clients_) {
     client.second.stop();
   }
   monitor_thread.join();
 }
 
-void fetch_clipper_metrics(std::ofstream& clipper_metrics_file, std::string clipper_address) {
-      std::string address = "http://" + clipper_address + ":" + std::to_string(1337) + "/metrics";
-      std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
-      std::system(cmd_str.c_str());
-      std::ifstream curl_output("curl_out.txt");
-      std::stringstream curl_str_buf;
-      curl_output >> curl_str_buf.rdbuf();
-      std::string curl_str = curl_str_buf.str();
-      clipper_metrics_file << curl_str;
-      clipper_metrics_file << "," << std::endl;
-      curl_output.close();
+void fetch_clipper_metrics(std::ofstream &clipper_metrics_file, std::string clipper_address) {
+  std::string address = "http://" + clipper_address + ":" + std::to_string(1337) + "/metrics";
+  std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
+  std::system(cmd_str.c_str());
+  std::ifstream curl_output("curl_out.txt");
+  std::stringstream curl_str_buf;
+  curl_output >> curl_str_buf.rdbuf();
+  std::string curl_str = curl_str_buf.str();
+  clipper_metrics_file << curl_str;
+  clipper_metrics_file << "," << std::endl;
+  curl_output.close();
 }
 
 void Driver::monitor_results() {
@@ -145,11 +147,15 @@ void Driver::monitor_results() {
   std::ofstream client_metrics_file;
   client_metrics_file.open(log_file_ + "-client_metrics.json");
   client_metrics_file << "[" << std::endl;
-  std::unorderd_map<std::string, std::ofstream> clipper_metrics_map;
-  for (addr : addresses_) {
-    std::ofstream cur_metrics_file(log_file + "-clipper_metrics_" + addr.first + ".json");
-    cur_metrics_file << "{" << std::endl;
-    clipper_metrics_map.emplace(addr, std::move(cur_metrics_file);
+  std::unordered_map<std::string, std::shared_ptr<std::ofstream>> clipper_metrics_map;
+  for (auto &addr : addresses_) {
+    clipper_metrics_map[addr.first] =
+        std::make_shared<std::ofstream>(log_file_ + "-clipper_metrics_" + addr.first + ".json");
+    *clipper_metrics_map[addr.first] << "{" << std::endl;
+    // std::shared_ptr<std::ofstream> cur_metrics_file =
+    //     std::make_shared<std::ofstream>(log_file_ + "-clipper_metrics_" + addr.first + ".json");
+    // *cur_metrics_file << "{" << std::endl;
+    // clipper_metrics_map.emplace(addr, cur_metrics_file);
   }
 
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
@@ -166,8 +172,8 @@ void Driver::monitor_results() {
       client_metrics_file << "," << std::endl;
 
       if (collect_clipper_metrics_) {
-        for (addr : clipper_metrics_map) {
-          fetch_clipper_metrics(addr.second, addr.first);
+        for (auto &addr : clipper_metrics_map) {
+          fetch_clipper_metrics(*addr.second, addr.first);
         }
       }
     }
@@ -183,12 +189,10 @@ void Driver::monitor_results() {
   client_metrics_file.close();
   // clipper_metrics_file << "]";
   if (collect_clipper_metrics_) {
-    for (addr : clipper_metrics_map) {
-      addr.second.close();
+    for (auto &addr : clipper_metrics_map) {
+      addr.second->close();
     }
   }
   return;
 }
-
-
 }

@@ -12,19 +12,19 @@ void spin_sleep(int duration_micros);
 
 class Driver {
  public:
-  Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient>&, ClientFeatureVector,
-                            std::atomic<int>&)>
+  Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient>&,
+                            ClientFeatureVector, std::atomic<int>&)>
              predict_func,
-         std::vector<ClientFeatureVector> inputs, float target_throughput,
-         std::string distribution, int trial_length, int num_trials,
-         std::string log_file, std::unordered_map<std::string, std::string> addresses, int batch_size,
+         std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
+         int trial_length, int num_trials, std::string log_file,
+         std::unordered_map<std::string, std::string> addresses, int batch_size,
          std::vector<float> delay_ms, bool collect_clipper_metrics);
 
   void start();
 
  private:
   void monitor_results();
-  std::function<void(std::map<std::string, FrontendRPCClient>&, ClientFeatureVector,
+  std::function<void(std::unordered_map<std::string, FrontendRPCClient>&, ClientFeatureVector,
                      std::atomic<int>&)>
       predict_func_;
   std::vector<ClientFeatureVector> inputs_;
