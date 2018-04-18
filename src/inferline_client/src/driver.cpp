@@ -43,7 +43,8 @@ Driver::Driver(std::function<void(std::unordered_map<std::string, FrontendRPCCli
     auto addr_find = clients_.find(address.first);
     if (addr_find == clients_.end()) {
       // clients_.emplace(std::string(address.first), 2);
-      clients_.emplace(address.first, 2);
+      clients_.emplace(std::piecewise_construct, std::forward_as_tuple(address.first),
+          std::forward_as_tuple(2));
       clients_[address.first].start(address.second, SEND_PORT, RECV_PORT);
       // FrontendRPCClient client(3);
       // client.start(address.second, SEND_PORT, RECV_PORT);
