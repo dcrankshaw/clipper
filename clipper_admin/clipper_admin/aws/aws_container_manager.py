@@ -393,7 +393,7 @@ class AWSContainerManager(ContainerManager):
             # we may still need to launch it using nvidia-docker because
             # the model framework may still depend on libcuda
             # remote_env = {}
-            cmd = ["nvidia-docker", "run", "-d"]
+            cmd = ["nvidia-docker", "run", "-d", "--privileged", "--cap-add=SYS_PTRACE"]
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num} on {remote_addr}".format(
                     name=name, version=version, gpu_num=gpu_num, remote_addr=remote_addr))

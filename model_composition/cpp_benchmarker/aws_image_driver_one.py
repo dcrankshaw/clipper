@@ -431,8 +431,10 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
             for c in procs:
                 procs[c][0].terminate()
 
-    run(100, 3, "warmup", "constant")
-    throughput_results = run(0, 25, "throughput", "file")
+    # run(100, 5, "warmup", "constant")
+    run(1000, 10, "warmup", "constant")
+    # throughput_results = run(0, 25, "throughput", "file")
+    throughput_results = run(0, 500, "throughput", "file")
 
     for cl in cls:
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
@@ -534,7 +536,7 @@ def run_experiment_for_config(config):
     results_dir = "image_driver_one_slo_{slo}_cv_{cv}-DEBUG".format(slo=slo, cv=cv)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
+    results_fname = "REMOTE_LOWER_LAMBDA_aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
 
     # if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
