@@ -22,8 +22,8 @@ CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 IPERF_PORT = 9999
 
 DEFAULT_OUTPUT = "TIMEOUT"
-# CLIPPER_ADDRESS = "localhost"
-CLIPPER_ADDRESS = "172.10.0.90"
+CLIPPER_ADDRESS = "localhost"
+# CLIPPER_ADDRESS = "172.10.0.90"
 
 RES50 = "res50"
 RES152 = "res152"
@@ -512,7 +512,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 2000
-    run(init_throughput, 3, "warmup", "constant")
+    run(init_throughput, 5, "warmup", "constant")
     throughput_results = run(init_throughput, 10, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
@@ -528,59 +528,63 @@ if __name__ == "__main__":
     env.disable_known_hosts = True
     env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
     env.colorize_errors = True
-    bws = [0.1, 100, 500, 1000, 2000, 3000, 5000, 8000]
-    for target_bandwidth_Mbps in bws:
+    # bws = [0.1, 100, 500, 1000, 2000, 3000, 5000, 8000]
+    # for target_bandwidth_Mbps in bws:
         # Start iperf on server
-        logger.info("Starting iperf server")
-        run("killall iperf3", warn_only=True)
-        run("iperf3 -s -p {port} -D".format(port=IPERF_PORT))
-        logger.info("Iperf started")
+        # logger.info("Starting iperf server")
+        # run("killall iperf3", warn_only=True)
+        # run("iperf3 -s -p {port} -D".format(port=IPERF_PORT))
+        # logger.info("Iperf started")
 
-        if target_bandwidth_Mbps > 0:
-            iperf_cmd = "iperf3 -c {address} -t 3000 -p {port} -P 1 -b {bw}M".format(
-                address=CLIPPER_ADDRESS, port=IPERF_PORT, bw=target_bandwidth_Mbps)
-            iperf_cmd_list = iperf_cmd.split(" ")
-            iperf_proc = subprocess.Popen(iperf_cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            time.sleep(5)
-            if iperf_proc.poll() is not None:
-                logger.error("iperf exited with code {code}.\nSTDERR: {stderr}".format(
-                    code=iperf_proc.returncode, stderr=iperf_proc.stderr.read().strip()))
-                raise
+        # if target_bandwidth_Mbps > 0:
+        #     iperf_cmd = "iperf3 -c {address} -t 3000 -p {port} -P 1 -b {bw}M".format(
+        #         address=CLIPPER_ADDRESS, port=IPERF_PORT, bw=target_bandwidth_Mbps)
+        #     iperf_cmd_list = iperf_cmd.split(" ")
+        #     iperf_proc = subprocess.Popen(iperf_cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        #     time.sleep(5)
+        #     if iperf_proc.poll() is not None:
+        #         logger.error("iperf exited with code {code}.\nSTDERR: {stderr}".format(
+        #             code=iperf_proc.returncode, stderr=iperf_proc.stderr.read().strip()))
+        #         raise
 
-        try:
+    try:
 
-            model = INCEPTION_FEATS
-            gpu = 3
-            batch_size = 16
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=1,
-                allocated_cpus=[13],
-                allocated_gpus=[3]
-            )
+        model = TF_KERNEL_SVM
+        # gpu = 3
+        batch_size = 8
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=[13],
+            allocated_gpus=None
+        )
 
-            input_size = get_input_size(config)
-            throughput_results, latency_results = run_profiler(
-                config, 2000, "../../release/src/inferline_client/profiler",
-                input_size,
-                "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
-            throughput_results.background_bandwidth = target_bandwidth_Mbps
-            latency_results.background_bandwidth = target_bandwidth_Mbps
-            fname = "varied-bw-v100-remote-{model}-batch-{batch}-bw-{bw}".format(
-                model=model, batch=batch_size, gpu=gpu, bw=target_bandwidth_Mbps)
-            results_dir = "varied-bandwidth-{model}-SMP-gpu-{gpu}-remote".format(model=model, gpu=gpu)
-            driver_utils.save_results_cpp_client(
-                [config, ],
-                throughput_results,
-                latency_results,
-                results_dir,
-                prefix=fname)
-        except Exception as e:
-            logger.exception(e)
-        finally:
-            if target_bandwidth_Mbps > 0:
-                iperf_proc.terminate()
+        input_size = get_input_size(config)
+        throughput_results, latency_results = run_profiler(
+            config, 2000, "../../release/src/inferline_client/profiler",
+            input_size,
+            # "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
+            "4,5,6,7,20,21,22,23")
+        # throughput_results.background_bandwidth = target_bandwidth_Mbps
+        # latency_results.background_bandwidth = target_bandwidth_Mbps
+        # fname = "varied-bw-v100-remote-{model}-batch-{batch}-bw-{bw}".format(
+        #     model=model, batch=batch_size, gpu=gpu, bw=target_bandwidth_Mbps)
+        fname = "v100-local-{model}-batch-{batch}".format(
+            model=model, batch=batch_size)
+        results_dir = "{model}-SMP-local".format(model=model)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            throughput_results,
+            latency_results,
+            results_dir,
+            prefix=fname)
+    except Exception as e:
+        logger.exception(e)
+        raise e
+    # finally:
+    #     if target_bandwidth_Mbps > 0:
+    #         iperf_proc.terminate()
 
     sys.exit(0)
