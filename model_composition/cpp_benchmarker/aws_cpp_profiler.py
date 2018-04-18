@@ -371,6 +371,8 @@ def print_stats(client_metrics, clipper_metrics):
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"] = \
         get_profiler_stats(client_metrics)
+
+    results_dict["clipper_mean_lats"], results_dict["clipper_p99_lats"] = get_clipper_latencies(clipper_metrics)
     # logger.info(("\nClient thrus: {client_thrus}, clipper thrus: {clipper_thrus} "
     #              "\nclient counts: {client_counts}, clipper counts: {clipper_counts}, "
     #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
@@ -378,7 +380,9 @@ def print_stats(client_metrics, clipper_metrics):
     #              "batch sizes: {batch_sizes}\n").format(**results_dict))
     logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
                  "mean lat: {client_mean_lats} "
-                 "\nbatches: {batch_sizes}, queues: {queue_sizes}\n").format(**results_dict))
+                 "\nbatches: {batch_sizes}, queues: {queue_sizes}"
+                 "\nclipper p99 lats: {clipper_p99_lats}"
+                 "\nclipper mean lats: {clipper_mean_lats}\n").format(**results_dict))
     return results_dict
 
 
@@ -513,7 +517,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
     init_throughput = 2000
     run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 10, "throughput", "constant")
+    throughput_results = run(init_throughput, 1000, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
