@@ -28,7 +28,8 @@ TF_RESNET = "tf-resnet-feats"
 # REMOTE_ADDR = "172.10.0.90"
 ALL_REMOTE_ADDRS = []
 
-RESNET_CLIPPER_ADDR = "172.10.0.90"
+# RESNET_CLIPPER_ADDR = "172.10.0.90"
+RESNET_CLIPPER_ADDR = "localhost"
 INCEPTION_CLIPPER_ADDR = RESNET_CLIPPER_ADDR
 # INCEPTION_CLIPPER_ADDR = "172.30.3.156"
 
@@ -536,7 +537,7 @@ def run_experiment_for_config(config):
     results_dir = "image_driver_one_slo_{slo}_cv_{cv}-DEBUG".format(slo=slo, cv=cv)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "REMOTE_LOWER_LAMBDA_aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
+    results_fname = "LOCAL_LOWER_LAMBDA_more_container_lineage_aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
 
     # if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
