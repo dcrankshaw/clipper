@@ -531,23 +531,12 @@ def run_experiment_for_config(config):
                 node_configs.append(node)
                 addr_config_map[INCEPTION_CLIPPER_ADDR].append(node)
 
-
-        # node_configs = [
-        #                 for c in config["node_configs"].values()]
-        # addr_config_map = {RESNET_CLIPPER_ADDR: [], INCEPTION_CLIPPER_ADDR: []}
-        # for n in node_configs:
-        #     if n.name in [TF_RESNET, TF_KERNEL_SVM]:
-        #         addr_config_map[RESNET_CLIPPER_ADDR].append(n)
-        #     elif n.name in [INCEPTION_FEATS, TF_LOG_REG]:
-        #         addr_config_map[INCEPTION_CLIPPER_ADDR].append(n)
-        # print(addr_config_map)
-
-
     except BenchmarkConfigurationException as e:
         logger.error("Error provisioning for requested configuration. Skipping.\n"
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
         return None
     lam = config["lam"]
+    lam = 500
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]

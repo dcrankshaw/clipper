@@ -24,7 +24,7 @@ static const std::string TF_KERNEL_SVM = "tf-kernel-svm";
 static const std::string INCEPTION_FEATS = "inception";
 static const std::string TF_LOG_REG = "tf-log-reg";
 
-void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
              ClientMetrics metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
@@ -140,7 +140,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     }
   };
 
-  auto inception_callback = [&clients, metrics, start_time, log_reg_callback, &lineage_file_map,
+  auto inception_callback = [clients, metrics, start_time, log_reg_callback, &lineage_file_map,
                              &lineage_mutex_map](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -151,7 +151,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    clients[INCEPTION_FEATS].send_request(
+    clients[INCEPTION_FEATS]->send_request(
         TF_LOG_REG, output, [cur_time, log_reg_callback](ClientFeatureVector output,
                                                          std::shared_ptr<QueryLineage> lineage) {
           log_reg_callback(output, lineage, cur_time);
@@ -187,7 +187,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     query_lineage_file << "}" << std::endl;
   };
 
-  auto resnet_callback = [&clients, metrics, start_time, ksvm_callback, &lineage_file_map,
+  auto resnet_callback = [clients, metrics, start_time, ksvm_callback, &lineage_file_map,
                           &lineage_mutex_map](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -198,7 +198,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    clients.at(TF_RESNET).send_request(
+    clients[TF_RESNET]->send_request(
         TF_KERNEL_SVM, output, [cur_time, ksvm_callback](ClientFeatureVector output,
                                                          std::shared_ptr<QueryLineage> lineage) {
           ksvm_callback(output, lineage, cur_time);
@@ -233,8 +233,8 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     query_lineage_file << "}" << std::endl;
   };
 
-  clients[INCEPTION_FEATS].send_request(INCEPTION_FEATS, input, inception_callback);
-  clients[TF_RESNET].send_request(TF_RESNET, resnet_input, resnet_callback);
+  clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, inception_callback);
+  clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, resnet_callback);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -309,7 +309,7 @@ int main(int argc, char* argv[]) {
   }
 
   auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
-      std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+      std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
     predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
   };

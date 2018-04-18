@@ -12,7 +12,7 @@ void spin_sleep(int duration_micros);
 
 class Driver {
  public:
-  Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient>&,
+  Driver(std::function<void(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>,
                             ClientFeatureVector, std::atomic<int>&)>
              predict_func,
          std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
@@ -24,7 +24,7 @@ class Driver {
 
  private:
   void monitor_results();
-  std::function<void(std::unordered_map<std::string, FrontendRPCClient>&, ClientFeatureVector,
+  std::function<void(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>, ClientFeatureVector,
                      std::atomic<int>&)>
       predict_func_;
   std::vector<ClientFeatureVector> inputs_;
@@ -34,7 +34,7 @@ class Driver {
   int num_trials_;
   std::string log_file_;
   // Map from model name to client
-  std::unordered_map<std::string, FrontendRPCClient> clients_;
+  std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients_;
   std::atomic_bool done_;
   std::atomic<int> prediction_counter_;
   // Map from model name to address

@@ -19,7 +19,7 @@ using namespace clipper;
 constexpr int SEND_PORT = 4456;
 constexpr int RECV_PORT = 4455;
 
-Driver::Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient> &,
+Driver::Driver(std::function<void(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>,
                                   ClientFeatureVector, std::atomic<int> &)>
                    predict_func,
                std::vector<ClientFeatureVector> inputs, float target_throughput,
@@ -39,19 +39,22 @@ Driver::Driver(std::function<void(std::unordered_map<std::string, FrontendRPCCli
       batch_size_(batch_size),
       delay_ms_(delay_ms),
       collect_clipper_metrics_{collect_clipper_metrics} {
+  // first create a map from address to client
+  std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> address_client_map;
   for (auto address : addresses_) {
-    auto addr_find = clients_.find(address.first);
-    if (addr_find == clients_.end()) {
-      // clients_.emplace(std::string(address.first), 2);
-      clients_.emplace(std::piecewise_construct, std::forward_as_tuple(address.first),
-          std::forward_as_tuple(2));
-      clients_[address.first].start(address.second, SEND_PORT, RECV_PORT);
-      // FrontendRPCClient client(3);
-      // client.start(address.second, SEND_PORT, RECV_PORT);
-      // clients_.emplace(address.first, std::move(client));
+    auto addr_find = address_client_map.find(address.second);
+    if (addr_find == address_client_map.end()) {
+      address_client_map.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
+      address_client_map[address.second]->start(address.second, SEND_PORT, RECV_PORT);
     }
   }
-  std::cout << "Starting " << std::to_string(clients_.size()) << " ZMQ clients." << std::endl;
+  std::cout << "Starting " << std::to_string(address_client_map.size()) << " ZMQ clients." << std::endl;
+  
+  // now create a map from model name to client so models can just look up what client has
+  // been assigned to them
+  for (auto address : addresses_) {
+    clients_.emplace(address.first, address_client_map[address.second]);
+  }
 }
 
 void spin_sleep(long duration_micros) {
@@ -126,7 +129,7 @@ void Driver::start() {
     }
   }
   for (auto &client : clients_) {
-    client.second.stop();
+    client.second->stop();
   }
   monitor_thread.join();
 }

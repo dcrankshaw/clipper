@@ -49,11 +49,11 @@ class ProfilerMetrics {
   std::shared_ptr<clipper::metrics::Counter> num_predictions_;
 };
 
-void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector input,
+void predict(std::shared_ptr<FrontendRPCClient> client, std::string name, ClientFeatureVector input,
              ProfilerMetrics metrics, std::atomic<int>& prediction_counter,
              std::ofstream& query_lineage_file, std::mutex& query_file_mutex) {
   auto start_time = std::chrono::system_clock::now();
-  client.send_request(name, input, [metrics, &prediction_counter, start_time, &query_lineage_file,
+  client->send_request(name, input, [metrics, &prediction_counter, start_time, &query_lineage_file,
                                     &query_file_mutex](ClientFeatureVector output,
                                                        std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -94,60 +94,7 @@ void predict(FrontendRPCClient& client, std::string name, ClientFeatureVector in
   });
 }
 
-// void spin_sleep(int duration_micros) {
-//   auto start_time = std::chrono::system_clock::now();
-//   long cur_delay_micros = 0;
-//   while (cur_delay_micros < duration_micros) {
-//     auto cur_delay = std::chrono::system_clock::now() - start_time;
-//     cur_delay_micros =
-//         std::chrono::duration_cast<std::chrono::microseconds>(cur_delay).count();
-//   }
-// }
-//
-// void timer_test(int sleep_time, int num_trials) {
-//
-//   struct timespec req = {0};
-//   req.tv_sec = 0;
-//   req.tv_nsec = sleep_time * 1000;
-//   std::vector<long> times;
-//   for (size_t i = 0; i < num_trials; ++i) {
-//     auto start_time = std::chrono::system_clock::now();
-//     // nanosleep(&req, (struct timespec *)NULL);
-//     spin_sleep(sleep_time);
-//     auto latency = std::chrono::system_clock::now() - start_time;
-//     long latency_micros =
-//       std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-//     times.push_back(latency_micros);
-//   }
-//   long sum = 0;
-//   for (int i = 0; i < times.size(); ++i) {
-//     sum += times[i];
-//   }
-//   double mean = ((double) sum) / ((double) times.size());
-//   double sum_of_diffs = 0.0;
-//   for (int i = 0; i < times.size(); ++i) {
-//     double diff = ((double) times[i]) - mean;
-//     sum_of_diffs += diff * diff;
-//   }
-//   double stdev = std::sqrt(1.0 / ((double) times.size() - 1.0) *
-//   sum_of_diffs);
-//   std::cout << "Sleep time: " << std::to_string(sleep_time) << ": " <<
-//   std::to_string(mean)
-//     << " +- " << std::to_string(stdev) << ". Diff: " << std::to_string(mean -
-//     sleep_time) << std::endl;
-//
-// }
-
 int main(int argc, char* argv[]) {
-  // size_t num_trials = 2000;
-  // std::vector<int> sleep_times = {1000, 2000, 3000, 4000, 5000, 6000, 7000,
-  // 8000, 9000, 10000, 15000,
-  //   20000, 30000, 40000, 50000, 75000, 100000};
-  // for (int i = 0; i < sleep_times.size(); ++i) {
-  //   timer_test(sleep_times[i], num_trials);
-  // }
-  // return 0;
-  // ///////////////////////////////////////////////////////////
 
   cxxopts::Options options("profiler", "InferLine profiler");
   // clang-format off
@@ -207,7 +154,7 @@ int main(int argc, char* argv[]) {
   query_lineage_file.open(options["log_file"].as<std::string>() + "-query_lineage.txt");
 
   auto predict_func = [metrics, model_name, &query_lineage_file, &query_file_mutex](
-      std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+      std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
     predict(clients[model_name], model_name, input, metrics, prediction_counter,
         query_lineage_file, query_file_mutex);

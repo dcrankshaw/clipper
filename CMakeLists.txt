@@ -38,7 +38,7 @@ set_property(TARGET boost PROPERTY
 #         INTERFACE_LINK_LIBRARIES ${WANGLE_LIBRARY})
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wextra -Werror -Wno-deprecated-declarations -Wno-unsupported-friend")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-compare")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-deprecated-declarations -Wno-unused-parameter -Wno-sign-compare -fpermissive")
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wno-unsupported-friend -Wno-gnu-anonymous-struct -Wno-nested-anon-types")
 endif()

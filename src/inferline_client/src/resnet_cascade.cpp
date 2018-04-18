@@ -23,7 +23,7 @@ static const std::string RES50 = "resnet50";
 static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
 
-void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
              ClientMetrics metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
@@ -40,7 +40,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     prediction_counter += 1;
   };
 
-  auto res152_callback = [metrics, &clients, completion_callback, &lineage_file_map,
+  auto res152_callback = [metrics, completion_callback, &lineage_file_map,
                           &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -84,7 +84,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     query_lineage_file << "}" << std::endl;
   };
 
-  auto res50_callback = [input, metrics, &clients, res152_callback, completion_callback,
+  auto res50_callback = [input, metrics, clients, res152_callback, completion_callback,
                          &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -99,7 +99,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
 
     float idk = ((float)rand()) / (float)RAND_MAX;
     if (idk > 0.4633) {
-      clients[RES152].send_request(
+      clients[RES152]->send_request(
           RES152, input, [cur_time, res152_callback](ClientFeatureVector output,
                                                      std::shared_ptr<QueryLineage> lineage) {
             res152_callback(output, lineage, cur_time);
@@ -137,7 +137,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     query_lineage_file << "}" << std::endl;
   };
 
-  auto alexnet_callback = [input, metrics, &clients, res50_callback, completion_callback,
+  auto alexnet_callback = [input, metrics, clients, res50_callback, completion_callback,
                            &lineage_file_map, &lineage_mutex_map, start_time](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -151,7 +151,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
 
     float idk = ((float)rand()) / (float)RAND_MAX;
     if (idk > 0.192) {
-      clients[RES50].send_request(
+      clients[RES50]->send_request(
           RES50, input, [cur_time, res50_callback](ClientFeatureVector output,
                                                    std::shared_ptr<QueryLineage> lineage) {
             res50_callback(output, lineage, cur_time);
@@ -189,7 +189,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, Client
     query_lineage_file << "}" << std::endl;
   };
 
-  clients[ALEXNET].send_request(ALEXNET, input, alexnet_callback);
+  clients[ALEXNET]->send_request(ALEXNET, input, alexnet_callback);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -267,7 +267,7 @@ int main(int argc, char* argv[]) {
   }
 
   auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
-      std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+      std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
     predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
   };
