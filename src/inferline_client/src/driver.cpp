@@ -20,10 +20,12 @@ constexpr int SEND_PORT = 4456;
 constexpr int RECV_PORT = 4455;
 
 Driver::Driver(
-    std::function<void(FrontendRPCClient &, FrontendRPCClient &, ClientFeatureVector, std::atomic<int> &)> predict_func,
+    std::function<void(std::unordered_map<std::string, FrontendRPCClient> &, ClientFeatureVector,
+      std::atomic<int> &)> predict_func,
     std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
-    int trial_length, int num_trials, std::string log_file, std::string clipper_address_resnet, std::string clipper_address_inception,
-    int batch_size, std::vector<float> delay_ms, bool get_clipper_metrics)
+    int trial_length, int num_trials, std::string log_file,
+    std::unordered_map<std::string, std::string> addresses,
+    int batch_size, std::vector<float> delay_ms, bool collect_clipper_metrics)
     : predict_func_(predict_func),
       inputs_(inputs),
       target_throughput_(target_throughput),
@@ -31,23 +33,21 @@ Driver::Driver(
       trial_length_(trial_length),
       num_trials_(num_trials),
       log_file_(log_file),
-      resnet_client_{4},
-      inception_client_{4},
       done_(false),
       prediction_counter_(0),
-      clipper_address_resnet_(clipper_address_resnet),
-      clipper_address_inception_(clipper_address_inception),
+      addresses_(addresses),
       batch_size_(batch_size),
       delay_ms_(delay_ms),
-      get_clipper_metrics_(get_clipper_metrics) {
-  resnet_client_.start(clipper_address_resnet, SEND_PORT, RECV_PORT);
-  if (clipper_address_resnet == clipper_address_inception) {
-    std::cout << "Using same client for resnet and inception" << std::endl;
-    different_clients_ = false;
-  } else {
-    inception_client_.start(clipper_address_inception, SEND_PORT, RECV_PORT);
-    different_clients_ = true;
+      collect_clipper_metrics_{collect_clipper_metrics} {
+  for (address : addresses_) {
+    auto addr_find = clients_.find(address.first);
+    if (addr_find == clients_.end()) {
+      FrontendRPCClient client(2);
+      client.start(address.second, SEND_PORT, RECV_PORT);
+      clients_.emplace(address.first, std::move(client));
+    }
   }
+  std::cout << "Starting " << std::tostring(clients_.size()) << " ZMQ clients." << std::endl;
 }
 
 void spin_sleep(long duration_micros) {
@@ -71,12 +71,7 @@ void Driver::start() {
               << std::endl;
     int cur_idx = 0;
 
-    // Send a query to flush the system
-    if (different_clients_) {
-      predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
-    } else {
-      predict_func_(resnet_client_, resnet_client_, inputs_[cur_idx], prediction_counter_);
-    }
+    predict_func_(clients_, inputs_[cur_idx], prediction_counter_);
     cur_idx += 1;
     spin_sleep(1000 * 1000L);
 
@@ -85,11 +80,7 @@ void Driver::start() {
       int cur_pred_counter = prediction_counter_;
       // Send a batch
       for (int j = 0; j < batch_size_; ++j) {
-        if (different_clients_) {
-          predict_func_(resnet_client_, inception_client_, inputs_[cur_idx], prediction_counter_);
-        } else {
-          predict_func_(resnet_client_, resnet_client_, inputs_[cur_idx], prediction_counter_);
-        }
+        predict_func_(clients_, inputs_[cur_idx], prediction_counter_);
         cur_idx += 1;
         if (cur_idx >= inputs_.size()) {
           cur_idx = 0;
@@ -110,11 +101,7 @@ void Driver::start() {
         if (done_) {
           break;
         }
-        if (different_clients_) {
-          predict_func_(resnet_client_, inception_client_, f, prediction_counter_);
-        } else {
-          predict_func_(resnet_client_, resnet_client_, f, prediction_counter_);
-        }
+        predict_func_(clients_, f, prediction_counter_);
 
         if (distribution_ == "poisson") {
           float delay_secs = exp_dist(gen);
@@ -134,14 +121,13 @@ void Driver::start() {
       }
     }
   }
-  resnet_client_.stop();
-  if (different_clients_) {
-    inception_client_.stop();
+  for (client : clients_) {
+    client.second.stop();
   }
   monitor_thread.join();
 }
 
-void get_clipper_metrics(std::ofstream& clipper_metrics_file, std::string clipper_address) {
+void fetch_clipper_metrics(std::ofstream& clipper_metrics_file, std::string clipper_address) {
       std::string address = "http://" + clipper_address + ":" + std::to_string(1337) + "/metrics";
       std::string cmd_str = "curl -s -S " + address + " > curl_out.txt";
       std::system(cmd_str.c_str());
@@ -159,17 +145,11 @@ void Driver::monitor_results() {
   std::ofstream client_metrics_file;
   client_metrics_file.open(log_file_ + "-client_metrics.json");
   client_metrics_file << "[" << std::endl;
-
-  std::ofstream resnet_clipper_metrics_file;
-  if (get_clipper_metrics_) {
-    resnet_clipper_metrics_file.open(log_file_ + "-clipper_metrics_resnet.json");
-    resnet_clipper_metrics_file << "[" << std::endl;
-  }
-  std::ofstream incept_clipper_metrics_file;
-  if (get_clipper_metrics_ && different_clients_) {
-    incept_clipper_metrics_file.open(log_file_ + "-clipper_metrics_incept.json");
-    incept_clipper_metrics_file << "[" << std::endl;
-
+  std::unorderd_map<std::string, std::ofstream> clipper_metrics_map;
+  for (addr : addresses_) {
+    std::ofstream cur_metrics_file(log_file + "-clipper_metrics_" + addr.first + ".json");
+    cur_metrics_file << "{" << std::endl;
+    clipper_metrics_map.emplace(addr, std::move(cur_metrics_file);
   }
 
   metrics::MetricsRegistry &registry = metrics::MetricsRegistry::get_metrics();
@@ -185,10 +165,9 @@ void Driver::monitor_results() {
       client_metrics_file << metrics_report;
       client_metrics_file << "," << std::endl;
 
-      if (get_clipper_metrics_) {
-        get_clipper_metrics(resnet_clipper_metrics_file, clipper_address_resnet_);
-        if (different_clients_) {
-          get_clipper_metrics(incept_clipper_metrics_file, clipper_address_inception_);
+      if (collect_clipper_metrics_) {
+        for (addr : clipper_metrics_map) {
+          fetch_clipper_metrics(addr.second, addr.first);
         }
       }
     }
@@ -203,10 +182,9 @@ void Driver::monitor_results() {
   // client_metrics_file << "]";
   client_metrics_file.close();
   // clipper_metrics_file << "]";
-  if (get_clipper_metrics_) {
-    resnet_clipper_metrics_file.close();
-    if (different_clients_) {
-      incept_clipper_metrics_file.close();
+  if (collect_clipper_metrics_) {
+    for (addr : clipper_metrics_map) {
+      addr.second.close();
     }
   }
   return;

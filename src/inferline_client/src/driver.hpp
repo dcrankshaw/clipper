@@ -12,20 +12,19 @@ void spin_sleep(int duration_micros);
 
 class Driver {
  public:
-  Driver(std::function<void(FrontendRPCClient&, FrontendRPCClient&, ClientFeatureVector,
+  Driver(std::function<void(std::unordered_map<std::string, FrontendRPCClient>&, ClientFeatureVector,
                             std::atomic<int>&)>
              predict_func,
          std::vector<ClientFeatureVector> inputs, float target_throughput,
          std::string distribution, int trial_length, int num_trials,
-         std::string log_file, std::string clipper_address_resnet,
-         std::string clipper_address_inception, int batch_size,
+         std::string log_file, std::unordered_map<std::string, std::string> addresses, int batch_size,
          std::vector<float> delay_ms, bool collect_clipper_metrics);
 
   void start();
 
  private:
   void monitor_results();
-  std::function<void(FrontendRPCClient&, FrontendRPCClient&, ClientFeatureVector,
+  std::function<void(std::map<std::string, FrontendRPCClient>&, ClientFeatureVector,
                      std::atomic<int>&)>
       predict_func_;
   std::vector<ClientFeatureVector> inputs_;
@@ -34,16 +33,15 @@ class Driver {
   int trial_length_;
   int num_trials_;
   std::string log_file_;
-  FrontendRPCClient resnet_client_;
-  FrontendRPCClient inception_client_;
-  bool different_clients_;
+  // Map from model name to client
+  std::unordered_map<std::string, FrontendRPCClient> clients_;
   std::atomic_bool done_;
   std::atomic<int> prediction_counter_;
-  std::string clipper_address_resnet_;
-  std::string clipper_address_inception_;
+  // Map from model name to address
+  std::unordered_map<std::string, std::string> addresses_;
   int batch_size_;
   std::vector<float> delay_ms_;
-  bool get_clipper_metrics_;
+  bool collect_clipper_metrics_;
 };
 
 }  // namespace zmq_client
