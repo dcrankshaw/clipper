@@ -33,7 +33,7 @@ add_executable(resnet_cascade
         src/driver.cpp
         src/zmq_client.cpp)
 
-target_link_libraries(image_driver_one
+target_link_libraries(resnet_cascade
         clipper
         boost
         cxxopts
