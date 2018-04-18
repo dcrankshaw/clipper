@@ -11,9 +11,9 @@
 #include <clipper/clock.hpp>
 #include <clipper/metrics.hpp>
 
+#include "client_metrics.hpp"
 #include "driver.hpp"
 #include "zmq_client.hpp"
-#include "client_metrics.hpp"
 
 using namespace clipper;
 using namespace zmq_client;
@@ -24,10 +24,8 @@ static const std::string TF_KERNEL_SVM = "tf-kernel-svm";
 static const std::string INCEPTION_FEATS = "inception";
 static const std::string TF_LOG_REG = "tf-log-reg";
 
-
-void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
-    ClientFeatureVector input, ClientMetrics metrics,
-             std::atomic<int>& prediction_counter,
+void predict(std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
+             ClientMetrics metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
@@ -40,15 +38,15 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_["e2e"]->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_["e2e"]->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_["e2e"]->mark(1);
-    metrics.num_predictions_["e2e"]->increment(1);
+    metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find("e2e")->second->mark(1);
+    metrics.num_predictions_.find("e2e")->second->increment(1);
     prediction_counter += 1;
   };
 
-  auto ksvm_callback = [metrics, branches_completed, completion_callback,
-                        &lineage_file_map, &lineage_mutex_map](
+  auto ksvm_callback = [metrics, branches_completed, completion_callback, &lineage_file_map,
+                        &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
@@ -61,10 +59,11 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_[TF_KERNEL_SVM]->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_[TF_KERNEL_SVM]->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_[TF_KERNEL_SVM]->mark(1);
-    metrics.num_predictions_[TF_KERNEL_SVM]->increment(1);
+    metrics.latencies_.find(TF_KERNEL_SVM)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(TF_KERNEL_SVM)
+        ->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find(TF_KERNEL_SVM)->second->mark(1);
+    metrics.num_predictions_.find(TF_KERNEL_SVM)->second->increment(1);
 
     lineage->add_timestamp(
         "driver::send",
@@ -94,8 +93,8 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     }
   };
 
-  auto log_reg_callback = [metrics, branches_completed, &completion_callback,
-                           &lineage_file_map, &lineage_mutex_map](
+  auto log_reg_callback = [metrics, branches_completed, &completion_callback, &lineage_file_map,
+                           &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
@@ -108,10 +107,10 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_[TF_LOG_REG]->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_[TF_LOG_REG]->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_[TF_LOG_REG]->mark(1);
-    metrics.num_predictions_[TF_LOG_REG]->increment(1);
+    metrics.latencies_.find(TF_LOG_REG)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(TF_LOG_REG)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find(TF_LOG_REG)->second->mark(1);
+    metrics.num_predictions_.find(TF_LOG_REG)->second->increment(1);
 
     lineage->add_timestamp(
         "driver::send",
@@ -141,7 +140,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     }
   };
 
-  auto inception_callback = [clients, metrics, start_time, log_reg_callback, &lineage_file_map,
+  auto inception_callback = [&clients, metrics, start_time, log_reg_callback, &lineage_file_map,
                              &lineage_mutex_map](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -152,17 +151,18 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    clients[INCEPTION_FEATS].send_request(TF_LOG_REG, output,
-                        [cur_time, log_reg_callback](ClientFeatureVector output,
-                                                     std::shared_ptr<QueryLineage> lineage) {
-                          log_reg_callback(output, lineage, cur_time);
-                        });
+    clients[INCEPTION_FEATS].send_request(
+        TF_LOG_REG, output, [cur_time, log_reg_callback](ClientFeatureVector output,
+                                                         std::shared_ptr<QueryLineage> lineage) {
+          log_reg_callback(output, lineage, cur_time);
+        });
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_[INCEPTION_FEATS]->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_[INCEPTION_FEATS]->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_[INCEPTION_FEATS]->mark(1);
-    metrics.num_predictions_[INCEPTION_FEATS]->increment(1);
+    metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(INCEPTION_FEATS)
+        ->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find(INCEPTION_FEATS)->second->mark(1);
+    metrics.num_predictions_.find(INCEPTION_FEATS)->second->increment(1);
 
     lineage->add_timestamp(
         "driver::send",
@@ -187,7 +187,7 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
     query_lineage_file << "}" << std::endl;
   };
 
-  auto resnet_callback = [clients, metrics, start_time, ksvm_callback, &lineage_file_map,
+  auto resnet_callback = [&clients, metrics, start_time, ksvm_callback, &lineage_file_map,
                           &lineage_mutex_map](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -198,17 +198,17 @@ void predict(std::unordered_map<std::string, FrontendRPCClient>& clients,
       }
     }
     auto cur_time = std::chrono::system_clock::now();
-    clients[TF_RESNET].send_request(TF_KERNEL_SVM, output,
-                        [cur_time, ksvm_callback](ClientFeatureVector output,
-                                                  std::shared_ptr<QueryLineage> lineage) {
-                          ksvm_callback(output, lineage, cur_time);
-                        });
+    clients.at(TF_RESNET).send_request(
+        TF_KERNEL_SVM, output, [cur_time, ksvm_callback](ClientFeatureVector output,
+                                                         std::shared_ptr<QueryLineage> lineage) {
+          ksvm_callback(output, lineage, cur_time);
+        });
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_[TF_RESNET]->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_[TF_RESNET]->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_[TF_RESNET]->mark(1);
-    metrics.num_predictions_[TF_RESNET]->increment(1);
+    metrics.latencies_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find(TF_RESNET)->second->mark(1);
+    metrics.num_predictions_.find(TF_RESNET)->second->increment(1);
 
     lineage->add_timestamp(
         "driver::send",
@@ -282,8 +282,8 @@ int main(int argc, char* argv[]) {
   // clang-format on
   options.parse(argc, argv);
   std::string distribution = options["request_distribution"].as<std::string>();
-  if (!(distribution == "poisson" || distribution == "constant"
-        || distribution == "batch" || distribution == "file")) {
+  if (!(distribution == "poisson" || distribution == "constant" || distribution == "batch" ||
+        distribution == "file")) {
     std::cerr << "Invalid distribution: " << distribution << std::endl;
     return 1;
   }
@@ -302,7 +302,7 @@ int main(int argc, char* argv[]) {
   for (auto model : models) {
     lineage_file_map.emplace(model, std::ofstream{});
     lineage_file_map[model].open(options["log_file"].as<std::string>() + "-" + model +
-                            "-query_lineage.txt");
+                                 "-query_lineage.txt");
     // lineage_file_map_refs.emplace(model, lineage_file_map[model]);
     lineage_mutex_map.emplace(std::piecewise_construct, std::make_tuple(model), std::make_tuple());
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
@@ -311,8 +311,7 @@ int main(int argc, char* argv[]) {
   auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
       std::unordered_map<std::string, FrontendRPCClient>& clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
-    predict(clients, input, metrics, prediction_counter,
-        lineage_file_map, lineage_mutex_map);
+    predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
   };
   std::vector<float> delays_ms;
   if (distribution == "file") {
@@ -322,16 +321,16 @@ int main(int argc, char* argv[]) {
       delays_ms.push_back(std::stof(line));
     }
     delay_file_stream.close();
-    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines" << std::endl;
+    std::cout << "Loaded delays file: " << std::to_string(delays_ms.size()) << " lines"
+              << std::endl;
   }
-  std::map<std::string, std::string> addresses = {
-    {TF_RESNET, options["clipper_address_resnet"].as<std::string>()},
-    {INCEPTION_FEATS, options["clipper_address_inception"].as<std::string>()}};
+  std::unordered_map<std::string, std::string> addresses;
+  addresses.emplace(TF_RESNET, options["clipper_address_resnet"].as<std::string>());
+  addresses.emplace(INCEPTION_FEATS, options["clipper_address_inception"].as<std::string>());
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
-                options["log_file"].as<std::string>(),
-                addresses,
-                -1, delays_ms, options["get_clipper_metrics"].as<bool>());
+                options["log_file"].as<std::string>(), addresses, -1, delays_ms,
+                options["get_clipper_metrics"].as<bool>());
   std::cout << "Starting driver" << std::endl;
   driver.start();
   std::cout << "Driver completed" << std::endl;
