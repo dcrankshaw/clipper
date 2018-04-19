@@ -9,6 +9,7 @@ from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
 import argparse
+import hashlib
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -308,6 +309,15 @@ def load_lineage(lineage_path):
 #     with open(deltas_path, "r") as f:
 #         deltas = np.array([float(l.strip()) for l in f]).flatten()
 
+def get_arrival_proc_file(lam, cv):
+    if cv == 1:
+        arrival_file_name = "{lam}.deltas".format(lam=lam)
+    else:
+        arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
+    arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
+                                        "cached_arrival_processes/{f}").format(f=arrival_file_name))
+    return arrival_delay_file
+
 def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients):
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
@@ -329,12 +339,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
         for cl in cls:
             cl.drain_queues()
         time.sleep(10)
-        if cv == 1:
-            arrival_file_name = "{lam}.deltas".format(lam=lam)
-        else:
-            arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
-        arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
-                                          "cached_arrival_processes/{f}").format(f=arrival_file_name))
+        arrival_delay_file = get_arrival_proc_file(lam, cv)
         try:
             procs = {}
             for client_num in range(num_clients):
@@ -441,6 +446,12 @@ class BenchmarkConfigurationException(Exception):
     pass
 
 
+def hash_file(fname):
+    with open(fname, "rb") as f:
+        fbytes = f.read()
+        return hashlib.sha256(fbytes).hexdigest()
+
+
 def run_experiment_for_config(config):
     global INCEPTION_CLIPPER_ADDR
     # res_cpus = range(0, 16)
@@ -541,6 +552,8 @@ def run_experiment_for_config(config):
     slo = config["slo"]
     cost = config["cost"]
     utilization = config["utilization"]
+    config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
+    config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
     results_dir = "image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
