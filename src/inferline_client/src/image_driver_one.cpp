@@ -24,8 +24,10 @@ static const std::string TF_KERNEL_SVM = "tf-kernel-svm";
 static const std::string INCEPTION_FEATS = "inception";
 static const std::string TF_LOG_REG = "tf-log-reg";
 
+static const std::string E2E = "e2e";
+
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
-             ClientMetrics metrics, std::atomic<int>& prediction_counter,
+             ClientMetrics &metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
@@ -34,18 +36,28 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
                                    resnet_input_length * sizeof(float), DataType::Floats);
 
   std::shared_ptr<std::atomic_int> branches_completed = std::make_shared<std::atomic_int>(0);
-  auto completion_callback = [metrics, &prediction_counter, start_time]() {
+  auto completion_callback = [&metrics, &prediction_counter, start_time]() {
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+    auto search = metrics.latencies_.find("e2e");
+    if (search != metrics.latencies_.end()) {
+      metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+    } else {
+      std::cout << "PRINTING ELEMENTS: ";
+      for (auto l : metrics.latencies_) {
+        std::cout << l.first << ", ";
+      }
+      std::cout << std::endl;
+      throw std::runtime_error("couldn't find e2e latencies");
+    }
     metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
     metrics.throughputs_.find("e2e")->second->mark(1);
     metrics.num_predictions_.find("e2e")->second->increment(1);
     prediction_counter += 1;
   };
 
-  auto ksvm_callback = [metrics, branches_completed, completion_callback, &lineage_file_map,
+  auto ksvm_callback = [&metrics, branches_completed, completion_callback, &lineage_file_map,
                         &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -93,7 +105,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
   };
 
-  auto log_reg_callback = [metrics, branches_completed, &completion_callback, &lineage_file_map,
+  auto log_reg_callback = [&metrics, branches_completed, &completion_callback, &lineage_file_map,
                            &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -140,7 +152,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
   };
 
-  auto inception_callback = [clients, metrics, start_time, log_reg_callback, &lineage_file_map,
+  auto inception_callback = [clients, &metrics, start_time, log_reg_callback, &lineage_file_map,
                              &lineage_mutex_map](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -187,7 +199,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  auto resnet_callback = [clients, metrics, start_time, ksvm_callback, &lineage_file_map,
+  auto resnet_callback = [clients, &metrics, start_time, ksvm_callback, &lineage_file_map,
                           &lineage_mutex_map](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -308,7 +320,7 @@ int main(int argc, char* argv[]) {
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
   }
 
-  auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
+  auto predict_func = [&metrics, &lineage_file_map, &lineage_mutex_map](
       std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
     predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);

@@ -366,9 +366,11 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                                 for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 procs[client_num] = (proc, log_path, client_path, lineage_paths)
-            clipper_paths = ["{p}-clipper_metrics_resnet.json".format(p=log_path)]
+            clipper_paths = ["{p}-clipper_metrics_{res_addr}.json".format(
+                p=log_path, res_addr=RESNET_CLIPPER_ADDR)]
             if len(addr_config_map) == 2:
-                clipper_paths.append("{p}-clipper_metrics_incept.json".format(p=log_path))
+                clipper_paths.append("{p}-clipper_metrics_{incept_addr}.json".format(
+                    p=log_path, incept_addr=INCEPTION_CLIPPER_ADDR))
 
             recorded_trials = 0
             summary_results = []

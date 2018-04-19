@@ -24,12 +24,12 @@ static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
 
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
-             ClientMetrics metrics, std::atomic<int>& prediction_counter,
+             ClientMetrics &metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
   auto start_time = std::chrono::system_clock::now();
 
-  auto completion_callback = [metrics, &prediction_counter, start_time]() {
+  auto completion_callback = [&metrics, &prediction_counter, start_time]() {
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
@@ -40,7 +40,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     prediction_counter += 1;
   };
 
-  auto res152_callback = [metrics, completion_callback, &lineage_file_map,
+  auto res152_callback = [&metrics, completion_callback, &lineage_file_map,
                           &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -84,7 +84,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  auto res50_callback = [input, metrics, clients, res152_callback, completion_callback,
+  auto res50_callback = [input, &metrics, clients, res152_callback, completion_callback,
                          &lineage_file_map, &lineage_mutex_map](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
@@ -137,7 +137,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  auto alexnet_callback = [input, metrics, clients, res50_callback, completion_callback,
+  auto alexnet_callback = [input, &metrics, clients, res50_callback, completion_callback,
                            &lineage_file_map, &lineage_mutex_map, start_time](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
   }
 
-  auto predict_func = [metrics, &lineage_file_map, &lineage_mutex_map](
+  auto predict_func = [&metrics, &lineage_file_map, &lineage_mutex_map](
       std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
     predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);

@@ -19,10 +19,12 @@ namespace zmq_client {
 
 class ClientMetrics {
  public:
-  explicit ClientMetrics(std::vector<std::string> model_names) {
-    latencies_.emplace("e2e",
-                       clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
-                           "e2e:prediction_latency", "microseconds", 32768));
+  ClientMetrics(std::vector<std::string> model_names) {
+    std::cout << "ClientMetrics constructed" << std::endl;
+    latencies_.emplace(
+        "e2e",
+        clipper::metrics::MetricsRegistry::get_metrics().create_histogram(
+          "e2e:prediction_latency", "microseconds", 32768));
     latency_lists_.emplace(
         "e2e",
         clipper::metrics::MetricsRegistry::get_metrics().create_data_list<long long>(
@@ -52,9 +54,11 @@ class ClientMetrics {
 
   ~ClientMetrics() = default;
 
-  ClientMetrics(const ClientMetrics&) = default;
+  ClientMetrics() = delete;
 
-  ClientMetrics& operator=(const ClientMetrics&) = default;
+  ClientMetrics(const ClientMetrics&) = delete;
+
+  ClientMetrics& operator=(const ClientMetrics&) = delete;
 
   ClientMetrics(ClientMetrics&&) = default;
   ClientMetrics& operator=(ClientMetrics&&) = default;

@@ -42,6 +42,7 @@ class Driver {
   int batch_size_;
   std::vector<float> delay_ms_;
   bool collect_clipper_metrics_;
+  std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> address_client_map_;
 };
 
 }  // namespace zmq_client

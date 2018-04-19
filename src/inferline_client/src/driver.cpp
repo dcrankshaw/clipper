@@ -40,20 +40,19 @@ Driver::Driver(std::function<void(std::unordered_map<std::string, std::shared_pt
       delay_ms_(delay_ms),
       collect_clipper_metrics_{collect_clipper_metrics} {
   // first create a map from address to client
-  std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> address_client_map;
   for (auto address : addresses_) {
-    auto addr_find = address_client_map.find(address.second);
-    if (addr_find == address_client_map.end()) {
-      address_client_map.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
-      address_client_map[address.second]->start(address.second, SEND_PORT, RECV_PORT);
+    auto addr_find = address_client_map_.find(address.second);
+    if (addr_find == address_client_map_.end()) {
+      address_client_map_.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
+      address_client_map_[address.second]->start(address.second, SEND_PORT, RECV_PORT);
     }
   }
-  std::cout << "Starting " << std::to_string(address_client_map.size()) << " ZMQ clients." << std::endl;
+  std::cout << "Starting " << std::to_string(address_client_map_.size()) << " ZMQ clients." << std::endl;
   
   // now create a map from model name to client so models can just look up what client has
   // been assigned to them
   for (auto address : addresses_) {
-    clients_.emplace(address.first, address_client_map[address.second]);
+    clients_.emplace(address.first, address_client_map_[address.second]);
   }
 }
 
@@ -153,7 +152,7 @@ void Driver::monitor_results() {
   client_metrics_file.open(log_file_ + "-client_metrics.json");
   client_metrics_file << "[" << std::endl;
   std::unordered_map<std::string, std::shared_ptr<std::ofstream>> clipper_metrics_map;
-  for (auto &addr : addresses_) {
+  for (auto addr : address_client_map_) {
     clipper_metrics_map[addr.first] =
         std::make_shared<std::ofstream>(log_file_ + "-clipper_metrics_" + addr.first + ".json");
     *clipper_metrics_map[addr.first] << "{" << std::endl;
