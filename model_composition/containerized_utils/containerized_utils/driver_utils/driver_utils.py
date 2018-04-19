@@ -192,7 +192,8 @@ def save_results_cpp_client(configs,
                             latency_results,
                             results_dir,
                             prefix="results",
-                            container_metrics=None):
+                            container_metrics=None,
+                            loaded_config=None):
     """
     Parameters
     ----------
@@ -225,6 +226,8 @@ def save_results_cpp_client(configs,
         results_obj["latency_results"] = latency_results.get_dict(),
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
+    if loaded_config is not None:
+        results_obj["loaded_config"] = loaded_config
 
     results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
         prefix=prefix, ts=datetime.datetime.now()))
