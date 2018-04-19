@@ -434,8 +434,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
 
     # run(100, 5, "warmup", "constant")
     run(1000, 10, "warmup", "constant")
-    # throughput_results = run(0, 25, "throughput", "file")
-    throughput_results = run(0, 500, "throughput", "file")
+    throughput_results = run(0, 25, "throughput", "file")
 
     for cl in cls:
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
@@ -530,6 +529,7 @@ def run_experiment_for_config(config):
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
         return None
     lam = config["lam"]
+    lam = 500
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]
