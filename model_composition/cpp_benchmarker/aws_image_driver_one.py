@@ -545,7 +545,7 @@ def run_experiment_for_config(config):
     results_dir = "image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "LOCAL_LOWER_LAMBDA_more_container_lineage_aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
+    results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
         lam=lam, cost=cost, reps_str=reps_str)
 
     # if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
@@ -586,7 +586,7 @@ if __name__ == "__main__":
         provided_configs = json.load(f)
 
     for config in provided_configs:
-        RESNET_CLIPPER_ADDR = "172.30.6.113"
-        INCEPTION_CLIPPER_ADDR = "172.30.6.251"
+        RESNET_CLIPPER_ADDR = "172.30.6.251"
+        INCEPTION_CLIPPER_ADDR = "172.30.6.113"
         run_experiment_for_config(config)
     sys.exit(0)
