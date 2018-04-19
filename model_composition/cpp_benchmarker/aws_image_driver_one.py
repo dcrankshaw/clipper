@@ -215,7 +215,8 @@ def get_profiler_stats(cur_client_metrics):
     agg_p99_latency = {}
     agg_mean_latency = {}
     for model in all_latencies[0]:
-        lats = np.hstack([c[model] for c in all_latencies])
+        lats = np.hstack([c[model] for c in all_latencies]).flatten()
+        print("MODEL: {}, LATS SHAPE: {}".format(model, lats.shape))
         agg_p99_latency[model] = round(np.percentile(lats, 99), 3)
         agg_mean_latency[model] = round(np.mean(lats), 3)
 
