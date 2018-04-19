@@ -32,7 +32,7 @@ class InceptionFeaturizationContainer(rpc.ModelContainerBase):
             return [np.array(item, dtype=np.float32) for item in all_img_features]
         except Exception as e:
             print(e)
-            return [np.random.random(2048).astype(np.float32) for item in all_img_features]
+            return [np.random.random(2048).astype(np.float32) for _ in inputs]
 
     def _get_image_features(self, images):
         feed_dict = { self.images_tensor : images }
