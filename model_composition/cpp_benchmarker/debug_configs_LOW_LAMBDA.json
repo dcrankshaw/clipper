@@ -43,6 +43,7 @@
             "cost": 10.511
         },
         "response_time": 0.4755665249380093,
-        "cv": 1
+        "cv": 1,
+        "utilization": 1.0
     }
 ]
