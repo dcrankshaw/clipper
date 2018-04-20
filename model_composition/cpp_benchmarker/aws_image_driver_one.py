@@ -555,7 +555,7 @@ def run_experiment_for_config(config):
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
-    results_dir = "image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
+    results_dir = "E2E-image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
