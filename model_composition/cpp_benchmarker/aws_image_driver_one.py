@@ -539,7 +539,6 @@ def run_experiment_for_config(config):
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
         return None
     lam = config["lam"]
-    lam = 500
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]
