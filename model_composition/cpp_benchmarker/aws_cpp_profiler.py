@@ -8,7 +8,7 @@ import json
 from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
-from fabric.api import env, run, get
+# from fabric.api import env, run, get
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -485,7 +485,7 @@ def get_contention_configs(available_cpus, available_gpus):
 ############################################
 
 def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str,
-                 contention_configs, contention_driver_cores_str,
+                 contention_configs, contention_driver_cores_str, contention_throughput_qps,
                  workload_path=None):
     with_contention = contention_configs is not None
     all_configs = [config,]
@@ -498,7 +498,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     time.sleep(30)
     if with_contention:
         contention_proc = start_contention_workload(
-            contention_driver_cores_str, 1000, clipper_address)
+            contention_driver_cores_str, contention_throughput_qps, clipper_address)
 
 
 
@@ -606,68 +606,63 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    env.host_string = CLIPPER_ADDRESS
-    env.disable_known_hosts = True
-    env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
-    env.colorize_errors = True
-    # bws = [0.1, 100, 500, 1000, 2000, 3000, 5000, 8000]
-    # for target_bandwidth_Mbps in bws:
-        # Start iperf on server
-        # logger.info("Starting iperf server")
-        # run("killall iperf3", warn_only=True)
-        # run("iperf3 -s -p {port} -D".format(port=IPERF_PORT))
-        # logger.info("Iperf started")
+    # env.host_string = CLIPPER_ADDRESS
+    # env.disable_known_hosts = True
+    # env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
+    # env.colorize_errors = True
 
-        # if target_bandwidth_Mbps > 0:
-        #     iperf_cmd = "iperf3 -c {address} -t 3000 -p {port} -P 1 -b {bw}M".format(
-        #         address=CLIPPER_ADDRESS, port=IPERF_PORT, bw=target_bandwidth_Mbps)
-        #     iperf_cmd_list = iperf_cmd.split(" ")
-        #     iperf_proc = subprocess.Popen(iperf_cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #     time.sleep(5)
-        #     if iperf_proc.poll() is not None:
-        #         logger.error("iperf exited with code {code}.\nSTDERR: {stderr}".format(
-        #             code=iperf_proc.returncode, stderr=iperf_proc.stderr.read().strip()))
-        #         raise
+    # Randomize assignment of models to resources
+    available_cpus = np.random.permutation(range(4,16))
+    available_gpus = np.random.permutation(range(4))
 
-    try:
-        # TODO TODO TODO: Assign GPUs and CPUs to contention models and test
+    with_contention = True
 
-        model = TF_KERNEL_SVM
-        # gpu = 3
-        batch_size = 8
-        config = get_heavy_node_config(
-            model_name=model,
-            batch_size=batch_size,
-            num_replicas=1,
-            cpus_per_replica=1,
-            allocated_cpus=[13],
-            allocated_gpus=None
-        )
 
-        input_size = get_input_size(config)
-        throughput_results, latency_results = run_profiler(
-            config, 2000, "../../release/src/inferline_client/profiler",
-            input_size,
-            # "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39")
-            "4,5,6,7,20,21,22,23")
-        # throughput_results.background_bandwidth = target_bandwidth_Mbps
-        # latency_results.background_bandwidth = target_bandwidth_Mbps
-        # fname = "varied-bw-v100-remote-{model}-batch-{batch}-bw-{bw}".format(
-        #     model=model, batch=batch_size, gpu=gpu, bw=target_bandwidth_Mbps)
-        fname = "v100-local-{model}-batch-{batch}".format(
-            model=model, batch=batch_size)
-        results_dir = "{model}-SMP-local".format(model=model)
-        driver_utils.save_results_cpp_client(
-            [config, ],
-            throughput_results,
-            latency_results,
-            results_dir,
-            prefix=fname)
-    except Exception as e:
-        logger.exception(e)
-        raise e
-    # finally:
-    #     if target_bandwidth_Mbps > 0:
-    #         iperf_proc.terminate()
+    model = TF_KERNEL_SVM
+    # gpu = 3
+    batch_size = 8
+    config = get_heavy_node_config(
+        model_name=model,
+        batch_size=batch_size,
+        num_replicas=1,
+        cpus_per_replica=1,
+        allocated_cpus=available_cpus.pop(),
+        allocated_gpus=None
+    )
+
+    if with_contention:
+        contention_configs = get_contention_configs(available_cpus, available_gpus)
+        contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
+        contention_throughput_qps = 1000
+        contention_to_save = {
+                "contention_configs": contention_configs,
+                "contention_throughput_qps": contention_throughput_qps
+                }
+    else:
+        contention_configs = None
+        contention_client_cpu_str = None
+        contention_throughput_qps = None
+        contention_to_save = None
+
+    input_size = get_input_size(config)
+    throughput_results, latency_results = run_profiler(
+        config=config,
+        trial_length=2000,
+        driver_path="../../release/src/inferline_client/profiler",
+        input_size=input_size,
+        profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
+        contention_configs=contention_configs,
+        contention_driver_cores_str=contention_client_cpu_str,
+        contention_throughput_qps=contention_throughput_qps)    # "4,5,6,7,20,21,22,23")
+    fname = "v100-contention-{contention}-model-{model}-batch-{batch}".format(
+        model=model, batch=batch_size, contention=contention_throughput_qps)
+    results_dir = "{model}-SMP-remote-contention".format(model=model)
+    driver_utils.save_results_cpp_client(
+        [config, ],
+        throughput_results,
+        latency_results,
+        results_dir,
+        prefix=fname,
+        contention=contention_to_save)
 
     sys.exit(0)

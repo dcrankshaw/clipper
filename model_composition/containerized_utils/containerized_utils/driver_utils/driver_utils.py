@@ -149,7 +149,8 @@ def setup_heavy_node_gcp(clipper_conn, config, default_output="TIMEOUT"):
 
 def save_results(configs, client_metrics, init_metrics, results_dir,
                  prefix="results",
-                 container_metrics=None):
+                 container_metrics=None,
+                 contention=None):
     """
     Parameters
     ----------
@@ -177,6 +178,7 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
         "node_configs": [c.__dict__ for c in configs],
         "client_metrics": client_metrics,
         "init_client_metrics": init_metrics,
+        "contention_settings": contention,
     }
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
