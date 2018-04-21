@@ -34,6 +34,8 @@ TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 TF_RESNET_VAR = "tf-resnet-feats-var"
 TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
+TF_RESNET_CONTENTION = "tf-resnet-feats-CONTENTION"
+TF_KERNEL_SVM_CONTENTION = "tf-kernel-svm-CONTENTION"
 
 TF_LANG_DETECT = "tf-lang-detect"
 TF_NMT = "tf-nmt"
@@ -420,13 +422,86 @@ def load_lineage(lineage_path):
     return parsed
 
 
+############################################
+######     CONTENTION WORKLOAD STUFF #######
+
+
+def start_contention_workload(profiler_cores_str, throughput, clipper_address):
+    """
+    Returns the process handle for the contention driver so it can be killed at
+    the end of profiling.
+    """
+    driver_path = "../../release/src/inferline_client/contention_driver",
+    cmd = ["numactl", "-C", profiler_cores_str,
+            os.path.abspath(driver_path),
+            "--target_throughput={}".format(throughput),
+            "--clipper_address={}".format(clipper_address)]
+    proc = subprocess.Popen(cmd)
+    time.sleep(10)
+
+    # Make sure we didn't crash
+    assert proc.poll() is None
+    return proc
+
+def get_contention_configs(available_cpus, available_gpus):
+
+    """
+    Contention strategy:
+        1) Fill all remaining GPUs with resnet152. This will mean either 3 or 4 resnet replicas.
+        2) Create 4 KSVM models.
+
+    """
+
+
+    assert len(available_cpus) >= 8
+    assert len(available_gpus) >= 3
+    configs = []
+    configs.append(driver_utils.HeavyNodeConfig(
+        name=TF_RESNET_CONTENTION,
+        input_type="floats",
+        model_image="gcr.io/clipper-model-comp/tf-resnet-feats:bench",
+        allocated_cpus=[available_cpus.pop() for _ in range(len(available_gpus))],
+        cpus_per_replica=1,
+        gpus=available_gpus,
+        batch_size=32,
+        num_replicas=len(available_gpus),
+        use_nvidia_docker=True,
+        no_diverge=True))
+
+    num_ksvm_reps = 4
+    configs.append(driver_utils.HeavyNodeConfig(
+        name=TF_KERNEL_SVM_CONTENTION,
+        input_type="floats",
+        model_image="gcr.io/clipper-model-comp/tf-kernel-svm:bench",
+        allocated_cpus=[available_cpus.pop() for _ in range(num_ksvm_reps)],
+        cpus_per_replica=1,
+        gpus=[],
+        batch_size=12,
+        num_replicas=num_ksvm_reps,
+        use_nvidia_docker=True,
+        no_diverge=True))
+    return configs
+
+############################################
+
 def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_str,
+                 contention_configs, contention_driver_cores_str,
                  workload_path=None):
-    clipper_address = setup_clipper([config, ])
+    with_contention = contention_configs is not None
+    all_configs = [config,]
+    if contention_configs is not None:
+        all_configs.extend(contention_configs)
+    clipper_address = setup_clipper(all_configs)
     clipper_address = CLIPPER_ADDRESS
     cl = ClipperConnection(AWSContainerManager(host=CLIPPER_ADDRESS, redis_port=6380))
     cl.connect()
     time.sleep(30)
+    if with_contention:
+        contention_proc = start_contention_workload(
+            contention_driver_cores_str, 1000, clipper_address)
+
+
+
     log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
                                                                     ts=datetime.now())
     if not os.path.exists(log_dir):
@@ -522,6 +597,9 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     cl.set_full_batches()
     time.sleep(1)
     latency_results = run(0, 10, "latency", "batch", batch_size=config.batch_size)
+
+    if with_contention:
+        contention_proc.terminate()
     cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     return throughput_results, latency_results
 
@@ -552,6 +630,7 @@ if __name__ == "__main__":
         #         raise
 
     try:
+        # TODO TODO TODO: Assign GPUs and CPUs to contention models and test
 
         model = TF_KERNEL_SVM
         # gpu = 3
