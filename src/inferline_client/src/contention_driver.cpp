@@ -18,8 +18,8 @@
 using namespace clipper;
 using namespace zmq_client;
 
-static const std::string TF_RESNET = "tf-resnet-feats-CONTENTION";
-static const std::string TF_KERNEL_SVM = "tf-kernel-svm-CONTENTION";
+static const std::string TF_RESNET = "tf-resnet-feats-contention";
+static const std::string TF_KERNEL_SVM = "tf-kernel-svm-contention";
 
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients,
     ClientFeatureVector resnet_input, std::atomic<int>& prediction_counter) {

@@ -22,8 +22,7 @@ CURR_DIR = os.path.dirname(os.path.realpath(__file__))
 IPERF_PORT = 9999
 
 DEFAULT_OUTPUT = "TIMEOUT"
-CLIPPER_ADDRESS = "localhost"
-# CLIPPER_ADDRESS = "172.10.0.90"
+CLIPPER_ADDRESS = os.environ["CLIPPER_ADDRESS"]
 
 RES50 = "res50"
 RES152 = "res152"
@@ -34,8 +33,8 @@ TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 TF_RESNET_VAR = "tf-resnet-feats-var"
 TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
-TF_RESNET_CONTENTION = "tf-resnet-feats-CONTENTION"
-TF_KERNEL_SVM_CONTENTION = "tf-kernel-svm-CONTENTION"
+TF_RESNET_CONTENTION = "tf-resnet-feats-contention"
+TF_KERNEL_SVM_CONTENTION = "tf-kernel-svm-contention"
 
 TF_LANG_DETECT = "tf-lang-detect"
 TF_NMT = "tf-nmt"
@@ -380,9 +379,9 @@ def print_stats(client_metrics, clipper_metrics):
     #              "\nclient p99 lats: {client_p99_lats}, client mean lats: {client_mean_lats} "
     #              "\nqueue sizes: {queue_sizes}, "
     #              "batch sizes: {batch_sizes}\n").format(**results_dict))
-    logger.info(("\nThroughput: {client_thrus}, p99 lat: {client_p99_lats}, "
-                 "mean lat: {client_mean_lats} "
-                 "\nbatches: {batch_sizes}, queues: {queue_sizes}"
+    logger.info(("\nCLIENT METRICS:\nThroughput: {client_thrus}\np99 lat: {client_p99_lats}"
+                 "\nmean lat: {client_mean_lats}\nCLIPPER METRICSS\n:"
+                 "\nbatches: {batch_sizes}\nqueues: {queue_sizes}"
                  "\nclipper p99 lats: {clipper_p99_lats}"
                  "\nclipper mean lats: {clipper_mean_lats}\n").format(**results_dict))
     return results_dict
@@ -405,13 +404,13 @@ def load_metrics(client_path, clipper_path):
             clipper_metrics_str += "]"
         try:
             client_metrics = json.loads(client_metrics_str)
-        except ValueError:
-            # logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
+        except ValueError as e:
+            logger.warn("Unable to parse client metrics: {}. Skipping...".format(e))
             return None
         try:
             clipper_metrics = json.loads(clipper_metrics_str)
-        except ValueError:
-            # logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
+        except ValueError as e:
+            logger.warn("Unable to parse clipper metrics: {}. Skipping...".format(e))
             return None
     return client_metrics, clipper_metrics
 
@@ -431,13 +430,17 @@ def start_contention_workload(profiler_cores_str, throughput, clipper_address):
     Returns the process handle for the contention driver so it can be killed at
     the end of profiling.
     """
-    driver_path = "../../release/src/inferline_client/contention_driver",
+    driver_path = "../../release/src/inferline_client/contention_driver"
     cmd = ["numactl", "-C", profiler_cores_str,
             os.path.abspath(driver_path),
             "--target_throughput={}".format(throughput),
             "--clipper_address={}".format(clipper_address)]
-    proc = subprocess.Popen(cmd)
-    time.sleep(10)
+
+    logger.info("Starting background contention process")
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Sleep for a long time to ensure that GPU models get loaded
+    time.sleep(150)
+    logger.info("Done letting contention driver warm up")
 
     # Make sure we didn't crash
     assert proc.poll() is None
@@ -501,7 +504,6 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
             contention_driver_cores_str, contention_throughput_qps, clipper_address)
 
 
-
     log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
                                                                     ts=datetime.now())
     if not os.path.exists(log_dir):
@@ -533,7 +535,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
         logger.info("Driver command: {}".format(" ".join(cmd)))
         client_path = "{p}-client_metrics.json".format(p=log_path)
-        clipper_path = "{p}-clipper_metrics_resnet.json".format(p=log_path)
+        clipper_path = "{p}-clipper_metrics_{a}.json".format(p=log_path, a=clipper_address)
         lineage_path = "{p}-query_lineage.txt".format(p=log_path)
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             recorded_trials = 0
@@ -556,6 +558,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 if loaded_metrics is not None:
                     client_metrics, clipper_metrics = loaded_metrics
                 else:
+                    logger.info("Could not load metrics")
                     continue
                 client_trials = len(client_metrics)
                 clipper_trials = len(clipper_metrics)
@@ -590,9 +593,9 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 logger.error("Unable to parse final metrics")
                 raise e
 
-    init_throughput = 2000
-    run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 1000, "throughput", "constant")
+    init_throughput = 1000
+    run(init_throughput, 7, "warmup", "constant")
+    throughput_results = run(init_throughput, 10, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
@@ -606,63 +609,58 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
 
-    # env.host_string = CLIPPER_ADDRESS
-    # env.disable_known_hosts = True
-    # env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
-    # env.colorize_errors = True
-
-    # Randomize assignment of models to resources
-    available_cpus = np.random.permutation(range(4,16))
-    available_gpus = np.random.permutation(range(4))
 
     with_contention = True
+    for cont_throughput in range(200, 1501, 100):
+        # Randomize assignment of models to resources
+        available_cpus = list(np.random.permutation(range(4,16)))
+        available_gpus = list(np.random.permutation(range(4)))
 
+        model = TF_KERNEL_SVM
+        # gpu = 3
+        batch_size = 8
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=[available_cpus.pop()],
+            allocated_gpus=None
+        )
 
-    model = TF_KERNEL_SVM
-    # gpu = 3
-    batch_size = 8
-    config = get_heavy_node_config(
-        model_name=model,
-        batch_size=batch_size,
-        num_replicas=1,
-        cpus_per_replica=1,
-        allocated_cpus=available_cpus.pop(),
-        allocated_gpus=None
-    )
+        if with_contention:
+            contention_configs = get_contention_configs(available_cpus, available_gpus)
+            contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
+            contention_throughput_qps = cont_throughput
+            contention_to_save = {
+                    "contention_configs": [c.__dict__ for c in contention_configs],
+                    "contention_throughput_qps": contention_throughput_qps
+                    }
+        else:
+            contention_configs = None
+            contention_client_cpu_str = None
+            contention_throughput_qps = None
+            contention_to_save = None
 
-    if with_contention:
-        contention_configs = get_contention_configs(available_cpus, available_gpus)
-        contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
-        contention_throughput_qps = 1000
-        contention_to_save = {
-                "contention_configs": contention_configs,
-                "contention_throughput_qps": contention_throughput_qps
-                }
-    else:
-        contention_configs = None
-        contention_client_cpu_str = None
-        contention_throughput_qps = None
-        contention_to_save = None
-
-    input_size = get_input_size(config)
-    throughput_results, latency_results = run_profiler(
-        config=config,
-        trial_length=2000,
-        driver_path="../../release/src/inferline_client/profiler",
-        input_size=input_size,
-        profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        contention_configs=contention_configs,
-        contention_driver_cores_str=contention_client_cpu_str,
-        contention_throughput_qps=contention_throughput_qps)    # "4,5,6,7,20,21,22,23")
-    fname = "v100-contention-{contention}-model-{model}-batch-{batch}".format(
-        model=model, batch=batch_size, contention=contention_throughput_qps)
-    results_dir = "{model}-SMP-remote-contention".format(model=model)
-    driver_utils.save_results_cpp_client(
-        [config, ],
-        throughput_results,
-        latency_results,
-        results_dir,
-        prefix=fname,
-        contention=contention_to_save)
+        input_size = get_input_size(config)
+        throughput_results, latency_results = run_profiler(
+            config=config,
+            trial_length=2000,
+            driver_path="../../release/src/inferline_client/profiler",
+            input_size=input_size,
+            profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
+            contention_configs=contention_configs,
+            contention_driver_cores_str=contention_client_cpu_str,
+            contention_throughput_qps=contention_throughput_qps)
+        fname = "v100-contention-{contention}-model-{model}-batch-{batch}".format(
+            model=model, batch=batch_size, contention=contention_throughput_qps)
+        results_dir = "{model}-SMP-remote-contention-sensitivity-analysis".format(model=model)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            throughput_results,
+            latency_results,
+            results_dir,
+            prefix=fname,
+            contention=contention_to_save)
 
     sys.exit(0)

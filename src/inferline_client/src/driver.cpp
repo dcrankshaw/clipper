@@ -155,7 +155,7 @@ void Driver::monitor_results() {
   for (auto addr : address_client_map_) {
     clipper_metrics_map[addr.first] =
         std::make_shared<std::ofstream>(log_file_ + "-clipper_metrics_" + addr.first + ".json");
-    *clipper_metrics_map[addr.first] << "{" << std::endl;
+    *clipper_metrics_map[addr.first] << "[" << std::endl;
     // std::shared_ptr<std::ofstream> cur_metrics_file =
     //     std::make_shared<std::ofstream>(log_file_ + "-clipper_metrics_" + addr.first + ".json");
     // *cur_metrics_file << "{" << std::endl;
