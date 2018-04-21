@@ -554,8 +554,6 @@ def run_experiment_for_config(config):
     utilization = config["utilization"]
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
-    if not (cost == 5.4 and slo == 1.0 and cv == 0.1):
-        return
 
     results_dir = "E2E-image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
