@@ -500,8 +500,9 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     cl.connect()
     time.sleep(30)
     if with_contention:
-        contention_proc = start_contention_workload(
-            contention_driver_cores_str, contention_throughput_qps, clipper_address)
+        if contention_throughput_qps > 0:
+            contention_proc = start_contention_workload(
+                contention_driver_cores_str, contention_throughput_qps, clipper_address)
 
 
     log_dir = "/tmp/{name}_profiler_logs_{ts:%y%m%d_%H%M%S}".format(name=config.name,
@@ -602,7 +603,8 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
     latency_results = run(0, 10, "latency", "batch", batch_size=config.batch_size)
 
     if with_contention:
-        contention_proc.terminate()
+        if contention_throughput_qps > 0:
+            contention_proc.terminate()
     cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
     return throughput_results, latency_results
 
@@ -611,10 +613,13 @@ if __name__ == "__main__":
 
 
     with_contention = True
-    for cont_throughput in range(200, 1501, 100):
+    for cont_throughput in range(0, 1201, 100):
         # Randomize assignment of models to resources
-        available_cpus = list(np.random.permutation(range(4,16)))
-        available_gpus = list(np.random.permutation(range(4)))
+        # available_cpus = list(np.random.permutation(range(4,16)))
+        # available_gpus = list(np.random.permutation(range(4)))
+
+        available_cpus = range(4,16)
+        available_gpus = range(4)
 
         model = TF_KERNEL_SVM
         # gpu = 3
@@ -654,7 +659,7 @@ if __name__ == "__main__":
             contention_throughput_qps=contention_throughput_qps)
         fname = "v100-contention-{contention}-model-{model}-batch-{batch}".format(
             model=model, batch=batch_size, contention=contention_throughput_qps)
-        results_dir = "{model}-SMP-remote-contention-sensitivity-analysis".format(model=model)
+        results_dir = "{model}-SMP-remote-contention-sensitivity-analysis-no-resource-bundle-randomization".format(model=model)
         driver_utils.save_results_cpp_client(
             [config, ],
             throughput_results,
