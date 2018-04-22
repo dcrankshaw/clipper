@@ -19,9 +19,16 @@
 using namespace clipper;
 using namespace zmq_client;
 
-static const std::string RES50 = "resnet50";
+static const std::string RES50 = "res50";
 static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
+
+// From https://stackoverflow.com/a/29710970/814642
+double double_rand(double min, double max) {
+  thread_local std::mt19937 generator(std::random_device{}());
+  std::uniform_real_distribution<double> distribution(min, max);
+  return distribution(generator);
+}
 
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
              ClientMetrics &metrics, std::atomic<int>& prediction_counter,
@@ -97,7 +104,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
     auto cur_time = std::chrono::system_clock::now();
 
-    float idk = ((float)rand()) / (float)RAND_MAX;
+    double idk = double_rand(0.0, 1.0);
     if (idk > 0.4633) {
       clients[RES152]->send_request(
           RES152, input, [cur_time, res152_callback](ClientFeatureVector output,
@@ -149,7 +156,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
     auto cur_time = std::chrono::system_clock::now();
 
-    float idk = ((float)rand()) / (float)RAND_MAX;
+    double idk = double_rand(0.0, 1.0);
     if (idk > 0.192) {
       clients[RES50]->send_request(
           RES50, input, [cur_time, res50_callback](ClientFeatureVector output,
