@@ -1,4 +1,4 @@
-FROM nvidia/cuda:8.0-cudnn6-runtime
+FROM nvidia/cuda:9.0-cudnn7-runtime
 # FROM continuumio/anaconda:latest
 
 # Set anaconda path
