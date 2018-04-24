@@ -311,7 +311,7 @@ def get_arrival_proc_file(lam, cv):
                                         "cached_arrival_processes/{f}").format(f=arrival_file_name))
     return arrival_delay_file
 
-def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients):
+def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients):
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -347,9 +347,9 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                     "--trial_length={}".format(trial_length),
                     "--num_trials={}".format(num_trials),
                     "--log_file={}".format(log_path),
-                    "--clipper_address_alexnet={}".format(ALEXNET_CLIPPER_ADDR),
-                    "--clipper_address_res50={}".format(RES50_CLIPPER_ADDR),
-                    "--clipper_address_res152={}".format(RES152_CLIPPER_ADDR),
+                    "--clipper_address_alexnet={}".format(name_addr_map[ALEXNET]),
+                    "--clipper_address_res50={}".format(name_addr_map[RES50]),
+                    "--clipper_address_res152={}".format(name_addr_map[RES152]),
                     "--request_delay_file={}".format(arrival_delay_file)]
                 if client_num == 0:
                     cmd.append("--get_clipper_metrics")
@@ -360,9 +360,8 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                                 for m in [ALEXNET, RES50, RES152]}
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 procs[client_num] = (proc, log_path, client_path, lineage_paths)
-            unique_addrs = set([RES50_CLIPPER_ADDR, ALEXNET_CLIPPER_ADDR, RES152_CLIPPER_ADDR])
             clipper_paths = ["{p}-clipper_metrics_{a}.json".format(
-                p=log_path, a=a) for a in unique_addrs]
+                p=log_path, a=a) for a in addr_config_map.keys()]
 
             recorded_trials = 0
             summary_results = []
@@ -493,6 +492,7 @@ def run_experiment_for_config(config):
     if combined_gpu_usage <= GPUS_PER_MACHINE:
         # If so, assign all models to ALEXNET_CLIPPER_ADDR
         model_name_to_addr_map = dict([(m, ALEXNET_CLIPPER_ADDR) for m in all_models])
+        logger.info("Running all models on {}".format(ALEXNET_CLIPPER_ADDR))
     else:
         # Now check if any 2 models can fit onto the same machine
         model_pairs = combinations(all_models, 2)
@@ -564,11 +564,12 @@ def run_experiment_for_config(config):
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
-    results_dir = "resnet-cascade_utilization_sweep_slo_{slo}_cv_{cv}".format(slo=slo, cv=cv)
+    results_dir = "resnet-cascade_e2e_sys_comp_slo_{slo}_cv_{cv}_util_{util}".format(
+        slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_util_{util}_lambda_{lam}".format(
-        lam=lam, util=utilization)
+    results_fname = "aws_lambda_{lam}_cost_{cost}".format(
+        lam=lam, cost=cost)
 
 
     # For client on standalone machine
@@ -582,7 +583,7 @@ def run_experiment_for_config(config):
     num_clients = 1
 
     throughput_results = run_e2e(
-        addr_config_map, 2000, "../../release/src/inferline_client/resnet_cascade",
+        addr_config_map, model_name_to_addr_map, 2000, "../../release/src/inferline_client/resnet_cascade",
         client_cpu_strs, int(lam / num_clients), cv, num_clients)
     driver_utils.save_results_cpp_client(
         node_configs,
@@ -607,10 +608,18 @@ if __name__ == "__main__":
     #     "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0.json"
     # ]
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/utilization_sweep_pipeline_three")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_0.7")
 
     config_paths = [
-        "aws_resnet_cascade_utilization_sweep_slo_1.0_cv_1.0_cost_11.08.json"
+        # "aws_resnet_cascade_ifl_configs_slo_0.35_cv_1.0.json",
+        # "aws_resnet_cascade_ifl_configs_slo_0.5_cv_1.0.json",
+        # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0.json"
+        # "aws_resnet_cascade_ifl_configs_slo_0.35_cv_4.0.json",
+        # "aws_resnet_cascade_ifl_configs_slo_0.5_cv_4.0.json",
+        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0.json",
+        "aws_resnet_cascade_ifl_configs_slo_0.35_cv_0.1.json",
+        "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1.json",
+        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1.json",
     ]
 
 
