@@ -563,13 +563,16 @@ def run_experiment_for_config(config):
     utilization = config["utilization"]
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
+    if "latency_percentage" not in config:
+        config["latency_percentage"] = 1.0
+    latency_perc = config["latency_percentage"]
 
-    results_dir = "resnet-cascade_e2e_sys_comp_slo_{slo}_cv_{cv}_util_{util}".format(
+    results_dir = "pipeline_three_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
         slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_lambda_{lam}_cost_{cost}".format(
-        lam=lam, cost=cost)
+    results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
+        lam=lam, perc=latency_perc)
 
 
     # For client on standalone machine
@@ -608,18 +611,10 @@ if __name__ == "__main__":
     #     "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0.json"
     # ]
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_0.7")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_three_underestimate_profile_latency")
 
     config_paths = [
-        # "aws_resnet_cascade_ifl_configs_slo_0.35_cv_1.0.json",
-        # "aws_resnet_cascade_ifl_configs_slo_0.5_cv_1.0.json",
-        # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0.json"
-        # "aws_resnet_cascade_ifl_configs_slo_0.35_cv_4.0.json",
-        # "aws_resnet_cascade_ifl_configs_slo_0.5_cv_4.0.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0.json",
-        "aws_resnet_cascade_ifl_configs_slo_0.35_cv_0.1.json",
-        "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1.json",
+        "aws_resnet_cascade_three_profiler_underestimate_slo_0.5_cv_1.0_cost_11.08.json"
     ]
 
 

@@ -437,7 +437,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                 procs[c][0].terminate()
 
     # run(100, 5, "warmup", "constant")
-    run(1000, 10, "warmup", "constant")
+    run(100, 10, "warmup", "constant")
     throughput_results = run(0, 25, "throughput", "file")
 
     for cl in cls:
@@ -546,11 +546,16 @@ def run_experiment_for_config(config):
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
-    results_dir = "E2E-image_driver_one_slo_{slo}_cv_{cv}_util_{util}".format(slo=slo, cv=cv, util=utilization)
+    if "latency_percentage" not in config:
+        config["latency_percentage"] = 1.0
+    latency_perc = config["latency_percentage"]
+
+    results_dir = "pipeline_one_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
+        slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_lambda_{lam}_cost_{cost}_{reps_str}".format(
-        lam=lam, cost=cost, reps_str=reps_str)
+    results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
+        lam=lam, perc=latency_perc)
 
     # if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
     #     client_cpu_str = "4,20,5,21"
@@ -586,15 +591,10 @@ if __name__ == "__main__":
     global RESNET_CLIPPER_ADDR
     global INCEPTION_CLIPPER_ADDR
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_0.7")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_one_underestimate_profile_latency")
 
     config_paths = [
-        "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_0.35_cv_0.1.json",
-        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_0.1.json"
+        "aws_image_driver_one_profiler_underestimate_slo_0.5_cv_1.0_cost_10.6.json"
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]
