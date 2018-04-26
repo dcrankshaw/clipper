@@ -319,7 +319,7 @@ def get_arrival_proc_file(lam, cv):
                                         "cached_arrival_processes/{f}").format(f=arrival_file_name))
     return arrival_delay_file
 
-def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients):
+def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients, slo):
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -349,15 +349,16 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                                                                     p=arrival_process,
                                                                     c=client_num))
                 cmd = ["numactl", "-C", profiler_cores_strs[client_num],
-                    os.path.abspath(driver_path),
-                    "--target_throughput={}".format(target_throughput),
-                    "--request_distribution={}".format(arrival_process),
-                    "--trial_length={}".format(trial_length),
-                    "--num_trials={}".format(num_trials),
-                    "--log_file={}".format(log_path),
-                    "--clipper_address_resnet={}".format(RESNET_CLIPPER_ADDR),
-                    "--clipper_address_inception={}".format(INCEPTION_CLIPPER_ADDR),
-                    "--request_delay_file={}".format(arrival_delay_file)]
+                       os.path.abspath(driver_path),
+                       "--target_throughput={}".format(target_throughput),
+                       "--request_distribution={}".format(arrival_process),
+                       "--trial_length={}".format(trial_length),
+                       "--num_trials={}".format(num_trials),
+                       "--log_file={}".format(log_path),
+                       "--clipper_address_resnet={}".format(RESNET_CLIPPER_ADDR),
+                       "--clipper_address_inception={}".format(INCEPTION_CLIPPER_ADDR),
+                       "--request_delay_file={}".format(arrival_delay_file),
+                       "--latency_budget_micros={}".format(slo * 1000 * 1000)]
                 if client_num == 0:
                     cmd.append("--get_clipper_metrics")
 
@@ -574,7 +575,7 @@ def run_experiment_for_config(config):
 
     throughput_results = run_e2e(
         addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients)
+        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
     driver_utils.save_results_cpp_client(
         node_configs,
         throughput_results,
