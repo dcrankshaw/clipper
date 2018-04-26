@@ -364,7 +364,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                        "--clipper_address_resnet={}".format(RESNET_CLIPPER_ADDR),
                        "--clipper_address_inception={}".format(INCEPTION_CLIPPER_ADDR),
                        "--request_delay_file={}".format(arrival_delay_file),
-                       "--latency_budget_micros={}".format(slo * 1000 * 1000)]
+                       "--latency_budget_micros={}".format(int(slo * 1000 * 1000))]
                 if client_num == 0:
                     cmd.append("--get_clipper_metrics")
 
@@ -578,7 +578,7 @@ def run_experiment_for_config(config):
         config["latency_percentage"] = 1.0
     latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
+    results_dir = "DEBUG_pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
         slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
@@ -630,10 +630,15 @@ if __name__ == "__main__":
     global RESNET_CLIPPER_ADDR
     global INCEPTION_CLIPPER_ADDR
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_one_underestimate_profile_latency")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
 
     config_paths = [
-        "aws_image_driver_one_profiler_underestimate_slo_0.5_cv_1.0_cost_10.6.json"
+        "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
+        "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]

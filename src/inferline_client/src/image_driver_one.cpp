@@ -47,6 +47,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
       metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
       metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
     } else {
+      std::cout << "query completed" << std::endl;
       auto cur_time = std::chrono::system_clock::now();
       auto latency = cur_time - start_time;
       long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
@@ -89,6 +90,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
         return;
       }
     }
+
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
@@ -147,6 +149,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
         return;
       }
     }
+
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
@@ -204,6 +207,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
         return;
       }
     }
+
     auto cur_time = std::chrono::system_clock::now();
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
