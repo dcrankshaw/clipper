@@ -201,6 +201,8 @@ class ModelQueue {
       }
     }
 
+    queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
+
 
     Deadline deadline = queue_.top().first;
     int max_batch_size = get_batch_size(deadline);
