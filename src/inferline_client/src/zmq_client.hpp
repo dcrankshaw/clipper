@@ -39,8 +39,8 @@ class ClientFeatureVector {
   DataType type_;
 };
 
-// Tuple of request ID, app name, input
-typedef std::tuple<int, std::string, ClientFeatureVector> FrontendRPCClientRequest;
+// Tuple of request ID, app name, input, latency_budge_micros
+typedef std::tuple<int, std::string, ClientFeatureVector, int> FrontendRPCClientRequest;
 // Tuple of request id, output.
 // typedef std::tuple<int, Output> FrontendRPCClientResponse;
 
@@ -60,7 +60,7 @@ class FrontendRPCClient {
   void start(const std::string address, int send_port, int recv_port);
   void stop();
   void send_request(
-      std::string app_name, ClientFeatureVector input,
+      std::string app_name, ClientFeatureVector input, int latency_budget_micros,
       std::function<void(ClientFeatureVector, std::shared_ptr<QueryLineage>)> &&callback);
 
  private:

@@ -170,6 +170,7 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
   zmq::message_t msg_app_name;
   zmq::message_t msg_data_type;
   zmq::message_t msg_data_size_typed;
+  zmq::message_t msg_latency_budget_micros;
 
   socket.recv(&msg_routing_identity, 0);
   socket.recv(&msg_delimiter, 0);
@@ -178,12 +179,14 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
   socket.recv(&msg_app_name, 0);
   socket.recv(&msg_data_type, 0);
   socket.recv(&msg_data_size_typed, 0);
+  socket.recv(&msg_latency_budget_micros, 0);
 
   std::string app_name(static_cast<char *>(msg_app_name.data()),
                        msg_app_name.size());
   DataType input_type =
       static_cast<DataType>(static_cast<int *>(msg_data_type.data())[0]);
   int input_size_typed = static_cast<int *>(msg_data_size_typed.data())[0];
+  int latency_budget_micros = static_cast<int *>(msg_latency_budget_micros.data())[0];
 
   // NOTE(dcrankshaw): It would make more sense to just have the RPC message
   // include the size in bytes, but to maintain backwards compatibility I'm
@@ -252,9 +255,12 @@ void FrontendRPCService::receive_request(zmq::socket_t &socket) {
             recv_end_time.time_since_epoch())
             .count());
 
+    Deadline deadline =
+      std::chrono::system_clock::now() + std::chrono::microseconds(latency_budget_micros);
+
     // The app_function should be very cheap, it's just constructing
     // an object and putting it on the task queue. Try executing it directly.
-    app_function(std::make_tuple(input, request_id, client_id, lineage));
+    app_function(std::make_tuple(input, request_id, client_id, lineage, deadline));
 
     request_enqueue_meter_->mark(1);
     // prediction_executor_->submit(

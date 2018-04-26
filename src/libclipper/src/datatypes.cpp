@@ -392,12 +392,14 @@ rpc::PredictionResponse::deserialize_prediction_response(
 PredictTask::PredictTask(InputVector input, VersionedModelId model,
                          float utility, QueryId query_id,
                          long latency_slo_micros,
-                         std::shared_ptr<QueryLineage> lineage)
+                         std::shared_ptr<QueryLineage> lineage,
+                         Deadline deadline)
     : input_(input),
       model_(model),
       utility_(utility),
       query_id_(query_id),
       latency_slo_micros_(latency_slo_micros),
-      lineage_(lineage) {}
+      lineage_(lineage),
+      deadline_(deadline) {}
 
 }  // namespace clipper

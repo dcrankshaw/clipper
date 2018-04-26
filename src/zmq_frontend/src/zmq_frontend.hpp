@@ -17,6 +17,7 @@
 #include <clipper/json_util.hpp>
 #include <clipper/logging.hpp>
 #include <clipper/metrics.hpp>
+#include <clipper/containers.hpp>
 #include <clipper/redis.hpp>
 #include <clipper/task_executor.hpp>
 
@@ -250,6 +251,7 @@ class ServerImpl {
 
       int request_id = std::get<1>(request);
       int client_id = std::get<2>(request);
+      Deadline deadline = std::get<4>(request);
       long query_id = query_counter_.fetch_add(1);
       std::chrono::time_point<std::chrono::system_clock> create_time =
           std::chrono::system_clock::now();
@@ -257,7 +259,7 @@ class ServerImpl {
 
       task_executor_.schedule_prediction(
           PredictTask{std::get<0>(request), versioned_models.front(), 1.0,
-                      query_id, latency_slo_micros, lineage},
+                      query_id, latency_slo_micros, lineage, deadline},
           [this, app_metrics, request_id, client_id, create_time](
               Output output, std::shared_ptr<QueryLineage> lineage) mutable {
             std::chrono::time_point<std::chrono::system_clock> end =

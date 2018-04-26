@@ -14,6 +14,10 @@
 
 namespace clipper {
 
+// We use the system clock for the deadline time point
+// due to its cross-platform consistency (consistent epoch, resolution)
+using Deadline = std::chrono::time_point<std::chrono::system_clock>;
+
 // Tuple of data content and byte size
 // typedef std::pair<void *, size_t> ByteBuffer;
 
@@ -144,7 +148,8 @@ class PredictTask {
 
   PredictTask(InputVector input, VersionedModelId model, float utility,
               QueryId query_id, long latency_slo_micros,
-              std::shared_ptr<QueryLineage> lineage);
+              std::shared_ptr<QueryLineage> lineage,
+              Deadline deadline);
 
   PredictTask(const PredictTask &other) = default;
   PredictTask &operator=(const PredictTask &other) = default;
@@ -159,6 +164,7 @@ class PredictTask {
   long latency_slo_micros_;
   std::chrono::time_point<std::chrono::system_clock> recv_time_;
   std::shared_ptr<QueryLineage> lineage_;
+  Deadline deadline_;
 };
 
 class OutputData {

@@ -6,6 +6,7 @@
 // #include <folly/ProducerConsumerQueue.h>
 #include <concurrentqueue.h>
 #include <clipper/callback_threadpool.hpp>
+#include <clipper/containers.hpp>
 #include <clipper/datatypes.hpp>
 #include <zmq.hpp>
 
@@ -24,8 +25,8 @@ constexpr size_t NUM_RESPONSES_SEND = 1000;
 constexpr size_t TOTAL_DATA_BYTES =
     299 * 299 * 3 * sizeof(float) * RESPONSE_QUEUE_SIZE;
 
-// Tuple of input, request id, client id, query lineage
-typedef std::tuple<InputVector, int, int, std::shared_ptr<QueryLineage>>
+// Tuple of input, request id, client id, query lineage, deadline
+typedef std::tuple<InputVector, int, int, std::shared_ptr<QueryLineage>, Deadline>
     FrontendRPCRequest;
 // Tuple of output, request id, client id. Request id and client ids
 // should match corresponding ids of a FrontendRPCRequest object

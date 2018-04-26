@@ -55,13 +55,13 @@ void FrontendRPCClient::stop() {
 }
 
 void FrontendRPCClient::send_request(
-    std::string app_name, ClientFeatureVector input,
+    std::string app_name, ClientFeatureVector input, int latency_budget_micros,
     std::function<void(ClientFeatureVector, std::shared_ptr<QueryLineage>)> &&callback) {
   std::unique_lock<std::mutex> closure_map_lock(closure_map_mutex_);
   int cur_request_id = request_id_.fetch_add(1);
   closure_map_.emplace(cur_request_id, callback);
 
-  request_queue_->enqueue(std::make_tuple(cur_request_id, app_name, input));
+  request_queue_->enqueue(std::make_tuple(cur_request_id, app_name, input, latency_budget_micros));
 }
 
 void FrontendRPCClient::manage_send_service(const std::string ip, int port) {
@@ -95,6 +95,7 @@ void FrontendRPCClient::send_messages(socket_t &socket, int max_num_messages) {
     int request_id = std::get<0>(request);
     std::string app_name = std::get<1>(request);
     ClientFeatureVector input = std::get<2>(request);
+    int latency_budget_micros = std::get<3>(request);
     int datatype = (int)input.type_;
     int datalength = int(input.size_typed_);
 
@@ -106,6 +107,7 @@ void FrontendRPCClient::send_messages(socket_t &socket, int max_num_messages) {
     socket.send(app_name.data(), app_name.length(), ZMQ_SNDMORE);
     socket.send(&datatype, sizeof(int), ZMQ_SNDMORE);
     socket.send(&datalength, sizeof(int), ZMQ_SNDMORE);
+    socket.send(&latency_budget_micros, sizeof(int), ZMQ_SNDMORE);
     socket.send(msg_data);
   }
 }

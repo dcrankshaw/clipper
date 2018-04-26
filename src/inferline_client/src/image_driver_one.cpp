@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <string>
+#include <algorithm>
 
 #include <cxxopts.hpp>
 
@@ -29,7 +30,8 @@ static const std::string E2E = "e2e";
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
              ClientMetrics &metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
-             std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
+             std::unordered_map<std::string, std::mutex>& lineage_mutex_map,
+             int latency_budget_micros) {
   auto start_time = std::chrono::system_clock::now();
   size_t resnet_input_length = 224 * 224 * 3;
   ClientFeatureVector resnet_input(input.data_, resnet_input_length,
@@ -153,7 +155,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   auto inception_callback = [clients, &metrics, start_time, log_reg_callback, &lineage_file_map,
-                             &lineage_mutex_map](ClientFeatureVector output,
+                             &lineage_mutex_map, latency_budget_micros](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
@@ -163,13 +165,14 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
       }
     }
     auto cur_time = std::chrono::system_clock::now();
+    auto latency = cur_time - start_time;
+    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+    int new_latency_budget = std::max(0L, latency_budget_micros - latency_micros);
     clients[INCEPTION_FEATS]->send_request(
-        TF_LOG_REG, output, [cur_time, log_reg_callback](ClientFeatureVector output,
+        TF_LOG_REG, output, new_latency_budget, [cur_time, log_reg_callback](ClientFeatureVector output,
                                                          std::shared_ptr<QueryLineage> lineage) {
           log_reg_callback(output, lineage, cur_time);
         });
-    auto latency = cur_time - start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_lists_.find(INCEPTION_FEATS)
         ->second->insert(static_cast<int64_t>(latency_micros));
@@ -200,7 +203,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   auto resnet_callback = [clients, &metrics, start_time, ksvm_callback, &lineage_file_map,
-                          &lineage_mutex_map](ClientFeatureVector output,
+                          &lineage_mutex_map, latency_budget_micros](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
@@ -210,13 +213,14 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
       }
     }
     auto cur_time = std::chrono::system_clock::now();
+    auto latency = cur_time - start_time;
+    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+    int new_latency_budget = std::max(0L, latency_budget_micros - latency_micros);
     clients[TF_RESNET]->send_request(
-        TF_KERNEL_SVM, output, [cur_time, ksvm_callback](ClientFeatureVector output,
+        TF_KERNEL_SVM, output, new_latency_budget, [cur_time, ksvm_callback](ClientFeatureVector output,
                                                          std::shared_ptr<QueryLineage> lineage) {
           ksvm_callback(output, lineage, cur_time);
         });
-    auto latency = cur_time - start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latencies_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_lists_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.throughputs_.find(TF_RESNET)->second->mark(1);
@@ -245,8 +249,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, inception_callback);
-  clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, resnet_callback);
+  clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, latency_budget_micros, inception_callback);
+  clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, latency_budget_micros, resnet_callback);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -290,6 +294,8 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("get_clipper_metrics", "Collect Clipper metrics",
        cxxopts::value<bool>())
+      ("latency_budget_micros", "end to end latency budget for query in microseconds",
+       cxxopts::value<int>()) // TODO TODO TODO
        ;
   // clang-format on
   options.parse(argc, argv);
@@ -320,10 +326,11 @@ int main(int argc, char* argv[]) {
     // lineage_mutex_map_refs.emplace(model, lineage_mutex_map[model]);
   }
 
-  auto predict_func = [&metrics, &lineage_file_map, &lineage_mutex_map](
+  int latency_budget_micros = options["latency_budget_micros"].as<int>();
+  auto predict_func = [&metrics, &lineage_file_map, &lineage_mutex_map, latency_budget_micros](
       std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
       std::atomic<int>& prediction_counter) {
-    predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map);
+    predict(clients, input, metrics, prediction_counter, lineage_file_map, lineage_mutex_map, latency_budget_micros);
   };
   std::vector<float> delays_ms;
   if (distribution == "file") {

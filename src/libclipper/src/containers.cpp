@@ -77,7 +77,7 @@ double ModelContainer::get_average_throughput_per_millisecond() {
   return avg_throughput_per_milli_;
 }
 
-size_t ModelContainer::get_batch_size(Deadline deadline) {
+size_t ModelContainer::get_batch_size(Deadline /*deadline*/) {
   return batch_size_;
 }
 

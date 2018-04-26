@@ -27,6 +27,7 @@
 namespace clipper {
 
 const std::string LOGGING_TAG_TASK_EXECUTOR = "TASKEXECUTOR";
+const std::string default_output_str = "TIMEOUT";
 
 class ModelMetrics {
  public:
@@ -127,7 +128,14 @@ class ModelQueue {
         lock_latency_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
             name + ":lock_latency", "microseconds", 4096)),
         queue_size_hist_(metrics::MetricsRegistry::get_metrics().create_histogram(
-            name + ":queue_size", "microseconds", 1000)) {}
+            name + ":queue_size", "microseconds", 1000)) {
+
+          std::shared_ptr<void> default_output_buffer(malloc(default_output_str.length()), free);
+          memcpy(default_output_buffer.get(), default_output_str.data(), default_output_str.length());
+          default_output_ = OutputData::create_output(DataType::Strings,
+              default_output_buffer, 0, default_output_str.length());
+
+        }
   // queue_size_list_(
   //     metrics::MetricsRegistry::get_metrics()
   //         .create_data_list<size_t>(name + ":queue_sizes", "queue size")),
@@ -158,7 +166,7 @@ class ModelQueue {
         std::chrono::duration_cast<std::chrono::microseconds>(lock_latency).count();
     lock_latency_hist_->insert(static_cast<int64_t>(lock_latency_micros));
 
-    Deadline deadline = current_time + std::chrono::microseconds(task.latency_slo_micros_);
+    Deadline deadline = task.deadline_;
     queue_.emplace(deadline, std::move(task));
 
     // long long curr_system_time =
@@ -175,9 +183,25 @@ class ModelQueue {
   }
 
   std::vector<PredictTask> get_batch(std::function<int(Deadline)> &&get_batch_size,
-                                     bool full_batch) {
+      bool full_batch, std::mutex &prediction_callback_map_mutex,
+      std::unordered_map<QueryId, std::function<void(Output, std::shared_ptr<QueryLineage>)>>& prediction_callback_map) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
+
+    // Remove and return timeout for all queries whose deadline elapsed
+    std::vector<PredictTask> expired_tasks = remove_tasks_with_elapsed_deadlines();
+    if (expired_tasks.size() > 0) {
+      std::unique_lock<std::mutex> l(prediction_callback_map_mutex);
+      for (auto& t: expired_tasks) {
+        auto search = prediction_callback_map.find(t.query_id_);
+        if (search != prediction_callback_map.end()) {
+          search->second(Output{default_output_, {}}, t.lineage_);
+          prediction_callback_map.erase(t.query_id_);
+        }
+      }
+    }
+
+
     Deadline deadline = queue_.top().first;
     int max_batch_size = get_batch_size(deadline);
     std::vector<PredictTask> batch;
@@ -233,25 +257,30 @@ class ModelQueue {
   std::condition_variable queue_not_empty_condition_;
   std::shared_ptr<metrics::Histogram> lock_latency_hist_;
   std::shared_ptr<metrics::Histogram> queue_size_hist_;
+  std::shared_ptr<OutputData> default_output_;
   // std::shared_ptr<metrics::DataList<size_t>> queue_size_list_;
   // std::shared_ptr<metrics::DataList<long long>> queue_arrivals_list_;
 
   // Deletes tasks with deadlines prior or equivalent to the
   // current system time. This method should only be called
   // when a unique lock on the queue_mutex is held.
-  void remove_tasks_with_elapsed_deadlines() {
+  std::vector<PredictTask> remove_tasks_with_elapsed_deadlines() {
     std::chrono::time_point<std::chrono::system_clock> current_time =
         std::chrono::system_clock::now();
+    std::vector<PredictTask> expired_tasks;
     while (!queue_.empty()) {
       Deadline first_deadline = queue_.top().first;
       if (first_deadline <= current_time) {
         // If a task's deadline has already elapsed,
         // we should not process it
+        auto &task = queue_.top().second;
+        expired_tasks.push_back(task);
         queue_.pop();
       } else {
         break;
       }
     }
+    return expired_tasks;
   }
 };
 
@@ -526,7 +555,7 @@ class TaskExecutor {
 
     std::vector<PredictTask> batch = current_model_queue->get_batch(
         [container](Deadline deadline) { return container->get_batch_size(deadline); },
-        use_full_batches_);
+        use_full_batches_, prediction_callback_map_mutex_, prediction_callback_map_);
 
     // Create a histogram "queue size hist"
 
