@@ -408,14 +408,16 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                         new_stats = print_stats(cur_client_metrics, new_recorded_trials - 1)
                         summary_results.append(new_stats)
                         print_stats_this_iter = True
-                        if check_for_divergence:
+                        # Run for a couple trials before checking for divergence
+                        if check_for_divergence and recorded_trials > 2:
                             models_to_replicate = []
                             ingest_rate = new_stats["ingest_rate"]
-                            for m, t in new_stats["client_thrus"]:
-                                if t/ingest_rate < DIVERGENCE_THRESHOLD:
-                                    logger.info("GREPTHISBBBB: Detected divergence in model {m}: {t}/{i}".format(
-                                        m=m, t=t, i=ingest_rate))
-                                    models_to_replicate.append(m)
+                            for m, t in new_stats["client_thrus"].iteritems():
+                                if m != "e2e":
+                                    if t/ingest_rate < DIVERGENCE_THRESHOLD:
+                                        logger.info("GREPTHISBBBB: Detected divergence in model {m}: {t}/{i}".format(
+                                            m=m, t=t, i=ingest_rate))
+                                        models_to_replicate.append(m)
                             # No need to keep running if we're already diverging
                             if len(models_to_replicate) > 0:
                                 # The "finally" block of the outer try statement will terminate
@@ -464,7 +466,6 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
             for c in procs:
                 procs[c][0].terminate()
 
-    # run(100, 5, "warmup", "constant")
     run(100, 10, "warmup", "constant", check_for_divergence=False)
     throughput_results, models_to_replicate = run(0, 25, "throughput", "file", check_for_divergence=True)
 
@@ -632,16 +633,17 @@ if __name__ == "__main__":
 
     base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
 
-    config_paths = [
-        "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-        "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
-        "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
-        "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
-        "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
-        "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
-    ]
+    # config_paths = [
+    #     "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
+    #     "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
+    #     "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
+    #     "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
+    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
+    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
+    # ]
 
-    config_paths = [os.path.join(base_path, c) for c in config_paths]
+    # config_paths = [os.path.join(base_path, c) for c in config_paths]
+    config_paths = [os.path.join(base_path, c) for c in os.listdir(base_path)]
 
     # for config_path in args.config_paths:
     for config_path in config_paths:

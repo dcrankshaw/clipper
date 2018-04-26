@@ -42,6 +42,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   std::shared_ptr<std::atomic_bool> expired = std::make_shared<std::atomic_bool>(false);
   auto completion_callback = [&metrics, &prediction_counter, start_time, expired]() {
     if (*expired) {
+      std::cout << "Dropping expired query" << std::endl;
       long latency_micros = std::numeric_limits<int>::max();
       metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
       metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
