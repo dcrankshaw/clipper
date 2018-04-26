@@ -6,6 +6,7 @@
 #include <random>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 #include <cxxopts.hpp>
 
@@ -38,35 +39,52 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
                                    resnet_input_length * sizeof(float), DataType::Floats);
 
   std::shared_ptr<std::atomic_int> branches_completed = std::make_shared<std::atomic_int>(0);
-  auto completion_callback = [&metrics, &prediction_counter, start_time]() {
-    auto cur_time = std::chrono::system_clock::now();
-    auto latency = cur_time - start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    auto search = metrics.latencies_.find("e2e");
-    if (search != metrics.latencies_.end()) {
+  std::shared_ptr<std::atomic_bool> expired = std::make_shared<std::atomic_bool>(false);
+  auto completion_callback = [&metrics, &prediction_counter, start_time, expired]() {
+    if (*expired) {
+      long latency_micros = std::numeric_limits<int>::max();
+      metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
       metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
     } else {
-      std::cout << "PRINTING ELEMENTS: ";
-      for (auto l : metrics.latencies_) {
-        std::cout << l.first << ", ";
+      auto cur_time = std::chrono::system_clock::now();
+      auto latency = cur_time - start_time;
+      long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+      auto search = metrics.latencies_.find("e2e");
+      if (search != metrics.latencies_.end()) {
+        metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+      } else {
+        std::cout << "PRINTING ELEMENTS: ";
+        for (auto l : metrics.latencies_) {
+          std::cout << l.first << ", ";
+        }
+        std::cout << std::endl;
+        throw std::runtime_error("couldn't find e2e latencies");
       }
-      std::cout << std::endl;
-      throw std::runtime_error("couldn't find e2e latencies");
+      metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
+      metrics.throughputs_.find("e2e")->second->mark(1);
+      metrics.num_predictions_.find("e2e")->second->increment(1);
     }
-    metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_.find("e2e")->second->mark(1);
-    metrics.num_predictions_.find("e2e")->second->increment(1);
     prediction_counter += 1;
   };
 
   auto ksvm_callback = [&metrics, branches_completed, completion_callback, &lineage_file_map,
-                        &lineage_mutex_map](
+                        &lineage_mutex_map, expired](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
       if (output_str == "TIMEOUT") {
+        // NOTE: This ignores lineage
+        long latency_micros = std::numeric_limits<int>::max();
+        expired->store(true);
+        metrics.latencies_.find(TF_KERNEL_SVM)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(TF_KERNEL_SVM)
+            ->second->insert(static_cast<int64_t>(latency_micros));
+        int num_branches_completed = branches_completed->fetch_add(1);
+        if (num_branches_completed == 1) {
+          completion_callback();
+        }
         return;
       }
     }
@@ -108,13 +126,23 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   auto log_reg_callback = [&metrics, branches_completed, &completion_callback, &lineage_file_map,
-                           &lineage_mutex_map](
+                           &lineage_mutex_map, expired](
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
       if (output_str == "TIMEOUT") {
+        // NOTE: This ignores lineage
+        long latency_micros = std::numeric_limits<int>::max();
+        expired->store(true);
+        metrics.latencies_.find(TF_LOG_REG)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(TF_LOG_REG)
+            ->second->insert(static_cast<int64_t>(latency_micros));
+        int num_branches_completed = branches_completed->fetch_add(1);
+        if (num_branches_completed == 1) {
+          completion_callback();
+        }
         return;
       }
     }
@@ -155,12 +183,23 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   auto inception_callback = [clients, &metrics, start_time, log_reg_callback, &lineage_file_map,
-                             &lineage_mutex_map, latency_budget_micros](ClientFeatureVector output,
+                             &lineage_mutex_map, latency_budget_micros, completion_callback,
+                             expired, branches_completed](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
       if (output_str == "TIMEOUT") {
+        // NOTE: This ignores lineage
+        long latency_micros = std::numeric_limits<int>::max();
+        expired->store(true);
+        metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(INCEPTION_FEATS)
+            ->second->insert(static_cast<int64_t>(latency_micros));
+        int num_branches_completed = branches_completed->fetch_add(1);
+        if (num_branches_completed == 1) {
+          completion_callback();
+        }
         return;
       }
     }
@@ -203,12 +242,23 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   auto resnet_callback = [clients, &metrics, start_time, ksvm_callback, &lineage_file_map,
-                          &lineage_mutex_map, latency_budget_micros](ClientFeatureVector output,
+                          &lineage_mutex_map, latency_budget_micros, completion_callback,
+                          expired, branches_completed](ClientFeatureVector output,
                                               std::shared_ptr<QueryLineage> lineage) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
       if (output_str == "TIMEOUT") {
+        // NOTE: This ignores lineage
+        long latency_micros = std::numeric_limits<int>::max();
+        expired->store(true);
+        metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(INCEPTION_FEATS)
+            ->second->insert(static_cast<int64_t>(latency_micros));
+        int num_branches_completed = branches_completed->fetch_add(1);
+        if (num_branches_completed == 1) {
+          completion_callback();
+        }
         return;
       }
     }
