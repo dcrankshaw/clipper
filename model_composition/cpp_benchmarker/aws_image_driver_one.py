@@ -459,7 +459,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
             return driver_utils.Results(all_client_metrics,
                                         None,
                                         summary_results,
-                                        lineages)
+                                        lineages), None
         except Exception as e:
             logger.exception(e)
         finally:
@@ -484,10 +484,10 @@ def hash_file(fname):
         return hashlib.sha256(fbytes).hexdigest()
 
 
-def run_experiment_for_config(config):
+def run_experiment_for_config(config, orig_config):
     global INCEPTION_CLIPPER_ADDR
     # res_cpus = range(0, 16)
-    res_cpus = range(8, 16)
+    res_cpus = range(4, 16)
     res_gpus = range(4)
 
     incept_cpus = range(4, 16)
@@ -579,7 +579,7 @@ def run_experiment_for_config(config):
         config["latency_percentage"] = 1.0
     latency_perc = config["latency_percentage"]
 
-    results_dir = "DEBUG_pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
+    results_dir = "pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
         slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
@@ -611,7 +611,8 @@ def run_experiment_for_config(config):
             None,
             results_dir,
             prefix=results_fname,
-            loaded_config=config)
+            orig_config=orig_config,
+            used_config=config)
     else:
         new_config = config.copy()
         for m in models_to_replicate:
@@ -621,7 +622,7 @@ def run_experiment_for_config(config):
                          m=models_to_replicate,
                          old=config,
                          new=new_config))
-        run_experiment_for_config(new_config)
+        run_experiment_for_config(new_config, orig_config)
 
 
 if __name__ == "__main__":
@@ -656,5 +657,5 @@ if __name__ == "__main__":
             # INCEPTION_CLIPPER_ADDR = "172.31.0.31"
             RESNET_CLIPPER_ADDR = os.environ["RESNET_CLIPPER_ADDR"]
             INCEPTION_CLIPPER_ADDR = os.environ["INCEPTION_CLIPPER_ADDR"]
-            run_experiment_for_config(config)
+            run_experiment_for_config(config, config)
     sys.exit(0)

@@ -195,7 +195,8 @@ def save_results_cpp_client(configs,
                             results_dir,
                             prefix="results",
                             container_metrics=None,
-                            loaded_config=None,
+                            orig_config=None,
+                            used_config=None,
                             contention=None):
     """
     Parameters
@@ -229,8 +230,10 @@ def save_results_cpp_client(configs,
         results_obj["latency_results"] = latency_results.get_dict(),
     if container_metrics is not None:
         results_obj["container_metrics"] = container_metrics
-    if loaded_config is not None:
-        results_obj["loaded_config"] = loaded_config
+    if orig_config is not None:
+        results_obj["orig_config"] = orig_config
+    if used_config is not None:
+        results_obj["used_config"] = used_config
     if contention is not None:
         results_obj["contention"] = contention
 
