@@ -29,6 +29,8 @@ TF_RESNET = "tf-resnet-feats"
 # REMOTE_ADDR = "172.10.0.90"
 ALL_REMOTE_ADDRS = []
 
+DIVERGENCE_THRESHOLD = 0.95
+
 
 def get_heavy_node_config(model_name,
                           batch_size,
@@ -179,6 +181,7 @@ def get_profiler_stats(cur_client_metrics):
     all_latencies = []
     all_thrus = []
     all_counts = []
+    ingest_rate = None
     for metrics_json in cur_client_metrics:
         latencies = {}
         thrus = {}
@@ -201,6 +204,9 @@ def get_profiler_stats(cur_client_metrics):
                 model = name.split(":")[0]
                 rate = float(m[name]["rate"])
                 thrus[model] = round(float(rate), 5)
+            elif "ingest_rate" in m.keys()[0]:
+                assert m.keys()[0] == "ingest:ingest_rate"
+                ingest_rate = round(float(m["ingest:ingest_rate"]["rate"]), 5)
         counters = metrics_json["counters"]
         counts = {}
         for c in counters:
@@ -216,7 +222,6 @@ def get_profiler_stats(cur_client_metrics):
     agg_mean_latency = {}
     for model in all_latencies[0]:
         lats = np.hstack([c[model] for c in all_latencies]).flatten()
-        print("MODEL: {}, LATS SHAPE: {}".format(model, lats.shape))
         agg_p99_latency[model] = round(np.percentile(lats, 99), 3)
         agg_mean_latency[model] = round(np.mean(lats), 3)
 
@@ -230,7 +235,7 @@ def get_profiler_stats(cur_client_metrics):
         total_count = np.sum([c[model] for c in all_counts])
         agg_counts[model] = total_count
 
-    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts)
+    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts, ingest_rate)
 
 
 def load_clipper_metrics(clipper_path):
@@ -264,10 +269,11 @@ def print_stats(cur_client_metrics, trial_num):
     cur_client_metrics = [c[trial_num] for c in cur_client_metrics]
     results_dict = {}
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
-        results_dict["client_thrus"], results_dict["client_counts"] = \
-        get_profiler_stats(cur_client_metrics)
+        results_dict["client_thrus"], results_dict["client_counts"], \
+        results_dict["ingest_rate"] = get_profiler_stats(cur_client_metrics)
     logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
-                "\nMean lat: {client_mean_lats}").format(**results_dict))
+                "\nMean lat: {client_mean_lats}"
+                 "\nIngest rate: {ingest_rate}\n").format(**results_dict))
     return results_dict
 
 
@@ -333,7 +339,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    def run(target_throughput, num_trials, name, arrival_process):
+    def run(target_throughput, num_trials, name, arrival_process, check_for_divergence):
         for cl in cls:
             cl.drain_queues()
         time.sleep(10)
@@ -399,8 +405,29 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                     new_recorded_trials = min([len(c) for c in cur_client_metrics])
                     if new_recorded_trials > recorded_trials:
                         recorded_trials = new_recorded_trials
-                        summary_results.append(print_stats(cur_client_metrics, new_recorded_trials - 1))
+                        new_stats = print_stats(cur_client_metrics, new_recorded_trials - 1)
+                        summary_results.append(new_stats)
                         print_stats_this_iter = True
+                        if check_for_divergence:
+                            models_to_replicate = []
+                            ingest_rate = new_stats["ingest_rate"]
+                            for m, t in new_stats["client_thrus"]:
+                                if t/ingest_rate < DIVERGENCE_THRESHOLD:
+                                    logger.info("GREPTHISBBBB: Detected divergence in model {m}: {t}/{i}".format(
+                                        m=m, t=t, i=ingest_rate))
+                                    models_to_replicate.append(m)
+                            # No need to keep running if we're already diverging
+                            if len(models_to_replicate) > 0:
+                                # The "finally" block of the outer try statement will terminate
+                                # the procs
+                                # # break out of the while loop
+                                # done = True
+                                # # stop all the drivers
+                                # for client_num in procs:
+                                #     proc, _, _, _ = procs[client_num]
+                                #     proc.terminate()
+                                return None, models_to_replicate
+
 
                 if print_stats_this_iter:
                     for clipper_path in clipper_paths:
@@ -438,12 +465,12 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                 procs[c][0].terminate()
 
     # run(100, 5, "warmup", "constant")
-    run(100, 10, "warmup", "constant")
-    throughput_results = run(0, 25, "throughput", "file")
+    run(100, 10, "warmup", "constant", check_for_divergence=False)
+    throughput_results, models_to_replicate = run(0, 25, "throughput", "file", check_for_divergence=True)
 
     for cl in cls:
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
-    return throughput_results
+    return (throughput_results, models_to_replicate)
 
 
 class BenchmarkConfigurationException(Exception):
@@ -551,12 +578,12 @@ def run_experiment_for_config(config):
         config["latency_percentage"] = 1.0
     latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
+    results_dir = "pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
         slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
-        lam=lam, perc=latency_perc)
+    results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
+        lam=lam, cv=cv, slo=slo, cost=cost, reps_str=reps_str)
 
     # if RESNET_CLIPPER_ADDR == INCEPTION_CLIPPER_ADDR:
     #     client_cpu_str = "4,20,5,21"
@@ -573,16 +600,27 @@ def run_experiment_for_config(config):
     # num_clients = 2
     num_clients = 1
 
-    throughput_results = run_e2e(
+    throughput_results, models_to_replicate = run_e2e(
         addr_config_map, 2000, "../../release/src/inferline_client/image_driver_one",
         client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
-    driver_utils.save_results_cpp_client(
-        node_configs,
-        throughput_results,
-        None,
-        results_dir,
-        prefix=results_fname,
-        loaded_config=config)
+    if models_to_replicate is None:
+        driver_utils.save_results_cpp_client(
+            node_configs,
+            throughput_results,
+            None,
+            results_dir,
+            prefix=results_fname,
+            loaded_config=config)
+    else:
+        new_config = config.copy()
+        for m in models_to_replicate:
+            new_config["node_configs"][m]["num_replicas"] += 1
+        logger.info(("GREPTHISAAAAA: Rerunning with more replicas of: {m}"
+                     "OLD CONFIG:\n{old}\nNEW CONFIG: {new}").format(
+                         m=models_to_replicate,
+                         old=config,
+                         new=new_config))
+        run_experiment_for_config(new_config)
 
 
 if __name__ == "__main__":

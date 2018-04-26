@@ -42,6 +42,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   std::shared_ptr<std::atomic_bool> expired = std::make_shared<std::atomic_bool>(false);
   auto completion_callback = [&metrics, &prediction_counter, start_time, expired]() {
     if (*expired) {
+      std::cout << "Received expired query" << std::endl;
       long latency_micros = std::numeric_limits<int>::max();
       metrics.latency_lists_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
       metrics.latencies_.find("e2e")->second->insert(static_cast<int64_t>(latency_micros));
@@ -298,6 +299,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
     query_lineage_file << "}" << std::endl;
   };
+  metrics.throughputs_.find("ingest")->second->mark(1);
 
   clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, latency_budget_micros, inception_callback);
   clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, latency_budget_micros, resnet_callback);

@@ -32,6 +32,9 @@ class ClientMetrics {
     throughputs_.emplace(
         "e2e",
         clipper::metrics::MetricsRegistry::get_metrics().create_meter("e2e:prediction_throughput"));
+    throughputs_.emplace(
+        "ingest",
+        clipper::metrics::MetricsRegistry::get_metrics().create_meter("ingest:ingest_rate"));
     num_predictions_.emplace(
         "e2e",
         clipper::metrics::MetricsRegistry::get_metrics().create_counter("e2e:num_predictions"));
