@@ -189,19 +189,21 @@ class ModelQueue {
     queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
 
     // Remove and return timeout for all queries whose deadline elapsed
-    std::vector<PredictTask> expired_tasks = remove_tasks_with_elapsed_deadlines();
-    if (expired_tasks.size() > 0) {
-      std::unique_lock<std::mutex> l(prediction_callback_map_mutex);
-      for (auto& t: expired_tasks) {
-        auto search = prediction_callback_map.find(t.query_id_);
-        if (search != prediction_callback_map.end()) {
-          search->second(Output{default_output_, {}}, t.lineage_);
-          prediction_callback_map.erase(t.query_id_);
-        }
-      }
-    }
-
-    queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
+    // std::vector<PredictTask> expired_tasks = remove_tasks_with_elapsed_deadlines();
+    // if (expired_tasks.size() > 0) {
+    //   std::unique_lock<std::mutex> l(prediction_callback_map_mutex);
+    //   for (PredictTask& t: expired_tasks) {
+    //     auto search = prediction_callback_map.find(t.query_id_);
+    //     if (search != prediction_callback_map.end()) {
+    //       search->second(Output{default_output_, {}}, t.lineage_);
+    //       prediction_callback_map.erase(t.query_id_);
+    //     } else {
+    //       log_error(LOGGING_TAG_TASK_EXECUTOR, "No callback found for expired task");
+    //     }
+    //   }
+    // }
+    //
+    // queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
 
 
     Deadline deadline = queue_.top().first;
