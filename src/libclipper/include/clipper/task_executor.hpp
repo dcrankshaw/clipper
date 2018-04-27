@@ -186,24 +186,28 @@ class ModelQueue {
       bool full_batch, std::mutex &prediction_callback_map_mutex,
       std::unordered_map<QueryId, std::function<void(Output, std::shared_ptr<QueryLineage>)>>& prediction_callback_map) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
-    queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
 
-    // Remove and return timeout for all queries whose deadline elapsed
-    // std::vector<PredictTask> expired_tasks = remove_tasks_with_elapsed_deadlines();
-    // if (expired_tasks.size() > 0) {
-    //   std::unique_lock<std::mutex> l(prediction_callback_map_mutex);
-    //   for (PredictTask& t: expired_tasks) {
-    //     auto search = prediction_callback_map.find(t.query_id_);
-    //     if (search != prediction_callback_map.end()) {
-    //       search->second(Output{default_output_, {}}, t.lineage_);
-    //       prediction_callback_map.erase(t.query_id_);
-    //     } else {
-    //       log_error(LOGGING_TAG_TASK_EXECUTOR, "No callback found for expired task");
-    //     }
-    //   }
-    // }
-    //
-    // queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
+    while (true) {
+      // Remove and return timeout for all queries whose deadline elapsed
+      std::vector<PredictTask> expired_tasks = remove_tasks_with_elapsed_deadlines();
+      if (expired_tasks.size() > 0) {
+        std::unique_lock<std::mutex> l(prediction_callback_map_mutex);
+        for (PredictTask& t: expired_tasks) {
+          auto search = prediction_callback_map.find(t.query_id_);
+          if (search != prediction_callback_map.end()) {
+            search->second(Output{default_output_, {}}, t.lineage_);
+            prediction_callback_map.erase(t.query_id_);
+          } else {
+            log_error(LOGGING_TAG_TASK_EXECUTOR, "No callback found for expired task");
+          }
+        }
+      }
+      if (!queue_.empty()) {
+        break;
+      } else {
+        queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
+      }
+    }
 
 
     Deadline deadline = queue_.top().first;
@@ -284,6 +288,9 @@ class ModelQueue {
         break;
       }
     }
+    // if (expired_tasks.size() > 0) {
+    //   std::cout << "Removed " << expired_tasks.size() << " expired tasks for " << expired_tasks[0].model_.serialize() << std::endl;
+    // }
     return expired_tasks;
   }
 };
@@ -470,10 +477,10 @@ class TaskExecutor {
           std::chrono::duration_cast<std::chrono::microseconds>(task.recv_time_.time_since_epoch())
               .count());
       // }
-    } else {
+    } /*else {
       log_error_formatted(LOGGING_TAG_TASK_EXECUTOR, "Received task for unknown model: {} : {}",
                           task.model_.get_name(), task.model_.get_id());
-    }
+    }*/
   }
 
   void drain_queues() {
@@ -584,6 +591,9 @@ class TaskExecutor {
                                                 container->container_id_);
       inflight_messages_.emplace(message_id, std::move(cur_batch));
     } else {
+      std::stringstream msg;
+      msg << "ModelQueue returned empty batch for model " << model_id.serialize();
+      throw std::runtime_error(msg.str());
       log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
                           "ModelQueue returned empty batch for model {}, replica {}",
                           model_id.serialize(), std::to_string(replica_id));
