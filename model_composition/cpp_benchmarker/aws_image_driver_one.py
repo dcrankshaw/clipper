@@ -345,7 +345,7 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
         time.sleep(10)
         for cl in cls:
             cl.drain_queues()
-        time.sleep(10)
+        time.sleep(30)
         arrival_delay_file = get_arrival_proc_file(lam, cv)
         try:
             procs = {}
@@ -419,16 +419,18 @@ def run_e2e(addr_config_map, trial_length, driver_path, profiler_cores_strs, lam
                                             m=m, t=t, i=ingest_rate))
                                         models_to_replicate.append(m)
                             # No need to keep running if we're already diverging
-                            if len(models_to_replicate) > 0:
-                                # The "finally" block of the outer try statement will terminate
-                                # the procs
-                                # # break out of the while loop
-                                # done = True
-                                # # stop all the drivers
-                                # for client_num in procs:
-                                #     proc, _, _, _ = procs[client_num]
-                                #     proc.terminate()
-                                return None, models_to_replicate
+                            # if len(models_to_replicate) > 0:
+                            #     # The "finally" block of the outer try statement will terminate
+                            #     # the procs
+                            #     # # break out of the while loop
+                            #     # done = True
+                            #     # # stop all the drivers
+                            #     # for client_num in procs:
+                            #     #     proc, _, _, _ = procs[client_num]
+                            #     #     proc.terminate()
+                            #     return None, models_to_replicate
+                    else:
+                        logger.info("Recorded trials is still {}".format(new_recorded_trials))
 
 
                 if print_stats_this_iter:
@@ -579,8 +581,9 @@ def run_experiment_for_config(config, orig_config):
         config["latency_percentage"] = 1.0
     latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
-        slo=slo, cv=cv, util=utilization)
+    results_dir = "pipeline_one_e2e_query_drop_DEBUG"
+    # results_dir = "pipeline_one_e2e_with_dynamic_replication_slo_{slo}_cv_{cv}_util_{util}".format(
+    #     slo=slo, cv=cv, util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
@@ -634,17 +637,17 @@ if __name__ == "__main__":
 
     base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
 
-    # config_paths = [
-    #     "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
-    # ]
+    config_paths = [
+        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
+        "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
+    ]
 
-    # config_paths = [os.path.join(base_path, c) for c in config_paths]
-    config_paths = [os.path.join(base_path, c) for c in os.listdir(base_path)]
+    config_paths = [os.path.join(base_path, c) for c in config_paths]
+    # config_paths = [os.path.join(base_path, c) for c in os.listdir(base_path)]
 
     # for config_path in args.config_paths:
     for config_path in config_paths:
@@ -657,5 +660,5 @@ if __name__ == "__main__":
             # INCEPTION_CLIPPER_ADDR = "172.31.0.31"
             RESNET_CLIPPER_ADDR = os.environ["RESNET_CLIPPER_ADDR"]
             INCEPTION_CLIPPER_ADDR = os.environ["INCEPTION_CLIPPER_ADDR"]
-            run_experiment_for_config(config, config)
+            run_experiment_for_config(config, config.copy())
     sys.exit(0)
