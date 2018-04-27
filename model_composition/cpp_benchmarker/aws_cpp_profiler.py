@@ -613,7 +613,7 @@ if __name__ == "__main__":
     for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
         available_cpus = range(4, 16)
         available_gpus = range(4)
-        model = INCEPTION_FEATS
+        model = TF_RESNET
         config = get_heavy_node_config(
             model_name=model,
             batch_size=batch_size,
@@ -638,6 +638,10 @@ if __name__ == "__main__":
             contention_to_save = None
 
         input_size = get_input_size(config)
+        # Lower bound on trial length is 500
+        trial_length = max(30*batch_size, 500)
+        # Upper bound on trial length is 2000
+        trial_length = min(2000,trial_length)
         throughput_results, latency_results = run_profiler(
             config=config,
             trial_length=2000,
