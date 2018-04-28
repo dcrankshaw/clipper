@@ -609,9 +609,15 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
 if __name__ == "__main__":
     with_contention = True
-    cont_throughput = 600
-    for model in [ALEXNET, RES50, RES152]:
+    # cont_throughput = 600
+    cont_throughput = 900
+    model = INCEPTION_FEATS
+    # for model in [ALEXNET, RES50, RES152]:
+    for cont_throughput in [900, 1000]:
+        # for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
         for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
+            if cont_throughput == 900 and batch_size > 4:
+                continue
             available_cpus = range(4, 16)
             available_gpus = range(4)
             config = get_heavy_node_config(
