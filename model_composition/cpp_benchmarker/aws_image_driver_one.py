@@ -584,6 +584,17 @@ def assign_models_to_nodes(resnet_addr, inception_addr, config):
         logger.exception(msg)
         raise BenchmarkConfigurationException(msg)
 
+    # Delete any addresses with no nodes assigned them, so we don't start the ZMQ frontend on them
+    # unnecessarily
+    for a in addr_config_map.keys():
+        if len(addr_config_map[a]) == 0:
+            del addr_config_map[a]
+    # Sanity check
+    for _, a in name_addr_map.iteritems():
+        assert a in addr_config_map
+
+
+
     return name_addr_map, addr_config_map
 
 
