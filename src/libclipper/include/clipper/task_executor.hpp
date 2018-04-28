@@ -276,21 +276,21 @@ class ModelQueue {
     std::chrono::time_point<std::chrono::system_clock> current_time =
         std::chrono::system_clock::now();
     std::vector<PredictTask> expired_tasks;
-    while (!queue_.empty()) {
-      Deadline first_deadline = queue_.top().first;
-      if (first_deadline <= current_time) {
-        // If a task's deadline has already elapsed,
-        // we should not process it
-        auto &task = queue_.top().second;
-        expired_tasks.push_back(task);
-        queue_.pop();
-      } else {
-        break;
-      }
-    }
-    // if (expired_tasks.size() > 0) {
-    //   std::cout << "Removed " << expired_tasks.size() << " expired tasks for " << expired_tasks[0].model_.serialize() << std::endl;
+    // while (!queue_.empty()) {
+    //   Deadline first_deadline = queue_.top().first;
+    //   if (first_deadline <= current_time) {
+    //     // If a task's deadline has already elapsed,
+    //     // we should not process it
+    //     auto &task = queue_.top().second;
+    //     expired_tasks.push_back(task);
+    //     queue_.pop();
+    //   } else {
+    //     break;
+    //   }
     // }
+    // // if (expired_tasks.size() > 0) {
+    // //   std::cout << "Removed " << expired_tasks.size() << " expired tasks for " << expired_tasks[0].model_.serialize() << std::endl;
+    // // }
     return expired_tasks;
   }
 };
