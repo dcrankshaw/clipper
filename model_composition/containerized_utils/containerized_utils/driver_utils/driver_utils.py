@@ -189,7 +189,7 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
         logger.info("Saved results to {}".format(results_file))
 
 
-def save_results_cpp_client(configs,
+def save_results_cpp_client(addr_config_map,
                             throughput_results,
                             latency_results,
                             results_dir,
@@ -222,7 +222,7 @@ def save_results_cpp_client(configs,
     #         c["all_lats"] = all_lats_strs
 
     results_obj = {
-        "node_configs": [c.__dict__ for c in configs]
+        "addr_config_map": addr_config_map
     }
     if throughput_results is not None:
         results_obj["throughput_results"] = throughput_results.get_dict()
