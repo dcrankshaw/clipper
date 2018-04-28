@@ -31,7 +31,7 @@ TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
 TF_RESNET_VAR = "tf-resnet-feats-var"
 TF_RESNET_SLEEP = "tf-resnet-feats-sleep"
-TF_RESNET_CONTENTION = "tf-resnet-feats-contention"
+TF_INCEPTION_CONTENTION = "tf-inception-contention"
 TF_KERNEL_SVM_CONTENTION = "tf-kernel-svm-contention"
 
 TF_LANG_DETECT = "tf-lang-detect"
@@ -458,9 +458,9 @@ def get_contention_configs(available_cpus, available_gpus):
     assert len(available_gpus) >= 3
     configs = []
     configs.append(driver_utils.HeavyNodeConfig(
-        name=TF_RESNET_CONTENTION,
+        name=TF_INCEPTION_CONTENTION,
         input_type="floats",
-        model_image="gcr.io/clipper-model-comp/tf-resnet-feats:bench",
+        model_image="gcr.io/clipper-model-comp/inception-feats:bench",
         allocated_cpus=[available_cpus.pop() for _ in range(len(available_gpus))],
         cpus_per_replica=1,
         gpus=available_gpus,
@@ -477,7 +477,7 @@ def get_contention_configs(available_cpus, available_gpus):
         allocated_cpus=[available_cpus.pop() for _ in range(num_ksvm_reps)],
         cpus_per_replica=1,
         gpus=[],
-        batch_size=12,
+        batch_size=16,
         num_replicas=num_ksvm_reps,
         use_nvidia_docker=True,
         no_diverge=True))
@@ -610,61 +610,56 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
     with_contention = True
     # cont_throughput = 600
-    cont_throughput = 900
+    cont_throughput = 1000
     model = INCEPTION_FEATS
-    # for model in [ALEXNET, RES50, RES152]:
-    for cont_throughput in [900, 1000]:
-        # for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
-        for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
-            if cont_throughput == 900 and batch_size > 4:
-                continue
-            available_cpus = range(4, 16)
-            available_gpus = range(4)
-            config = get_heavy_node_config(
-                model_name=model,
-                batch_size=batch_size,
-                num_replicas=1,
-                cpus_per_replica=1,
-                allocated_cpus=[available_cpus.pop()],
-                allocated_gpus=[available_gpus.pop()]
-            )
+    for batch_size in [8, 12, 16, 24, 32, 48, 64, 4, 2, 1]:
+        available_cpus = range(4, 16)
+        available_gpus = range(4)
+        config = get_heavy_node_config(
+            model_name=model,
+            batch_size=batch_size,
+            num_replicas=1,
+            cpus_per_replica=1,
+            allocated_cpus=[available_cpus.pop()],
+            allocated_gpus=[available_gpus.pop()]
+        )
 
-            if with_contention:
-                contention_configs = get_contention_configs(available_cpus, available_gpus)
-                contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
-                contention_throughput_qps = cont_throughput
-                contention_to_save = {
-                        "contention_configs": [c.__dict__ for c in contention_configs],
-                        "contention_throughput_qps": contention_throughput_qps
-                        }
-            else:
-                contention_configs = None
-                contention_client_cpu_str = None
-                contention_throughput_qps = None
-                contention_to_save = None
+        if with_contention:
+            contention_configs = get_contention_configs(available_cpus, available_gpus)
+            contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
+            contention_throughput_qps = cont_throughput
+            contention_to_save = {
+                    "contention_configs": [c.__dict__ for c in contention_configs],
+                    "contention_throughput_qps": contention_throughput_qps
+                    }
+        else:
+            contention_configs = None
+            contention_client_cpu_str = None
+            contention_throughput_qps = None
+            contention_to_save = None
 
-            input_size = get_input_size(config)
-            # Lower bound on trial length is 500
-            trial_length = max(30*batch_size, 500)
-            # Upper bound on trial length is 2000
-            trial_length = min(2000,trial_length)
-            throughput_results, latency_results = run_profiler(
-                config=config,
-                trial_length=2000,
-                driver_path="../../release/src/inferline_client/profiler",
-                input_size=input_size,
-                profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-                contention_configs=contention_configs,
-                contention_driver_cores_str=contention_client_cpu_str,
-                contention_throughput_qps=contention_throughput_qps)
-            fname = "v100.model-{model}.contention-{contention}.batch-{batch}".format(
-                model=model, batch=batch_size, contention=contention_throughput_qps)
-            results_dir = "{model}-SMP-contention".format(model=model)
-            driver_utils.save_results_cpp_client(
-                [config, ],
-                throughput_results,
-                latency_results,
-                results_dir,
-                prefix=fname,
-                contention=contention_to_save)
+        input_size = get_input_size(config)
+        # Lower bound on trial length is 500
+        trial_length = max(30*batch_size, 500)
+        # Upper bound on trial length is 2000
+        trial_length = min(2000,trial_length)
+        throughput_results, latency_results = run_profiler(
+            config=config,
+            trial_length=2000,
+            driver_path="../../release/src/inferline_client/profiler",
+            input_size=input_size,
+            profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
+            contention_configs=contention_configs,
+            contention_driver_cores_str=contention_client_cpu_str,
+            contention_throughput_qps=contention_throughput_qps)
+        fname = "v100.model-{model}.contention-{contention}.batch-{batch}".format(
+            model=model, batch=batch_size, contention=contention_throughput_qps)
+        results_dir = "{model}-SMP-contention".format(model=model)
+        driver_utils.save_results_cpp_client(
+            [config, ],
+            throughput_results,
+            latency_results,
+            results_dir,
+            prefix=fname,
+            contention=contention_to_save)
     sys.exit(0)

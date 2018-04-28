@@ -18,13 +18,13 @@
 using namespace clipper;
 using namespace zmq_client;
 
-static const std::string TF_RESNET = "tf-resnet-feats-contention";
+static const std::string INCEPTION_FEATS = "tf-inception-contention";
 static const std::string TF_KERNEL_SVM = "tf-kernel-svm-contention";
 
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients,
-    ClientFeatureVector resnet_input, std::atomic<int>& prediction_counter) {
+    ClientFeatureVector inception_input, std::atomic<int>& prediction_counter) {
   size_t ksvm_input_length = 2048;
-  ClientFeatureVector ksvm_input(resnet_input.data_, ksvm_input_length,
+  ClientFeatureVector ksvm_input(inception_input.data_, ksvm_input_length,
                                    ksvm_input_length * sizeof(float), DataType::Floats);
 
   std::shared_ptr<std::atomic_int> branches_completed = std::make_shared<std::atomic_int>(0);
@@ -38,7 +38,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   clients[TF_KERNEL_SVM]->send_request(TF_KERNEL_SVM, ksvm_input, callback);
-  clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, callback);
+  clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, inception_input, callback);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -90,8 +90,8 @@ int main(int argc, char* argv[]) {
 
   // Request the system uptime so that a clock instance is created as
   // soon as the frontend starts
-  std::vector<ClientFeatureVector> inputs = generate_float_inputs(224 * 224 * 3);
-  std::vector<std::string> models = {TF_RESNET, TF_KERNEL_SVM};
+  std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
+  std::vector<std::string> models = {INCEPTION_FEATS, TF_KERNEL_SVM};
 
 
   auto predict_func = [](
@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
     predict(clients, input, prediction_counter);
   };
   std::unordered_map<std::string, std::string> addresses;
-  addresses.emplace(TF_RESNET, options["clipper_address"].as<std::string>());
+  addresses.emplace(INCEPTION_FEATS, options["clipper_address"].as<std::string>());
   addresses.emplace(TF_KERNEL_SVM, options["clipper_address"].as<std::string>());
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, 100000, 100000, /* Basically just run forever */
