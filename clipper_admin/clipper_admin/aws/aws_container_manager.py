@@ -306,6 +306,8 @@ class AWSContainerManager(ContainerManager):
                     name=name, version=version, gpu_num=gpu_num))
                 cmd.insert(0, "NV_GPU={}".format(str(gpu_num)))
                 os_env["NV_GPU"] = str(gpu_num)
+                cmd.append("-e")
+                cmd.append("CUDA_VISIBLE_DEVICES={}".format(str(gpu_num)))
 
             else:
                 # We're not running on a GPU, so we should mask all available
@@ -364,7 +366,10 @@ class AWSContainerManager(ContainerManager):
             if gpu_num is not None:
                 logger.info("Starting {name}:{version} on GPU {gpu_num} on {remote_addr}".format(
                     name=name, version=version, gpu_num=gpu_num, remote_addr=remote_addr))
-                cmd.insert(0, "NV_GPU={}".format(str(gpu_num)))
+                # cmd.insert(0, "NV_GPU={}".format(str(gpu_num)))
+                cmd.append("-e")
+                cmd.append("CUDA_VISIBLE_DEVICES={}".format(str(gpu_num)))
+
                 # remote_env["NV_GPU"] = str(gpu_num)
             else:
                 # We're not running on a GPU, so we should mask all available
@@ -388,6 +393,7 @@ class AWSContainerManager(ContainerManager):
             env.disable_known_hosts = True
             print(env.host_string)
             cmd_str = " ".join(cmd)
+            print(cmd_str)
             # Don't use self._execute() here because if the query frontend host is local,
             # this will execute the command locally instead of remotely
             with show("everything"):
@@ -579,7 +585,7 @@ class AWSContainerManager(ContainerManager):
             logger.info("Stopping remote containers")
             for r in remote_addrs:
                 env.host_string = r
-                run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL))
+                run("docker stop $(docker ps -aq --filter label={})".format(CLIPPER_DOCKER_LABEL), warn_only=True)
 
         env.host_string = self.host
 

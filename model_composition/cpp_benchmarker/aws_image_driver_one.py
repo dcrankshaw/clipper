@@ -403,15 +403,15 @@ def run_e2e(frontend_configs, trial_length, driver_path, profiler_cores_strs,
                        "--num_trials={}".format(num_trials),
                        "--log_file={}".format(log_path),
                        "--clipper_address_resnet={}".format(frontend_configs[RES_BRANCH].address),
-                       "--clipper_port_range_resnet={}".format(",".join(frontend_configs[RES_BRANCH].client_ports)),
+                       "--clipper_port_range_resnet={}".format(",".join([str(p) for p in frontend_configs[RES_BRANCH].client_ports])),
                        "--clipper_rest_port_resnet={}".format(frontend_configs[RES_BRANCH].rest_port),
                        "--clipper_address_inception={}".format(frontend_configs[INCEPT_BRANCH].address),
-                       "--clipper_port_range_inception={}".format(",".join(frontend_configs[INCEPT_BRANCH].client_ports)),
+                       "--clipper_port_range_inception={}".format(",".join([str(p) for p in frontend_configs[INCEPT_BRANCH].client_ports])),
                        "--clipper_rest_port_inception={}".format(frontend_configs[INCEPT_BRANCH].rest_port),
                        "--request_delay_file={}".format(arrival_delay_file),
                        "--latency_budget_micros={}".format(int(slo * 1000 * 1000))]
                 for n, lt in model_lat_map.iteritems():
-                    cmd.append("--{n}_lat_micros={l}".format(n=n, lt=int(math.ceil(lt*1000*1000))))
+                    cmd.append("--{n}_lat_micros={lt}".format(n=n, lt=int(math.ceil(lt*1000*1000))))
                 if client_num == 0:
                     cmd.append("--get_clipper_metrics")
 

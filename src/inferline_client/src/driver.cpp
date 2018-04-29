@@ -49,8 +49,10 @@ Driver::Driver(std::function<void(std::unordered_map<std::string, std::shared_pt
     if (addr_find == address_client_map_.end()) {
       address_client_map_.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
 
-      std::string pr_str = port_ranges_[address.second];
+      std::string pr_str = port_ranges_[address.first];
+      std::cout << pr_str << std::endl;
       auto split = pr_str.find(",");
+
       int recv_port = std::stoi(pr_str.substr(0, split));
       int send_port = std::stoi(pr_str.substr(split + 1, pr_str.size()));
 
