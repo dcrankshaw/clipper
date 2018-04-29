@@ -187,7 +187,7 @@ def handle_predictions(predict_fn, request_queue, response_queue):
             clock_time = (after_predict_lineage_point - before_predict_lineage_point).total_seconds()
             user_time = user_after - user_before
             sys_time = sys_after - sys_before
-            kd.write("{clock},{user},{kernel}\n".format(clock_time, user_time, sys_time))
+            kd.write("{clock},{user},{kernel}\n".format(clock=clock_time, user=user_time, kernel=sys_time))
 
 
 
