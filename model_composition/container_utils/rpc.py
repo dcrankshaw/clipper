@@ -563,6 +563,9 @@ class RPCService:
         # send_port = 7011
         recv_port = int(os.environ["CLIPPER_RECV_PORT"])
         send_port = int(os.environ["CLIPPER_SEND_PORT"])
+        print("SEND PORT: {}, RECV_PORT: {}".format(send_port, recv_port))
+        sys.stdout.flush()
+        sys.stderr.flush()
 
 
         try:

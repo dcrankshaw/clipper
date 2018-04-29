@@ -127,8 +127,14 @@ def setup_clipper(frontend_configs, remote_addrs):
             mgmt_cpu_str="0",
             query_cpu_str=frontend.cpu_str)
         time.sleep(10)
+        grouped_configs = {}
         for c in frontend.node_configs:
-            driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
+            if c.name in grouped_configs:
+                grouped_configs[c.name].append(c)
+            else:
+                grouped_configs[c.name] = [c]
+        for c in grouped_configs.values():
+            driver_utils.setup_heavy_node(cl, None, c, DEFAULT_OUTPUT)
         idx += 1
         cls.append(cl)
     time.sleep(10)
@@ -401,7 +407,7 @@ def run_e2e(frontend_configs, trial_length, driver_path, profiler_cores_strs,
                        "--clipper_rest_port_resnet={}".format(frontend_configs[RES_BRANCH].rest_port),
                        "--clipper_address_inception={}".format(frontend_configs[INCEPT_BRANCH].address),
                        "--clipper_port_range_inception={}".format(",".join(frontend_configs[INCEPT_BRANCH].client_ports)),
-                       "--clipper_rest_port_inception={}".format(frontend_configs[INCEPTION_BRANCH].rest_port),
+                       "--clipper_rest_port_inception={}".format(frontend_configs[INCEPT_BRANCH].rest_port),
                        "--request_delay_file={}".format(arrival_delay_file),
                        "--latency_budget_micros={}".format(int(slo * 1000 * 1000))]
                 for n, lt in model_lat_map.iteritems():

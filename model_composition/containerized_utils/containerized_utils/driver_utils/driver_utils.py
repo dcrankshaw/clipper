@@ -4,8 +4,8 @@ import logging
 import os
 import datetime
 import requests
-from scipy.stats import linregress
-import numpy as np
+# from scipy.stats import linregress
+# import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -68,36 +68,47 @@ class HeavyNodeConfig(object):
         return json.dumps(self.__dict__)
 
 
-def setup_heavy_node(clipper_conn, config, default_output="TIMEOUT"):
-    clipper_conn.register_application(name=config.name,
-                                      default_output=default_output,
-                                      slo_micros=config.slo,
-                                      input_type=config.input_type)
-    if config.remote_addr is not None:
-        clipper_conn.deploy_model_remote(name=config.name,
-                                         version=1,
-                                         image=config.model_image,
-                                         input_type=config.input_type,
-                                         num_replicas=config.num_replicas,
-                                         batch_size=config.batch_size,
-                                         gpus=config.gpus,
-                                         allocated_cpus=config.allocated_cpus,
-                                         cpus_per_replica=config.cpus_per_replica,
-                                         use_nvidia_docker=config.use_nvidia_docker,
-                                         remote_addr=config.remote_addr)
+def setup_heavy_node(clipper_conn, local_config, remote_configs, default_output="TIMEOUT"):
+    if local_config is not None:
+        reg_config = local_config
     else:
-        clipper_conn.deploy_model(name=config.name,
-                                  version=1,
-                                  image=config.model_image,
-                                  input_type=config.input_type,
-                                  num_replicas=config.num_replicas,
-                                  batch_size=config.batch_size,
-                                  gpus=config.gpus,
-                                  allocated_cpus=config.allocated_cpus,
-                                  cpus_per_replica=config.cpus_per_replica,
-                                  use_nvidia_docker=config.use_nvidia_docker)
+        reg_config = remote_configs[0]
 
-    clipper_conn.link_model_to_app(app_name=config.name, model_name=config.name)
+    clipper_conn.register_application(name=reg_config.name,
+                                      default_output=default_output,
+                                      slo_micros=reg_config.slo,
+                                      input_type=reg_config.input_type)
+
+    clipper_conn.register_model(name=reg_config.name,
+                                version=1,
+                                image=reg_config.model_image,
+                                input_type=reg_config.input_type,
+                                batch_size=reg_config.batch_size)
+    if local_config is not None:
+        clipper_conn.cm.deploy_model(name=local_config.name,
+                                     version=1,
+                                     image=local_config.model_image,
+                                     input_type=local_config.input_type,
+                                     num_replicas=local_config.num_replicas,
+                                     batch_size=local_config.batch_size,
+                                     gpus=local_config.gpus,
+                                     allocated_cpus=local_config.allocated_cpus,
+                                     cpus_per_replica=local_config.cpus_per_replica,
+                                     use_nvidia_docker=local_config.use_nvidia_docker)
+    for r_config in remote_configs:
+        clipper_conn.cm.deploy_model_remote(name=r_config.name,
+                                         version=1,
+                                         image=r_config.model_image,
+                                         input_type=r_config.input_type,
+                                         num_replicas=r_config.num_replicas,
+                                         batch_size=r_config.batch_size,
+                                         gpus=r_config.gpus,
+                                         allocated_cpus=r_config.allocated_cpus,
+                                         cpus_per_replica=r_config.cpus_per_replica,
+                                         use_nvidia_docker=r_config.use_nvidia_docker,
+                                         remote_addr=r_config.remote_addr)
+
+    clipper_conn.link_model_to_app(app_name=reg_config.name, model_name=reg_config.name)
 
 
 class HeavyNodeConfigGCP(object):
