@@ -759,12 +759,12 @@ def run_experiment_for_config(config, orig_config, model_server_addrs):
             rpc_ports=[7010, 7011],
             client_ports=[4455, 4456],
             rest_port=1337,
-            cpu_str="8,9,10,11,40,41,42,43"),
+            cpu_str="8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"),
         INCEPT_BRANCH: ClipperFrontendConfig(
             rpc_ports=[7110, 7111],
             client_ports=[4555, 4556],
             rest_port=1437,
-            cpu_str="24,25,26,27,56,57,58,59")
+            cpu_str="24,25,26,27,28,29,30,31,56,57,58,59,60,61,62,63")
     }
     machines = [V100ResourceAllocator(a) for a in model_server_addrs]
     try:
@@ -798,11 +798,11 @@ def run_experiment_for_config(config, orig_config, model_server_addrs):
     # For client on standalone machine
     client_cpu_strs = [
         "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        "16,17,18,19,20,21,22,23,48,49,50,51,52,53,54,55"
+        # "16,17,18,19,20,21,22,23,48,49,50,51,52,53,54,55"
     ]
 
-    num_clients = 2
-    # num_clients = 1
+    # num_clients = 2
+    num_clients = 1
 
     model_lat_map = {}
     for name, n in config["node_configs"].iteritems():
