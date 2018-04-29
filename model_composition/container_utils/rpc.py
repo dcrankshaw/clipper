@@ -148,8 +148,14 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     # handle_dur_file = "/logs/handle_duration.log"
 
     # Field order: clock_time, user time, sys time
+    kernel_measures = False
+    if not os.path.exists("/logs"):
+        os.makedirs("/logs")
+
     kernel_instr_file = "/logs/kernel_measures.csv"
+
     # with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+
     with open(kernel_instr_file, "w") as kd:
         kd.write("wall_clock_secs, user_clock_ticks, kernel_clock_ticks\n")
         while True:
