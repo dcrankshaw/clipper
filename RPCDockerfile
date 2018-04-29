@@ -6,7 +6,7 @@ MAINTAINER Dan Crankshaw <dscrankshaw@gmail.com>
 RUN mkdir -p /model \
       && apt-get update \
       && apt-get install -y libzmq3 libzmq3-dev \
-      && conda install -y pyzmq
+      && conda install -y pyzmq subprocess32
 
 WORKDIR /container
 

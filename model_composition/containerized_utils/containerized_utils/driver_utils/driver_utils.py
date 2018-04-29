@@ -196,7 +196,8 @@ def save_results_cpp_client(configs,
                             prefix="results",
                             container_metrics=None,
                             loaded_config=None,
-                            contention=None):
+                            contention=None,
+                            kernel_measures=None):
     """
     Parameters
     ----------
@@ -233,6 +234,8 @@ def save_results_cpp_client(configs,
         results_obj["loaded_config"] = loaded_config
     if contention is not None:
         results_obj["contention"] = contention
+    if kernel_measures is not None:
+        results_obj["kernel_measures"] = kernel_measures
 
     results_file = os.path.join(results_dir, "{prefix}-{ts:%y%m%d_%H%M%S}.json".format(
         prefix=prefix, ts=datetime.datetime.now()))

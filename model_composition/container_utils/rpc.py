@@ -9,6 +9,7 @@ import socket
 import sys
 from collections import deque
 import json
+from subprocess32 import check_output
 
 from threading import Thread
 from Queue import Queue
@@ -142,14 +143,20 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     pred_count = 0
 
     last_loop_start = datetime.now()
-    loop_dur_file = "/logs/loop_duration.log"
-    handle_dur_file = "/logs/handle_duration.log"
-    with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+    # loop_dur_file = "/logs/loop_duration.log"
+    # handle_dur_file = "/logs/handle_duration.log"
+    # handle_dur_file = "/logs/handle_duration.log"
+
+    # Field order: clock_time, user time, sys time
+    kernel_instr_file = "/logs/kernel_measures.csv"
+    # with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
+    with open(kernel_instr_file, "w") as kd:
+        kd.write("wall_clock_secs, user_clock_ticks, kernel_clock_ticks\n")
         while True:
             cur_loop_start = datetime.now()
             loop_duration = (cur_loop_start - last_loop_start).microseconds
             loop_times.append(loop_duration)
-            ld.write("{}\n".format(loop_duration))
+            # ld.write("{}\n".format(loop_duration))
             last_loop_start = cur_loop_start
 
             t1 = datetime.now()
@@ -159,12 +166,28 @@ def handle_predictions(predict_fn, request_queue, response_queue):
 
             handle_start_times.append(time.time()*1000)
             before_predict_lineage_point = datetime.now()
+            proc_stat_before = check_output(["cat", "/proc/1/stat"]).strip().split()
+            user_before = int(proc_stat_before[13])
+            sys_before = int(proc_stat_before[14])
+
+
             outputs = predict_fn(prediction_request.inputs)
+            proc_stat_after = check_output(["cat", "/proc/1/stat"]).strip().split()
+            user_after = int(proc_stat_after[13])
+            sys_after = int(proc_stat_after[14])
+
             after_predict_lineage_point = datetime.now()
+            clock_time = (after_predict_lineage_point - before_predict_lineage_point).total_seconds()
+            user_time = user_after - user_before
+            sys_time = sys_after - sys_before
+            kd.write("{clock},{user},{kernel}\n".format(clock_time, user_time, sys_time))
+
+
+
             pred_count += len(prediction_request.inputs)
             t3 = datetime.now()
             handle_times.append((t3 - t2).microseconds)
-            hd.write("{}\n".format((t3 - t2).microseconds))
+            # hd.write("{}\n".format((t3 - t2).microseconds))
             # Type check the outputs:
             if not type(outputs) == list:
                 raise PredictionError("Model did not return a list")
@@ -206,8 +229,9 @@ def handle_predictions(predict_fn, request_queue, response_queue):
                 print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
                 throughput = float(pred_count) / (datetime.now() - trial_start).total_seconds()
                 print("Throughput: {}".format(throughput))
-                ld.flush()
-                hd.flush()
+                # ld.flush()
+                # hd.flush()
+                kd.flush()
 
                 loop_times = []
                 queue_get_times = []
@@ -234,7 +258,7 @@ class Server(threading.Thread):
         self.full_buffers = 0
         self.request_queue = Queue()
         self.response_queue = Queue()
-        self.recv_time_log = open("/logs/recv_times.log", "w")
+        # self.recv_time_log = open("/logs/recv_times.log", "w")
         self.init_time = datetime.now()
 
     def connect(self):
@@ -324,7 +348,7 @@ class Server(threading.Thread):
         self.recv_socket.recv()
         absolute_recv_time = datetime.now()
         recv_time = (absolute_recv_time - self.init_time).total_seconds()
-        self.recv_time_log.write("{}\n".format(recv_time))
+        # self.recv_time_log.write("{}\n".format(recv_time))
         msg_type_bytes = self.recv_socket.recv()
         msg_type = struct.unpack("<I", msg_type_bytes)[0]
         if msg_type is not MESSAGE_TYPE_CONTAINER_CONTENT:
@@ -397,7 +421,7 @@ class Server(threading.Thread):
             self.send_response()
             sys.stdout.flush()
             sys.stderr.flush()
-            self.recv_time_log.flush()
+            # self.recv_time_log.flush()
 
 
 

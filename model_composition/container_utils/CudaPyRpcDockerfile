@@ -12,7 +12,7 @@ RUN mkdir -p /model \
 RUN wget -P /tmp/ http://repo.continuum.io/archive/Anaconda2-4.4.0-Linux-x86_64.sh
 RUN bash /tmp/Anaconda2-4.4.0-Linux-x86_64.sh -b -p $ANACONDA
 RUN rm /tmp/Anaconda2-4.4.0-Linux-x86_64.sh
-RUN conda install -y pyzmq
+RUN conda install -y pyzmq subprocess32
 
 WORKDIR /container
 
