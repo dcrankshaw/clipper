@@ -101,22 +101,39 @@ def get_heavy_node_config(model_name,
                                             remote_addr=remote_addr)
 
 
-def setup_clipper(addr_config_map):
-    for addr, configs in addr_config_map.iteritems():
-        cl = ClipperConnection(AWSContainerManager(host=addr, redis_port=6380))
+def setup_clipper(frontend_configs, remote_addrs):
+    cls = []
+    redis_port = 6380
+    mgmt_port = 1338
+    idx = 0
+    for _, frontend in frontend_configs.iteritems():
+        cl = ClipperConnection(AWSContainerManager(
+            host=frontend.address,
+            rpc_ports=frontend.rpc_ports,
+            client_ports=frontend.client_ports,
+            query_rest_port=frontend.rest_port,
+            redis_port=redis_port + idx,
+            clipper_management_port=mgmt_port + idx,
+            docker_network="clipper_network_{}".format(idx)
+        ))
         # cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
-        cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
+        if idx == 0:
+            # Only cleanup the first time through
+            cl.stop_all(remote_addrs=remote_addrs)
         cl.start_clipper(
             query_frontend_image="clipper/zmq_frontend:develop",
             redis_cpu_str="0",
             mgmt_cpu_str="0",
-            query_cpu_str="0,16,1,17,2,18,3,19")
+            query_cpu_str=frontend.cpu_str)
         time.sleep(10)
-        for c in configs:
+        for c in frontend.node_configs:
             driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
+        idx += 1
+        cls.append(cl)
     time.sleep(10)
     logger.info("Clipper is set up!")
+    return cls
 
 
 def get_clipper_batch_sizes(metrics_json):
@@ -341,15 +358,16 @@ def get_arrival_proc_file(lam, cv):
     return arrival_delay_file
 
 
-def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs,
-        lam, cv, num_clients, slo, model_lat_map):
-    assert len(addr_config_map) >= 1
-    setup_clipper(addr_config_map)
+def run_e2e(frontend_configs, trial_length, driver_path, profiler_cores_strs,
+        lam, cv, num_clients, slo, model_lat_map, remote_addrs):
+    assert num_clients == 1
+    # assert len(addr_config_map) >= 1
+    cls = setup_clipper(frontend_configs, remote_addrs)
     # clipper_address = CLIPPER_ADDRESS
-    cls = [ClipperConnection(AWSContainerManager(host=addr, redis_port=6380)) for addr in addr_config_map]
-    # cls = [ClipperConnection(DockerContainerManager(redis_port=6380)) for addr in addr_config_map]
-    for cl in cls:
-        cl.connect()
+    # cls = [ClipperConnection(AWSContainerManager(host=addr, redis_port=6380)) for addr in addr_config_map]
+    # # cls = [ClipperConnection(DockerContainerManager(redis_port=6380)) for addr in addr_config_map]
+    # for cl in cls:
+    #     cl.connect()
 
     time.sleep(30)
     log_dir = "/tmp/image_driver_one_profiler_logs_{ts:%y%m%d_%H%M%S}".format(ts=datetime.now())
@@ -378,8 +396,12 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                        "--trial_length={}".format(trial_length),
                        "--num_trials={}".format(num_trials),
                        "--log_file={}".format(log_path),
-                       "--clipper_address_resnet={}".format(name_addr_map[TF_RESNET]),
-                       "--clipper_address_inception={}".format(name_addr_map[INCEPTION_FEATS]),
+                       "--clipper_address_resnet={}".format(frontend_configs[RES_BRANCH].address),
+                       "--clipper_port_range_resnet={}".format(",".join(frontend_configs[RES_BRANCH].client_ports)),
+                       "--clipper_rest_port_resnet={}".format(frontend_configs[RES_BRANCH].rest_port),
+                       "--clipper_address_inception={}".format(frontend_configs[INCEPT_BRANCH].address),
+                       "--clipper_port_range_inception={}".format(",".join(frontend_configs[INCEPT_BRANCH].client_ports)),
+                       "--clipper_rest_port_inception={}".format(frontend_configs[INCEPTION_BRANCH].rest_port),
                        "--request_delay_file={}".format(arrival_delay_file),
                        "--latency_budget_micros={}".format(int(slo * 1000 * 1000))]
                 for n, lt in model_lat_map.iteritems():
@@ -393,8 +415,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                                 for m in [TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG]}
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 procs[client_num] = (proc, log_path, client_path, lineage_paths)
-            clipper_paths = ["{p}-clipper_metrics_{addr}.json".format(
-                p=log_path, addr=a) for a in addr_config_map]
+            clipper_paths = ["{p}-clipper_metrics_{addr}:{port}.json".format(
+                p=log_path, addr=f.address, port=f.rest_port) for f in frontend_configs.values()]
 
             recorded_trials = 0
             summary_results = []
@@ -453,16 +475,16 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                                 if diverging_models[m] >= divergence_iteration_threshold:
                                     models_to_replicate.append(m)
                             # No need to keep running if we're already diverging
-                            if len(models_to_replicate) > 0:
-                                # The "finally" block of the outer try statement will terminate
-                                # the procs
-                                # # break out of the while loop
-                                # done = True
-                                # # stop all the drivers
-                                # for client_num in procs:
-                                #     proc, _, _, _ = procs[client_num]
-                                #     proc.terminate()
-                                return None, models_to_replicate
+                            # if len(models_to_replicate) > 0:
+                            #     # The "finally" block of the outer try statement will terminate
+                            #     # the procs
+                            #     # # break out of the while loop
+                            #     # done = True
+                            #     # # stop all the drivers
+                            #     # for client_num in procs:
+                            #     #     proc, _, _, _ = procs[client_num]
+                            #     #     proc.terminate()
+                            #     return None, models_to_replicate
                     else:
                         logger.info("Recorded trials is still {}".format(new_recorded_trials))
 
@@ -654,6 +676,7 @@ class ClipperFrontendConfig(object):
     def __repr__(self):
         return self.__str__()
 
+
 class V100ResourceAllocator(object):
     def __init__(self, address):
         self.address = address
@@ -743,12 +766,7 @@ def run_experiment_for_config(config, orig_config, model_server_addrs):
                      "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=json.dumps(config, indent=2)))
         return None
 
-    print(clipper_frontend_configs)
-    return None
-
-
-    ######################################################
-
+    print("Model distribution configs:\n{}".format(clipper_frontend_configs))
 
 
     lam = config["lam"]
@@ -776,7 +794,7 @@ def run_experiment_for_config(config, orig_config, model_server_addrs):
     ]
 
     # num_clients = 2
-    num_clients = 2
+    num_clients = 1
 
     model_lat_map = {}
     for name, n in config["node_configs"].iteritems():
@@ -787,26 +805,28 @@ def run_experiment_for_config(config, orig_config, model_server_addrs):
 
     throughput_results, models_to_replicate = run_e2e(
         clipper_frontend_configs, trial_length, "../../release/src/inferline_client/image_driver_one",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo, model_lat_map)
+        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo, model_lat_map,
+        [m.address for m in machines])
     if models_to_replicate is None:
         driver_utils.save_results_cpp_client(
-            dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
+            # dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
+            str(clipper_frontend_configs),
             throughput_results,
             None,
             results_dir,
             prefix=results_fname,
             orig_config=orig_config,
             used_config=config)
-    else:
-        new_config = config.copy()
-        for m in models_to_replicate:
-            new_config["node_configs"][m]["num_replicas"] += 1
-        logger.info(("Rerunning with more replicas of: {m}"
-                     "OLD CONFIG:\n{old}\nNEW CONFIG: {new}").format(
-                         m=models_to_replicate,
-                         old=config,
-                         new=new_config))
-        run_experiment_for_config(new_config, orig_config, resnet_addr, inception_addr)
+    # else:
+    #     new_config = config.copy()
+    #     for m in models_to_replicate:
+    #         new_config["node_configs"][m]["num_replicas"] += 1
+    #     logger.info(("Rerunning with more replicas of: {m}"
+    #                  "OLD CONFIG:\n{old}\nNEW CONFIG: {new}").format(
+    #                      m=models_to_replicate,
+    #                      old=config,
+    #                      new=new_config))
+    #     run_experiment_for_config(new_config, orig_config, resnet_addr, inception_addr)
 
 
 if __name__ == "__main__":

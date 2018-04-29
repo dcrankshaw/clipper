@@ -436,7 +436,7 @@ int main(int argc, char* argv[]) {
   port_ranges.emplace(TF_RESNET, options["clipper_port_range_resnet"].as<std::string>());
   port_ranges.emplace(INCEPTION_FEATS, options["clipper_port_range_inception"].as<std::string>());
 
-  std::unordered_map<std::string, std::string> rest_ports;
+  std::unordered_map<std::string, int> rest_ports;
   rest_ports.emplace(TF_RESNET, options["clipper_rest_port_resnet"].as<int>());
   rest_ports.emplace(INCEPTION_FEATS, options["clipper_rest_port_inception"].as<int>());
 

@@ -189,7 +189,7 @@ def save_results(configs, client_metrics, init_metrics, results_dir,
         logger.info("Saved results to {}".format(results_file))
 
 
-def save_results_cpp_client(addr_config_map,
+def save_results_cpp_client(clipper_frontend_configs,
                             throughput_results,
                             latency_results,
                             results_dir,
@@ -222,7 +222,7 @@ def save_results_cpp_client(addr_config_map,
     #         c["all_lats"] = all_lats_strs
 
     results_obj = {
-        "addr_config_map": addr_config_map
+        "clipper_frontend_configs": clipper_frontend_configs,
     }
     if throughput_results is not None:
         results_obj["throughput_results"] = throughput_results.get_dict()
@@ -244,145 +244,145 @@ def save_results_cpp_client(addr_config_map,
         logger.info("Saved results to {}".format(results_file))
 
 
-def check_convergence_via_queue(stats, configs):
-    """
-    Returns
-    -------
-    boolean : whether we're in a steady state yet
-    slope_sign : if we're not in a steady state, the sign of
-        the slope of the function computing latency
-        as a function of time. If the slope is negative, we're
-        draining the queues and we should keep waiting. If the slope is
-        positive, we're filling the queues faster than they can be drained
-        and we should quit and increase the delay.
-
-    """
-
-    window_size = min(15, len(stats["mean_queue_sizes"]) - 4)
-    # Raw is a list of dicts
-    queue_sizes_raw = stats["mean_queue_sizes"][-1*window_size:]
-    batch_sizes_raw = stats["mean_batch_sizes"][-1*window_size:]
-    queue_sizes = {}
-    batch_sizes = {}
-    # Reshape to a dict of lists
-    for model in queue_sizes_raw[0].keys():
-        queue_sizes[model] = []
-        batch_sizes[model] = []
-
-    for entry in queue_sizes_raw:
-        for model, size in entry.iteritems():
-            queue_sizes[model].append(size)
-
-    for entry in batch_sizes_raw:
-        for model, size in entry.iteritems():
-            batch_sizes[model].append(size)
-
-    window_size = min(15, len(batch_sizes) - 4)
-
-    desired_batch_sizes = {}
-    for c in configs:
-        desired_batch_sizes[c.name] = c.batch_size
-
-    # Check that at least one model is using large batch sizes (this should be the bottleneck model)
-    found_full_batches = False
-    for model_name in desired_batch_sizes.keys():
-        mean_of_means_batch_size = np.mean(batch_sizes[model_name])
-        if mean_of_means_batch_size > desired_batch_sizes[model_name]*0.85:
-            logger.info(("{name} is using full-size batches. Desired {desired}, "
-                         "actual: {actual}").format(
-                             name=model_name,
-                             actual=mean_of_means_batch_size,
-                             desired=float(desired_batch_sizes[model_name])))
-            found_full_batches = True
-
-    if not found_full_batches:
-        logger.info("No nodes are using large batch sizes")
-        return CONVERGED_LOW
-
-    # Now check that none of the queues are overloaded
-    for model_name, qs in queue_sizes.iteritems():
-        mean_queue_size = np.mean(qs)
-        std_queue_size = np.std(qs)
-        # Check if queue behavior has stabilized
-        if (mean_queue_size < 3.0*desired_batch_sizes[model_name] and
-                std_queue_size < 1.5*desired_batch_sizes[model_name]):
-            continue
-        else:
-            lr = linregress(x=range(len(qs)), y=qs)
-            logger.info("{mname} regression results:\n{lr}".format(mname=model_name, lr=lr))
-            # If pvalue less than 0.001, the line definitely has a slope
-            if lr.pvalue < 0.01:
-                if lr.slope > 0:
-                    return INCREASING
-                else:
-                    return DECREASING
-            else:
-                # If the pvalues is greater than 0.1, the queue size is not changing but it's still
-                # too high
-                return CONVERGED_HIGH
-    # If we've reached the end of the for loop and all the nodes queueing behavior is stable, return
-    # converged
-    return CONVERGED
-
-
-def check_convergence(stats, configs, latency_upper_bound=None):
-    """
-    Returns
-    -------
-    boolean : whether we're in a steady state yet
-    slope_sign : if we're not in a steady state, the sign of
-        the slope of the function computing latency
-        as a function of time. If the slope is negative, we're
-        draining the queues and we should keep waiting. If the slope is
-        positive, we're filling the queues faster than they can be drained
-        and we should quit and increase the delay.
-
-    """
-    window_size = min(15, len(stats["p99_lats"]) - 4)
-    p99_lats = stats["p99_lats"][-1*window_size:]
-
-    mean_batch_sizes = {}
-    for c in configs:
-        mean_batch_sizes[c.name] = np.mean(
-            [b[c.name] for b in stats["mean_batch_sizes"][-1*window_size:]])
-    lr = linregress(x=range(len(p99_lats)), y=p99_lats)
-    logger.info(lr)
-    # pvalue checks against the null hypothesis that the
-    # slope is 0. We are checking for the slope to be 0,
-    # so we want to the null hypothesis to be true.
-
-    # If pvalue less than 0.001, the line definitely has a slope
-    if lr.pvalue < 0.001:
-        if lr.slope > 0:
-            return INCREASING
-        else:
-            return DECREASING
-    elif lr.pvalue > 0.2:
-        # Slope is 0, now check to see
-        # if mean batch_sizes are less
-        # than
-        # configured batch size.
-
-        if latency_upper_bound is not None:
-            mean_p99_lats = np.mean(p99_lats)
-            if mean_p99_lats > latency_upper_bound:
-                logger.info(("Slope is 0 but p99 latency ({lat} s) is too high"
-                             " for node {name}").format(lat=mean_p99_lats,
-                                                        name=c.name))
-                return CONVERGED_HIGH
-
-        # If any of the nodes batch sizes are set to 1, skip the batch size check
-        for c in configs:
-            if c.batch_size == 1.0:
-                return CONVERGED
-
-        # We don't know which node is the bottleneck, so we check that all the nodes have batch
-        # sizes slightly less than the configured batch size.
-        for c in configs:
-            if mean_batch_sizes[c.name] == c.batch_size:
-                logger.info(("Slope is 0 but batch_sizes too big for "
-                             "node {name}").format(name=c.name))
-                return CONVERGED_HIGH
-        return CONVERGED
-    else:
-        return UNKNOWN
+# def check_convergence_via_queue(stats, configs):
+#     """
+#     Returns
+#     -------
+#     boolean : whether we're in a steady state yet
+#     slope_sign : if we're not in a steady state, the sign of
+#         the slope of the function computing latency
+#         as a function of time. If the slope is negative, we're
+#         draining the queues and we should keep waiting. If the slope is
+#         positive, we're filling the queues faster than they can be drained
+#         and we should quit and increase the delay.
+#
+#     """
+#
+#     window_size = min(15, len(stats["mean_queue_sizes"]) - 4)
+#     # Raw is a list of dicts
+#     queue_sizes_raw = stats["mean_queue_sizes"][-1*window_size:]
+#     batch_sizes_raw = stats["mean_batch_sizes"][-1*window_size:]
+#     queue_sizes = {}
+#     batch_sizes = {}
+#     # Reshape to a dict of lists
+#     for model in queue_sizes_raw[0].keys():
+#         queue_sizes[model] = []
+#         batch_sizes[model] = []
+#
+#     for entry in queue_sizes_raw:
+#         for model, size in entry.iteritems():
+#             queue_sizes[model].append(size)
+#
+#     for entry in batch_sizes_raw:
+#         for model, size in entry.iteritems():
+#             batch_sizes[model].append(size)
+#
+#     window_size = min(15, len(batch_sizes) - 4)
+#
+#     desired_batch_sizes = {}
+#     for c in configs:
+#         desired_batch_sizes[c.name] = c.batch_size
+#
+#     # Check that at least one model is using large batch sizes (this should be the bottleneck model)
+#     found_full_batches = False
+#     for model_name in desired_batch_sizes.keys():
+#         mean_of_means_batch_size = np.mean(batch_sizes[model_name])
+#         if mean_of_means_batch_size > desired_batch_sizes[model_name]*0.85:
+#             logger.info(("{name} is using full-size batches. Desired {desired}, "
+#                          "actual: {actual}").format(
+#                              name=model_name,
+#                              actual=mean_of_means_batch_size,
+#                              desired=float(desired_batch_sizes[model_name])))
+#             found_full_batches = True
+#
+#     if not found_full_batches:
+#         logger.info("No nodes are using large batch sizes")
+#         return CONVERGED_LOW
+#
+#     # Now check that none of the queues are overloaded
+#     for model_name, qs in queue_sizes.iteritems():
+#         mean_queue_size = np.mean(qs)
+#         std_queue_size = np.std(qs)
+#         # Check if queue behavior has stabilized
+#         if (mean_queue_size < 3.0*desired_batch_sizes[model_name] and
+#                 std_queue_size < 1.5*desired_batch_sizes[model_name]):
+#             continue
+#         else:
+#             lr = linregress(x=range(len(qs)), y=qs)
+#             logger.info("{mname} regression results:\n{lr}".format(mname=model_name, lr=lr))
+#             # If pvalue less than 0.001, the line definitely has a slope
+#             if lr.pvalue < 0.01:
+#                 if lr.slope > 0:
+#                     return INCREASING
+#                 else:
+#                     return DECREASING
+#             else:
+#                 # If the pvalues is greater than 0.1, the queue size is not changing but it's still
+#                 # too high
+#                 return CONVERGED_HIGH
+#     # If we've reached the end of the for loop and all the nodes queueing behavior is stable, return
+#     # converged
+#     return CONVERGED
+#
+#
+# def check_convergence(stats, configs, latency_upper_bound=None):
+#     """
+#     Returns
+#     -------
+#     boolean : whether we're in a steady state yet
+#     slope_sign : if we're not in a steady state, the sign of
+#         the slope of the function computing latency
+#         as a function of time. If the slope is negative, we're
+#         draining the queues and we should keep waiting. If the slope is
+#         positive, we're filling the queues faster than they can be drained
+#         and we should quit and increase the delay.
+#
+#     """
+#     window_size = min(15, len(stats["p99_lats"]) - 4)
+#     p99_lats = stats["p99_lats"][-1*window_size:]
+#
+#     mean_batch_sizes = {}
+#     for c in configs:
+#         mean_batch_sizes[c.name] = np.mean(
+#             [b[c.name] for b in stats["mean_batch_sizes"][-1*window_size:]])
+#     lr = linregress(x=range(len(p99_lats)), y=p99_lats)
+#     logger.info(lr)
+#     # pvalue checks against the null hypothesis that the
+#     # slope is 0. We are checking for the slope to be 0,
+#     # so we want to the null hypothesis to be true.
+#
+#     # If pvalue less than 0.001, the line definitely has a slope
+#     if lr.pvalue < 0.001:
+#         if lr.slope > 0:
+#             return INCREASING
+#         else:
+#             return DECREASING
+#     elif lr.pvalue > 0.2:
+#         # Slope is 0, now check to see
+#         # if mean batch_sizes are less
+#         # than
+#         # configured batch size.
+#
+#         if latency_upper_bound is not None:
+#             mean_p99_lats = np.mean(p99_lats)
+#             if mean_p99_lats > latency_upper_bound:
+#                 logger.info(("Slope is 0 but p99 latency ({lat} s) is too high"
+#                              " for node {name}").format(lat=mean_p99_lats,
+#                                                         name=c.name))
+#                 return CONVERGED_HIGH
+#
+#         # If any of the nodes batch sizes are set to 1, skip the batch size check
+#         for c in configs:
+#             if c.batch_size == 1.0:
+#                 return CONVERGED
+#
+#         # We don't know which node is the bottleneck, so we check that all the nodes have batch
+#         # sizes slightly less than the configured batch size.
+#         for c in configs:
+#             if mean_batch_sizes[c.name] == c.batch_size:
+#                 logger.info(("Slope is 0 but batch_sizes too big for "
+#                              "node {name}").format(name=c.name))
+#                 return CONVERGED_HIGH
+#         return CONVERGED
+#     else:
+#         return UNKNOWN
