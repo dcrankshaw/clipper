@@ -43,9 +43,9 @@ class AWSContainerManager(ContainerManager):
 
 
         self.rpc_ports = rpc_ports
-        self.internal_rpc_ports = [4455, 4456]
+        self.internal_rpc_ports = [7010, 7011]
         self.client_ports = client_ports
-        self.internal_client_ports = [7010, 7011]
+        self.internal_client_ports = [4455, 4456]
         self.query_rest_port = query_rest_port
         self.internal_rest_port = 1337
 

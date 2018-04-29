@@ -44,28 +44,49 @@ Driver::Driver(std::function<void(std::unordered_map<std::string, std::shared_pt
       port_ranges_(port_ranges),
       rest_ports_(rest_ports) {
   // first create a map from address to client
-  for (auto address : addresses_) {
-    auto addr_find = address_client_map_.find(address.second);
-    if (addr_find == address_client_map_.end()) {
-      address_client_map_.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
 
-      std::string pr_str = port_ranges_[address.first];
-      std::cout << pr_str << std::endl;
-      auto split = pr_str.find(",");
+  auto res_client = std::make_shared<FrontendRPCClient>(2);
+  std::string res_pr_str = port_ranges_["tf-resnet-feats"];
+  auto res_split = res_pr_str.find(",");
+  int res_recv_port = std::stoi(res_pr_str.substr(0, res_split));
+  int res_send_port = std::stoi(res_pr_str.substr(res_split + 1, res_pr_str.size()));
+  res_client->start(addresses["tf-resnet-feats"], res_send_port, res_recv_port);
 
-      int recv_port = std::stoi(pr_str.substr(0, split));
-      int send_port = std::stoi(pr_str.substr(split + 1, pr_str.size()));
+  auto incept_client = std::make_shared<FrontendRPCClient>(2);
+  std::string incept_pr_str = port_ranges_["inception"];
+  auto incept_split = incept_pr_str.find(",");
+  int incept_recv_port = std::stoi(incept_pr_str.substr(0, incept_split));
+  int incept_send_port = std::stoi(incept_pr_str.substr(incept_split + 1, incept_pr_str.size()));
+  incept_client->start(addresses["inception"], incept_send_port, incept_recv_port);
 
-      address_client_map_[address.second]->start(address.second, send_port, recv_port);
-    }
-  }
-  std::cout << "Starting " << std::to_string(address_client_map_.size()) << " ZMQ clients." << std::endl;
+  clients_.emplace("tf-resnet-feats", res_client);
+  clients_.emplace("tf-kernel-svm", res_client);
+  clients_.emplace("inception", incept_client);
+  clients_.emplace("tf-log-reg", incept_client);
+
+
+  // for (auto address : addresses_) {
+  //   auto addr_find = address_client_map_.find(address.second);
+  //   if (addr_find == address_client_map_.end()) {
+  //     address_client_map_.emplace(address.second, std::make_shared<FrontendRPCClient>(2));
+  //
+  //     std::string pr_str = port_ranges_[address.first];
+  //     std::cout << pr_str << std::endl;
+  //     auto split = pr_str.find(",");
+  //
+  //     int recv_port = std::stoi(pr_str.substr(0, split));
+  //     int send_port = std::stoi(pr_str.substr(split + 1, pr_str.size()));
+  //
+  //     address_client_map_[address.second]->start(address.second, send_port, recv_port);
+  //   }
+  // }
+  // std::cout << "Starting " << std::to_string(address_client_map_.size()) << " ZMQ clients." << std::endl;
   
   // now create a map from model name to client so models can just look up what client has
   // been assigned to them
-  for (auto address : addresses_) {
-    clients_.emplace(address.first, address_client_map_[address.second]);
-  }
+  // for (auto address : addresses_) {
+  //   clients_.emplace(address.first, address_client_map_[address.second]);
+  // }
 }
 
 void spin_sleep(long duration_micros) {
