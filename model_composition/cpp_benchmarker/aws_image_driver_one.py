@@ -8,8 +8,9 @@ import json
 from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
-import argparse
+# import argparse
 import hashlib
+import math
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -25,6 +26,9 @@ INCEPTION_FEATS = "inception"
 TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
 TF_RESNET = "tf-resnet-feats"
+
+RES_BRANCH = "res_branch"
+INCEPT_BRANCH = "incept_branch"
 
 ALL_REMOTE_ADDRS = []
 
@@ -180,11 +184,12 @@ def get_profiler_stats(cur_client_metrics):
     all_latencies = []
     all_thrus = []
     all_counts = []
-    ingest_rate = None
+    all_ingest_rates = []
     for metrics_json in cur_client_metrics:
         latencies = {}
         thrus = {}
         counts = {}
+        ingest_rates = {}
 
         data_lists = metrics_json["data_lists"]
         for l in data_lists:
@@ -203,9 +208,14 @@ def get_profiler_stats(cur_client_metrics):
                 model = name.split(":")[0]
                 rate = float(m[name]["rate"])
                 thrus[model] = round(float(rate), 5)
-            elif "ingest_rate" in m.keys()[0]:
-                assert m.keys()[0] == "ingest:ingest_rate"
-                ingest_rate = round(float(m["ingest:ingest_rate"]["rate"]), 5)
+
+        for m in meters:
+            if "ingest_rate" in m.keys()[0]:
+                name = m.keys()[0]
+                model = name.split(":")[0]
+                rate = float(m[name]["rate"])
+                ingest_rates[model] = round(float(rate), 5)
+
         counters = metrics_json["counters"]
         counts = {}
         for c in counters:
@@ -216,6 +226,7 @@ def get_profiler_stats(cur_client_metrics):
                 counts[model] = int(count)
         all_latencies.append(latencies)
         all_thrus.append(thrus)
+        all_ingest_rates.append(ingest_rates)
         all_counts.append(counts)
     agg_p99_latency = {}
     agg_mean_latency = {}
@@ -229,12 +240,17 @@ def get_profiler_stats(cur_client_metrics):
         total_thru = np.sum([c[model] for c in all_thrus])
         agg_thrus[model] = total_thru
 
+    agg_ingest_rates = {}
+    for model in all_ingest_rates[0]:
+        total_ingest_rate = np.sum([c[model] for c in all_ingest_rates])
+        agg_ingest_rates[model] = total_ingest_rate
+
     agg_counts = {}
     for model in all_counts[0]:
         total_count = np.sum([c[model] for c in all_counts])
         agg_counts[model] = total_count
 
-    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts, ingest_rate)
+    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts, agg_ingest_rates)
 
 
 def load_clipper_metrics(clipper_path):
@@ -269,10 +285,10 @@ def print_stats(cur_client_metrics, trial_num):
     results_dict = {}
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"], \
-        results_dict["ingest_rate"] = get_profiler_stats(cur_client_metrics)
+        results_dict["ingest_rates"] = get_profiler_stats(cur_client_metrics)
     logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
                 "\nMean lat: {client_mean_lats}"
-                 "\nIngest rate: {ingest_rate}\n").format(**results_dict))
+                 "\nIngest rates: {ingest_rates}\n").format(**results_dict))
     return results_dict
 
 
@@ -320,11 +336,13 @@ def get_arrival_proc_file(lam, cv):
         arrival_file_name = "{lam}.deltas".format(lam=lam)
     else:
         arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
-    arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
-                                        "cached_arrival_processes/{f}").format(f=arrival_file_name))
+        arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
+                                           "cached_arrival_processes/{f}").format(f=arrival_file_name))
     return arrival_delay_file
 
-def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients, slo):
+
+def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs,
+        lam, cv, num_clients, slo, model_lat_map):
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -364,6 +382,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                        "--clipper_address_inception={}".format(name_addr_map[INCEPTION_FEATS]),
                        "--request_delay_file={}".format(arrival_delay_file),
                        "--latency_budget_micros={}".format(int(slo * 1000 * 1000))]
+                for n, lt in model_lat_map.iteritems():
+                    cmd.append("--{n}_lat_micros={l}".format(n=n, lt=int(math.ceil(lt*1000*1000))))
                 if client_num == 0:
                     cmd.append("--get_clipper_metrics")
 
@@ -379,6 +399,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
             recorded_trials = 0
             summary_results = []
             done = False
+            diverging_models = {}
+
             while recorded_trials < num_trials and not done:
                 time.sleep(5)
                 cur_client_metrics = []
@@ -405,26 +427,42 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                         summary_results.append(new_stats)
                         print_stats_this_iter = True
                         # Run for a couple trials before checking for divergence
-                        if check_for_divergence and recorded_trials > 2:
-                            models_to_replicate = []
-                            ingest_rate = new_stats["ingest_rate"]
+                        if check_for_divergence and recorded_trials > 5:
+                            ingest_rates = new_stats["ingest_rates"]
                             for m, t in new_stats["client_thrus"].iteritems():
                                 if m != "e2e":
-                                    if t/ingest_rate < DIVERGENCE_THRESHOLD:
-                                        logger.info("GREPTHISBBBB: Detected divergence in model {m}: {t}/{i}".format(
-                                            m=m, t=t, i=ingest_rate))
-                                        models_to_replicate.append(m)
+                                    if t/ingest_rates[m] < DIVERGENCE_THRESHOLD:
+                                        logger.info("Trial {trial}: Detected divergence in model {m}: {t}/{i}".format(
+                                            m=m, t=t, i=ingest_rates[m], trial=recorded_trials))
+                                        # If this model is diverging, either increment or initialize
+                                        # it's divergence count
+                                        if m in diverging_models:
+                                            diverging_models[m] += 1
+                                        else:
+                                            diverging_models[m] = 1
+                                        logger.info("{} has diverged for {} trials".format(m, diverging_models[m]))
+                                    else:
+                                        # If this model is not diverging but was previously,
+                                        # remove it from the divergence count
+                                        if m in diverging_models:
+                                            del diverging_models[m]
+
+                            divergence_iteration_threshold = 3
+                            models_to_replicate = []
+                            for m in diverging_models:
+                                if diverging_models[m] >= divergence_iteration_threshold:
+                                    models_to_replicate.append(m)
                             # No need to keep running if we're already diverging
-                            # if len(models_to_replicate) > 0:
-                            #     # The "finally" block of the outer try statement will terminate
-                            #     # the procs
-                            #     # # break out of the while loop
-                            #     # done = True
-                            #     # # stop all the drivers
-                            #     # for client_num in procs:
-                            #     #     proc, _, _, _ = procs[client_num]
-                            #     #     proc.terminate()
-                            #     return None, models_to_replicate
+                            if len(models_to_replicate) > 0:
+                                # The "finally" block of the outer try statement will terminate
+                                # the procs
+                                # # break out of the while loop
+                                # done = True
+                                # # stop all the drivers
+                                # for client_num in procs:
+                                #     proc, _, _, _ = procs[client_num]
+                                #     proc.terminate()
+                                return None, models_to_replicate
                     else:
                         logger.info("Recorded trials is still {}".format(new_recorded_trials))
 
@@ -464,7 +502,7 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
             for c in procs:
                 procs[c][0].terminate()
 
-    run(100, 10, "warmup", "constant", check_for_divergence=False)
+    run(400, 10, "warmup", "constant", check_for_divergence=False)
     throughput_results, models_to_replicate = run(0, 25, "throughput", "file", check_for_divergence=True)
 
     for cl in cls:
@@ -481,143 +519,249 @@ def hash_file(fname):
         fbytes = f.read()
         return hashlib.sha256(fbytes).hexdigest()
 
-def assign_models_to_nodes(resnet_addr, inception_addr, config):
-    """
 
-    This method first assigns ResNet and Inception to nodes, then assigns
-    the ksvm reps to the ResNet node and the logistic regression models to
-    the Inception node.
-    Parameters
-    ----------
-    addrs: list
-        A list of available addresses for running models.
+# def assign_models_to_nodes(resnet_addr, inception_addr, config):
+#     """
+#
+#     This method first assigns ResNet and Inception to nodes, then assigns
+#     the ksvm reps to the ResNet node and the logistic regression models to
+#     the Inception node.
+#     Parameters
+#     ----------
+#     addrs: list
+#         A list of available addresses for running models.
+#
+#     """
+#     MAX_GPUS_PER_NODE = 4
+#
+#     # Map from address to resource name
+#     addr_resource_map = {
+#         resnet_addr: {"cpus": list(range(4, 16)),
+#             "gpus": list(range(MAX_GPUS_PER_NODE))
+#             },
+#         inception_addr: {"cpus": list(range(4, 16)),
+#             "gpus": list(range(MAX_GPUS_PER_NODE))
+#             }
+#     }
+#
+#
+#     # First assign GPU models greedily. We know that Resnet will always have the most
+#     # replicas, so start by assigning those.
+#     node_configs = config["node_configs"]
+#     res_config = node_configs[TF_RESNET]
+#     addr_config_map = {resnet_addr: [], inception_addr: []}
+#     name_addr_map = {TF_RESNET: resnet_addr, INCEPTION_FEATS: inception_addr}
+#     try:
+#         num_local_res_replicas = min(res_config["num_replicas"], MAX_GPUS_PER_NODE)
+#         num_remote_res_replicas = max(res_config["num_replicas"] - MAX_GPUS_PER_NODE, 0)
+#         local_res_node_conf = get_heavy_node_config(
+#             model_name=TF_RESNET,
+#             batch_size=int(res_config["batch_size"]),
+#             num_replicas=num_local_res_replicas,
+#             cpus_per_replica=res_config["num_cpus"],
+#             allocated_cpus=[addr_resource_map[name_addr_map[TF_RESNET]]["cpus"].pop()
+#                             for _ in range(res_config["num_cpus"]*num_local_res_replicas)],
+#             allocated_gpus=[addr_resource_map[name_addr_map[TF_RESNET]]["gpus"].pop()
+#                             for _ in range(num_local_res_replicas)]
+#         )
+#         addr_config_map[name_addr_map[TF_RESNET]].append(local_res_node_conf)
+#         if num_remote_res_replicas > 0:
+#             remote_res_node_conf = get_heavy_node_config(
+#                 model_name=TF_RESNET,
+#                 batch_size=int(res_config["batch_size"]),
+#                 num_replicas=num_remote_res_replicas,
+#                 cpus_per_replica=res_config["num_cpus"],
+#                 allocated_cpus=[addr_resource_map[inception_addr]["cpus"].pop()
+#                                 for _ in range(res_config["num_cpus"]*num_remote_res_replicas)],
+#                 allocated_gpus=[addr_resource_map[inception_addr]["gpus"].pop()
+#                                 for _ in range(num_remote_res_replicas)],
+#                 remote_addr=name_addr_map[TF_RESNET])
+#             addr_config_map[name_addr_map[TF_RESNET]].append(remote_res_node_conf)
+#         # Provision KSVM
+#         addr_config_map[name_addr_map[TF_RESNET]].append(get_heavy_node_config(
+#                     model_name=TF_KERNEL_SVM,
+#                     batch_size=int(node_configs[TF_KERNEL_SVM]["batch_size"]),
+#                     num_replicas=node_configs[TF_KERNEL_SVM]["num_replicas"],
+#                     cpus_per_replica=node_configs[TF_KERNEL_SVM]["num_cpus"],
+#                     allocated_cpus=[addr_resource_map[name_addr_map[TF_RESNET]]["cpus"].pop()
+#                                     for _ in range(node_configs[TF_KERNEL_SVM]["num_cpus"]*node_configs[TF_KERNEL_SVM]["num_replicas"])],
+#                     allocated_gpus=None
+#                 ))
+#
+#
+#
+#         # Now check if we can fit resnet and inception on same machine
+#         incept_config = node_configs[INCEPTION_FEATS]
+#         if incept_config["num_replicas"] + num_local_res_replicas < MAX_GPUS_PER_NODE:
+#             assert num_remote_res_replicas == 0
+#             name_addr_map[INCEPTION_FEATS] = name_addr_map[TF_RESNET]
+#
+#
+#         addr_config_map[name_addr_map[INCEPTION_FEATS]].append(get_heavy_node_config(
+#                     model_name=INCEPTION_FEATS,
+#                     batch_size=int(node_configs[INCEPTION_FEATS]["batch_size"]),
+#                     num_replicas=node_configs[INCEPTION_FEATS]["num_replicas"],
+#                     cpus_per_replica=node_configs[INCEPTION_FEATS]["num_cpus"],
+#                     allocated_cpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["cpus"].pop()
+#                                     for _ in range(node_configs[INCEPTION_FEATS]["num_cpus"]*node_configs[INCEPTION_FEATS]["num_replicas"])],
+#                     allocated_gpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["gpus"].pop()
+#                                     for _ in range(node_configs[INCEPTION_FEATS]["num_replicas"])],
+#                 )
+#         )
+#         addr_config_map[name_addr_map[INCEPTION_FEATS]].append(get_heavy_node_config(
+#                     model_name=TF_LOG_REG,
+#                     batch_size=int(node_configs[TF_LOG_REG]["batch_size"]),
+#                     num_replicas=node_configs[TF_LOG_REG]["num_replicas"],
+#                     cpus_per_replica=node_configs[TF_LOG_REG]["num_cpus"],
+#                     allocated_cpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["cpus"].pop()
+#                                     for _ in range(node_configs[TF_LOG_REG]["num_cpus"]*node_configs[TF_LOG_REG]["num_replicas"])],
+#                     allocated_gpus=None
+#                 )
+#         )
+#     except IndexError:
+#         msg = "Ran out of available GPUs"
+#         logger.exception(msg)
+#         raise BenchmarkConfigurationException(msg)
+#
+#     # Delete any addresses with no nodes assigned them, so we don't start the ZMQ frontend on them
+#     # unnecessarily
+#     for a in addr_config_map.keys():
+#         if len(addr_config_map[a]) == 0:
+#             del addr_config_map[a]
+#     # Sanity check
+#     for _, a in name_addr_map.iteritems():
+#         assert a in addr_config_map
+#
+#
+#
+#     return name_addr_map, addr_config_map
 
-    """
-    MAX_GPUS_PER_NODE = 4
 
-    # Map from address to resource name
-    addr_resource_map = {
-        resnet_addr: {"cpus": list(range(4,16)),
-            "gpus": list(range(MAX_GPUS_PER_NODE))
-            },
-        inception_addr: {"cpus": list(range(4,16)),
-            "gpus": list(range(MAX_GPUS_PER_NODE))
-            }
+class ClipperFrontendConfig(object):
+    def __init__(self, rpc_ports, client_ports, rest_port, cpu_str):
+        self.address = "localhost"
+        self.rpc_ports = rpc_ports
+        self.client_ports = client_ports
+        self.rest_port = rest_port
+        self.cpu_str = cpu_str
+        self.node_configs = []
+
+    def __str__(self):
+        d = self.__dict__.copy()
+        d["node_configs"] = [n.__dict__ for n in self.node_configs]
+        return json.dumps(d, indent=2)
+
+    def __repr__(self):
+        return self.__str__()
+
+class V100ResourceAllocator(object):
+    def __init__(self, address):
+        self.address = address
+        self.cpus = list(range(16))
+        self.gpus = list(range(4))
+
+
+def assign_reps_to_machines(node_config, machines):
+    reps_to_machines_map = dict((m.address, {"cpus": [], "gpus": [], "count": 0}) for m in machines)
+    uses_gpu = node_config["gpu_type"] is not None and node_config["gpu_type"] != "none"
+    for _ in range(node_config["num_replicas"]):
+        # randomly pick a machine and see if it has resources
+        machine_index = np.random.randint(len(machines))
+        init_machine_index = machine_index
+        found_machine = False
+        if len(machines[machine_index].cpus) == 0 or \
+                (uses_gpu and len(machines[machine_index].gpus) == 0):
+            machine_index = (machine_index + 1) % len(machines)
+            while machine_index != init_machine_index:
+                if len(machines[machine_index].cpus) == 0 or \
+                        (uses_gpu and len(machines[machine_index].gpus) == 0):
+                    machine_index = (machine_index + 1) % len(machines)
+                else:
+                    found_machine = True
+                    break
+        else:
+            found_machine = True
+
+        if found_machine:
+            cur_machine = machines[machine_index]
+            reps_to_machines_map[cur_machine.address]["count"] += 1
+            reps_to_machines_map[cur_machine.address]["cpus"].extend(
+                [cur_machine.cpus.pop() for _ in range(node_config["num_cpus"])])
+            if uses_gpu:
+                reps_to_machines_map[cur_machine.address]["gpus"].append(cur_machine.gpus.pop())
+        else:
+            msg = "Ran out of machine resources: {}".format([m.__dict__ for m in machines])
+            logger.exception(msg)
+            raise BenchmarkConfigurationException(msg)
+
+    heavy_node_configs = []
+    for addr, alloc in reps_to_machines_map.iteritems():
+        if alloc["count"] > 0:
+            heavy_node_configs.append(get_heavy_node_config(
+                model_name=node_config["name"],
+                batch_size=int(node_config["batch_size"]),
+                num_replicas=alloc["count"],
+                cpus_per_replica=node_config["num_cpus"],
+                allocated_cpus=alloc["cpus"],
+                allocated_gpus=alloc["gpus"],
+                remote_addr=addr)
+            )
+
+    return heavy_node_configs
+
+
+def assign_models_to_nodes(log_config, clipper_frontend_configs, machines):
+    node_configs = log_config["node_configs"]
+    model_to_frontend_map = {
+        TF_RESNET: RES_BRANCH,
+        TF_KERNEL_SVM: RES_BRANCH,
+        INCEPTION_FEATS: INCEPT_BRANCH,
+        TF_LOG_REG: INCEPT_BRANCH
     }
 
+    for name, n in node_configs.iteritems():
+        clipper_frontend_configs[model_to_frontend_map[name]].node_configs.extend(
+            assign_reps_to_machines(n, machines))
 
-    # First assign GPU models greedily. We know that Resnet will always have the most
-    # replicas, so start by assigning those.
-    node_configs = config["node_configs"]
-    res_config = node_configs[TF_RESNET]
-    addr_config_map = {resnet_addr: [], inception_addr: []}
-    name_addr_map = {TF_RESNET: resnet_addr, INCEPTION_FEATS: inception_addr}
+
+def run_experiment_for_config(config, orig_config, model_server_addrs):
+    clipper_frontend_configs = {
+        RES_BRANCH: ClipperFrontendConfig(rpc_ports=[4455, 4456],
+                              client_ports=[7010, 7011],
+                              rest_port=1337,
+                              cpu_str="8,9,10,11,40,41,42,43"),
+        INCEPT_BRANCH: ClipperFrontendConfig(rpc_ports=[4555, 4556],
+                              client_ports=[7110, 7111],
+                              rest_port=1437,
+                              cpu_str="24,25,26,27,56,57,58,59")
+    }
+    machines = [V100ResourceAllocator(a) for a in model_server_addrs]
     try:
-        num_local_res_replicas = min(res_config["num_replicas"], MAX_GPUS_PER_NODE)
-        num_remote_res_replicas = max(res_config["num_replicas"] - MAX_GPUS_PER_NODE, 0)
-        local_res_node_conf = get_heavy_node_config(
-            model_name=TF_RESNET,
-            batch_size=int(res_config["batch_size"]),
-            num_replicas=num_local_res_replicas,
-            cpus_per_replica=res_config["num_cpus"],
-            allocated_cpus=[addr_resource_map[name_addr_map[TF_RESNET]]["cpus"].pop()
-                            for _ in range(res_config["num_cpus"]*num_local_res_replicas)],
-            allocated_gpus=[addr_resource_map[name_addr_map[TF_RESNET]]["gpus"].pop()
-                            for _ in range(num_local_res_replicas)]
-        )
-        addr_config_map[name_addr_map[TF_RESNET]].append(local_res_node_conf)
-        if num_remote_res_replicas > 0:
-            remote_res_node_conf = get_heavy_node_config(
-                model_name=TF_RESNET,
-                batch_size=int(res_config["batch_size"]),
-                num_replicas=num_remote_res_replicas,
-                cpus_per_replica=res_config["num_cpus"],
-                allocated_cpus=[addr_resource_map[inception_addr]["cpus"].pop()
-                                for _ in range(res_config["num_cpus"]*num_remote_res_replicas)],
-                allocated_gpus=[addr_resource_map[inception_addr]["gpus"].pop()
-                                for _ in range(num_remote_res_replicas)],
-                remote_addr=name_addr_map[TF_RESNET])
-            addr_config_map[name_addr_map[TF_RESNET]].append(remote_res_node_conf)
-        # Provision KSVM
-        addr_config_map[name_addr_map[TF_RESNET]].append(get_heavy_node_config(
-                    model_name=TF_KERNEL_SVM,
-                    batch_size=int(node_configs[TF_KERNEL_SVM]["batch_size"]),
-                    num_replicas=node_configs[TF_KERNEL_SVM]["num_replicas"],
-                    cpus_per_replica=node_configs[TF_KERNEL_SVM]["num_cpus"],
-                    allocated_cpus=[addr_resource_map[name_addr_map[TF_RESNET]]["cpus"].pop()
-                                    for _ in range(node_configs[TF_KERNEL_SVM]["num_cpus"]*node_configs[TF_KERNEL_SVM]["num_replicas"])],
-                    allocated_gpus=None
-                ))
-
-
-
-        # Now check if we can fit resnet and inception on same machine
-        incept_config = node_configs[INCEPTION_FEATS]
-        if incept_config["num_replicas"] + num_local_res_replicas < MAX_GPUS_PER_NODE:
-            assert num_remote_res_replicas == 0
-            name_addr_map[INCEPTION_FEATS] = name_addr_map[TF_RESNET]
-
-
-        addr_config_map[name_addr_map[INCEPTION_FEATS]].append(get_heavy_node_config(
-                    model_name=INCEPTION_FEATS,
-                    batch_size=int(node_configs[INCEPTION_FEATS]["batch_size"]),
-                    num_replicas=node_configs[INCEPTION_FEATS]["num_replicas"],
-                    cpus_per_replica=node_configs[INCEPTION_FEATS]["num_cpus"],
-                    allocated_cpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["cpus"].pop()
-                                    for _ in range(node_configs[INCEPTION_FEATS]["num_cpus"]*node_configs[INCEPTION_FEATS]["num_replicas"])],
-                    allocated_gpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["gpus"].pop()
-                                    for _ in range(node_configs[INCEPTION_FEATS]["num_replicas"])],
-                )
-        )
-        addr_config_map[name_addr_map[INCEPTION_FEATS]].append(get_heavy_node_config(
-                    model_name=TF_LOG_REG,
-                    batch_size=int(node_configs[TF_LOG_REG]["batch_size"]),
-                    num_replicas=node_configs[TF_LOG_REG]["num_replicas"],
-                    cpus_per_replica=node_configs[TF_LOG_REG]["num_cpus"],
-                    allocated_cpus=[addr_resource_map[name_addr_map[INCEPTION_FEATS]]["cpus"].pop()
-                                    for _ in range(node_configs[TF_LOG_REG]["num_cpus"]*node_configs[TF_LOG_REG]["num_replicas"])],
-                    allocated_gpus=None
-                )
-        )
-    except IndexError:
-        msg = "Ran out of available GPUs"
-        logger.exception(msg)
-        raise BenchmarkConfigurationException(msg)
-
-    # Delete any addresses with no nodes assigned them, so we don't start the ZMQ frontend on them
-    # unnecessarily
-    for a in addr_config_map.keys():
-        if len(addr_config_map[a]) == 0:
-            del addr_config_map[a]
-    # Sanity check
-    for _, a in name_addr_map.iteritems():
-        assert a in addr_config_map
-
-
-
-    return name_addr_map, addr_config_map
-
-
-def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
-    try:
-        name_addr_map, addr_config_map = assign_models_to_nodes(resnet_addr, inception_addr, config)
+        assign_models_to_nodes(config, clipper_frontend_configs, machines)
     except BenchmarkConfigurationException as e:
         logger.error("Error provisioning for requested configuration. Skipping.\n"
-                     "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=config))
+                     "Reason: {reason}\nBad config was:\n{conf}".format(reason=e, conf=json.dumps(config, indent=2)))
         return None
-    print("\n\n\nADDR CONFIG MAP:\n{}".format(json.dumps(dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]), indent=2)))
-    print("NAME ADDR MAP:\n:{}".format(json.dumps(name_addr_map, indent=2)))
+
+    print(clipper_frontend_configs)
+    return None
+
+
+    ######################################################
+
+
+
     lam = config["lam"]
     cv = config["cv"]
     slo = config["slo"]
     cost = config["cost"]
-    utilization = config["utilization"]
+    # utilization = config["utilization"]
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
     if "latency_percentage" not in config:
         config["latency_percentage"] = 1.0
-    latency_perc = config["latency_percentage"]
+    # latency_perc = config["latency_percentage"]
 
     results_dir = "pipeline_one_e2e_sys_comp"
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
@@ -625,18 +769,25 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
     results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
         lam=lam, cv=cv, slo=slo, cost=cost, reps_str=reps_str)
 
-
     # For client on standalone machine
     client_cpu_strs = [
         "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        # "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
+        # "16,17,18,19,20,21,22,23,48,49,50,51,52,53,54,55"
     ]
 
-    num_clients = 1
+    # num_clients = 2
+    num_clients = 2
+
+    model_lat_map = {}
+    for name, n in config["node_configs"].iteritems():
+        model_lat_map[name] = n["p99_lat"]
+    print(model_lat_map)
+
+    trial_length = 3000
 
     throughput_results, models_to_replicate = run_e2e(
-        addr_config_map, name_addr_map, 2000, "../../release/src/inferline_client/image_driver_one",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
+        clipper_frontend_configs, trial_length, "../../release/src/inferline_client/image_driver_one",
+        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo, model_lat_map)
     if models_to_replicate is None:
         driver_utils.save_results_cpp_client(
             dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
@@ -650,12 +801,12 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
         new_config = config.copy()
         for m in models_to_replicate:
             new_config["node_configs"][m]["num_replicas"] += 1
-        logger.info(("GREPTHISAAAAA: Rerunning with more replicas of: {m}"
+        logger.info(("Rerunning with more replicas of: {m}"
                      "OLD CONFIG:\n{old}\nNEW CONFIG: {new}").format(
                          m=models_to_replicate,
                          old=config,
                          new=new_config))
-        run_experiment_for_config(new_config, orig_config)
+        run_experiment_for_config(new_config, orig_config, resnet_addr, inception_addr)
 
 
 if __name__ == "__main__":
@@ -665,27 +816,21 @@ if __name__ == "__main__":
 
     base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
 
-    # config_paths = [
-    #     # "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-    #     # "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json",
-    #     # "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
-    #     # "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_1.0.json",
-    #     "aws_image_driver_one_ifl_configs_slo_0.35_cv_4.0.json",
-    # ]
-    #
-    # config_paths = [os.path.join(base_path, c) for c in config_paths]
-    config_paths = [os.path.join(base_path, c) for c in os.listdir(base_path)]
+    config_paths = [
+        "all_configs_pipeline_one.json"
+    ]
+
+    config_paths = [os.path.join(base_path, c) for c in config_paths]
+    # config_paths = [os.path.join(base_path, c) for c in os.listdir(base_path)]
 
     # for config_path in args.config_paths:
     for config_path in config_paths:
-        print(config_path)
-        with open(os.path.abspath(os.path.expanduser(config_path)), "r") as f:
-            provided_configs = json.load(f)
-
-        for config in provided_configs:
-            run_experiment_for_config(
-                config, config.copy(),
-                os.environ["RESNET_CLIPPER_ADDR"],
-                os.environ["INCEPTION_CLIPPER_ADDR"])
+        if config_path[-4:] == "json":
+            with open(os.path.abspath(os.path.expanduser(config_path)), "r") as f:
+                provided_configs = json.load(f)
+            for config in provided_configs:
+                run_experiment_for_config(
+                    config, config.copy(),
+                    [os.environ["RESNET_CLIPPER_ADDR"], os.environ["INCEPTION_CLIPPER_ADDR"]])
+                sys.exit(0)
     sys.exit(0)

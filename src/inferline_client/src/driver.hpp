@@ -18,7 +18,9 @@ class Driver {
          std::vector<ClientFeatureVector> inputs, float target_throughput, std::string distribution,
          int trial_length, int num_trials, std::string log_file,
          std::unordered_map<std::string, std::string> addresses, int batch_size,
-         std::vector<float> delay_ms, bool collect_clipper_metrics);
+         std::vector<float> delay_ms, bool collect_clipper_metrics,
+         std::unordered_map<std::string, std::string> port_ranges,
+         std::unordered_map<std::string, int> rest_ports);
 
   void start();
 
@@ -39,6 +41,8 @@ class Driver {
   std::atomic<int> prediction_counter_;
   // Map from model name to address
   std::unordered_map<std::string, std::string> addresses_;
+  std::unordered_map<std::string, std::string> port_ranges_;
+  std::unordered_map<std::string, int> rest_ports_;
   int batch_size_;
   std::vector<float> delay_ms_;
   bool collect_clipper_metrics_;

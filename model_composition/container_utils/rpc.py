@@ -9,6 +9,7 @@ import socket
 import sys
 from collections import deque
 import json
+import os
 
 from threading import Thread
 from Queue import Queue
@@ -558,8 +559,11 @@ class RPCService:
             input_type (str): One of ints, doubles, floats, bytes, strings.
         """
 
-        recv_port = 7010
-        send_port = 7011
+        # recv_port = 7010
+        # send_port = 7011
+        recv_port = int(os.environ["CLIPPER_RECV_PORT"])
+        send_port = int(os.environ["CLIPPER_SEND_PORT"])
+
 
         try:
             ip = socket.gethostbyname(host)

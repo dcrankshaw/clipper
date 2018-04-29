@@ -25,41 +25,14 @@ class AWSContainerManager(ContainerManager):
     def __init__(self,
                  host="localhost",
                  key_path=os.path.expanduser("~/.ssh/aws_rsa"),
-                 clipper_query_port=1337,
+                 rpc_ports=None,
+                 client_ports=None,
+                 query_rest_port=None,
                  clipper_management_port=1338,
-                 clipper_rpc_port=7000,
                  redis_ip=None,
                  redis_port=6379,
                  docker_network="clipper_network",
                  extra_container_kwargs={}):
-
-        """
-        Parameters
-        ----------
-        docker_ip_address : str, optional
-            The public hostname or IP address at which the Clipper Docker
-            containers can be accessed via their exposed ports. This should almost always
-            be "localhost". Only change if you know what you're doing!
-        clipper_query_port : int, optional
-            The port on which the query frontend should listen for incoming prediction requests.
-        clipper_management_port : int, optional
-            The port on which the management frontend should expose the management REST API.
-        clipper_rpc_port : int, optional
-            The port to start the Clipper RPC service on.
-        redis_ip : str, optional
-            The address of a running Redis cluster. If set to None, Clipper will start
-            a Redis container for you.
-        redis_port : int, optional
-            The Redis port. If ``redis_ip`` is set to None, Clipper will start Redis on this port.
-            If ``redis_ip`` is provided, Clipper will connect to Redis on this port.
-        docker_network : str, optional
-            The docker network to attach the containers to. You can read more about Docker
-            networking in the
-            `Docker User Guide <https://docs.docker.com/engine/userguide/networking/>`_.
-        extra_container_kwargs : dict
-            Any additional keyword arguments to pass to the call to
-            :py:meth:`docker.client.containers.run`.
-        """
         self.host = host
         env.host_string = self.host
         env.key_filename = key_path
@@ -69,14 +42,17 @@ class AWSContainerManager(ContainerManager):
         fab_output["debug"] = True
 
 
-
-
+        self.rpc_ports = rpc_ports
+        self.internal_rpc_ports = [4455, 4456]
+        self.client_ports = client_ports
+        self.internal_client_ports = [7010, 7011]
+        self.query_rest_port = query_rest_port
+        self.internal_rest_port = 1337
 
 
         self.public_hostname = self.host
-        self.clipper_query_port = clipper_query_port
         self.clipper_management_port = clipper_management_port
-        self.clipper_rpc_port = clipper_rpc_port
+
         self.redis_ip = redis_ip
         if redis_ip is None:
             self.external_redis = False
@@ -196,29 +172,18 @@ class AWSContainerManager(ContainerManager):
         self._execute(mgmt_docker_cmd)
 
 
-
-
-        # mgmt_labels = self.common_labels.copy()
-        # mgmt_labels[CLIPPER_MGMT_FRONTEND_CONTAINER_LABEL] = ""
-        # self.docker_client.containers.run(
-        #     mgmt_frontend_image,
-        #     mgmt_cmd,
-        #     name="mgmt_frontend-{}".format(
-        #         random.randint(0, 100000)),  # generate a random name
-        #     ports={
-        #         '%s/tcp' % CLIPPER_INTERNAL_MANAGEMENT_PORT:
-        #         self.clipper_management_port
-        #     },
-        #     labels=mgmt_labels,
-        #     cpuset_cpus=mgmt_cpu_str,
-        #     **self.extra_container_kwargs)
-
-
         query_cmd = "--redis_ip={redis_ip} --redis_port={redis_port}".format(
             redis_ip=self.redis_ip, redis_port=self.redis_port)
         # query_ports = [4455, 4456, 9999, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
-        query_ports = [4455, 4456, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
-        query_ports_str = " ".join(["-p {p}:{p}".format(p=p) for p in query_ports])
+        # query_ports = [4455, 4456, 1337, 7010, 7011, CLIPPER_INTERNAL_RPC_PORT]
+        query_ports = [
+            (self.rpc_ports[0], self.internal_rpc_ports[0]),
+            (self.rpc_ports[1], self.internal_rpc_ports[1]),
+            (self.client_ports[0], self.internal_client_ports[0]),
+            (self.client_ports[1], self.internal_client_ports[1]),
+            (self.query_rest_port, self.internal_rest_port)
+        ]
+        query_ports_str = " ".join(["-p {h}:{c}".format(h=p[0], c=p[1]) for p in query_ports])
         query_labels = self.common_labels.copy()
         query_labels[CLIPPER_QUERY_FRONTEND_CONTAINER_LABEL] = ""
         query_labels_str = " ".join(["-l {k}={v}".format(k=k, v=v) for k, v in query_labels.iteritems()])
@@ -322,6 +287,8 @@ class AWSContainerManager(ContainerManager):
             # in same docker network as the query frontend
             "CLIPPER_IP": query_frontend_hostname,
             "CLIPPER_INPUT_TYPE": input_type,
+            "CLIPPER_RECV_PORT": self.rpc_ports[0],
+            "CLIPPER_SEND_PORT": self.rpc_ports[1],
         }
         labels = self.common_labels.copy()
         labels[CLIPPER_MODEL_CONTAINER_LABEL] = create_model_container_label(
@@ -380,10 +347,10 @@ class AWSContainerManager(ContainerManager):
         env_vars = {
             "CLIPPER_MODEL_NAME": name,
             "CLIPPER_MODEL_VERSION": version,
-            # NOTE: assumes this container being launched on same machine
-            # in same docker network as the query frontend
             "CLIPPER_IP": query_frontend_hostname,
             "CLIPPER_INPUT_TYPE": input_type,
+            "CLIPPER_RECV_PORT": self.rpc_ports[0],
+            "CLIPPER_SEND_PORT": self.rpc_ports[1],
         }
         labels = self.common_labels.copy()
         labels[CLIPPER_MODEL_CONTAINER_LABEL] = create_model_container_label(
