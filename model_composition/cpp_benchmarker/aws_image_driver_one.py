@@ -390,7 +390,8 @@ def get_arrival_proc_files(lam, cv, num_clients, out_dir):
 
 
 
-def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs, lam, cv, num_clients, slo):
+def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs,
+            lam, cv, num_clients, slo):
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -512,7 +513,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                     logger.info("stderr: {}".format(prof_stderr))
                 try:
                     loaded_metrics = load_metrics(client_path)
-                    lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
+                    # lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
+                    lineages = None
                     if loaded_metrics is not None:
                         all_client_metrics.append(loaded_metrics)
                     else:

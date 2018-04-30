@@ -105,12 +105,13 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     auto cur_time = std::chrono::system_clock::now();
 
     double idk = double_rand(0.0, 1.0);
-    if (idk > 0.4633) {
+    if (idk > 0.9) {
       clients[RES152]->send_request(
-          RES152, input, [cur_time, res152_callback](ClientFeatureVector output,
+          RES152, input, 0, [cur_time, res152_callback](ClientFeatureVector output,
                                                      std::shared_ptr<QueryLineage> lineage) {
             res152_callback(output, lineage, cur_time);
           });
+        metrics.ingests_.find(RES152)->second->mark(1);
     } else {
       completion_callback();
     }
@@ -159,10 +160,11 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     double idk = double_rand(0.0, 1.0);
     if (idk > 0.192) {
       clients[RES50]->send_request(
-          RES50, input, [cur_time, res50_callback](ClientFeatureVector output,
+          RES50, input, 0, [cur_time, res50_callback](ClientFeatureVector output,
                                                    std::shared_ptr<QueryLineage> lineage) {
             res50_callback(output, lineage, cur_time);
           });
+        metrics.ingests_.find(RES50)->second->mark(1);
     } else {
       completion_callback();
     }
@@ -196,7 +198,9 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  clients[ALEXNET]->send_request(ALEXNET, input, alexnet_callback);
+  metrics.ingests_.find("e2e")->second->mark(1);
+  clients[ALEXNET]->send_request(ALEXNET, input, 0, alexnet_callback);
+  metrics.ingests_.find(ALEXNET)->second->mark(1);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
