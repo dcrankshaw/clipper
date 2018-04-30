@@ -9,7 +9,6 @@ import socket
 import sys
 from collections import deque
 import json
-from subprocess32 import check_output
 import os
 
 from threading import Thread
