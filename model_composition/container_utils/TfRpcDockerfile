@@ -8,5 +8,8 @@ RUN mkdir -p /model \
     && pip install subprocess32
 
 COPY rpc.py __init__.py /container/
+COPY compile_tensorflow.py /
+# RUN cd / && python compile_tensorflow.py
+CMD ["python", "/compile_tensorflow.py"]
 
 # vim: set filetype=dockerfile:
