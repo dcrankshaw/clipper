@@ -611,7 +611,7 @@ if __name__ == "__main__":
     cont_throughput = 1000
     contention_cpu_batch = 8
     contention_gpu_batch = 32
-    for model in [TF_KERNEL_SVM]:
+    for model in [RES152]:
         for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
             available_cpus = list(range(4, 16))
             available_gpus = list(range(4))
