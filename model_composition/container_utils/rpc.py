@@ -149,107 +149,109 @@ def handle_predictions(predict_fn, request_queue, response_queue):
     # handle_dur_file = "/logs/handle_duration.log"
 
     # Field order: clock_time, user time, sys time
-    kernel_measures = False
-    if not os.path.exists("/logs"):
-        os.makedirs("/logs")
-
-    kernel_instr_file = "/logs/kernel_measures.csv"
+    # kernel_measures = False
+    # if not os.path.exists("/logs"):
+    #     os.makedirs("/logs")
+    #
+    # kernel_instr_file = "/logs/kernel_measures.csv"
 
     # with open(loop_dur_file, "w") as ld, open(handle_dur_file, "w") as hd:
 
-    with open(kernel_instr_file, "w") as kd:
-        kd.write("wall_clock_secs, user_clock_ticks, kernel_clock_ticks\n")
-        while True:
-            cur_loop_start = datetime.now()
-            loop_duration = (cur_loop_start - last_loop_start).microseconds
-            loop_times.append(loop_duration)
-            # ld.write("{}\n".format(loop_duration))
-            last_loop_start = cur_loop_start
+    # with open(kernel_instr_file, "w") as kd:
+    #     kd.write("wall_clock_secs, user_clock_ticks, kernel_clock_ticks\n")
+    while True:
+        cur_loop_start = datetime.now()
+        loop_duration = (cur_loop_start - last_loop_start).microseconds
+        loop_times.append(loop_duration)
+        # ld.write("{}\n".format(loop_duration))
+        last_loop_start = cur_loop_start
 
-            t1 = datetime.now()
-            prediction_request, recv_time = request_queue.get(block=True)
-            t2 = datetime.now()
-            queue_get_times.append((t2 - t1).microseconds)
+        t1 = datetime.now()
+        prediction_request, recv_time = request_queue.get(block=True)
+        t2 = datetime.now()
+        queue_get_times.append((t2 - t1).microseconds)
 
-            handle_start_times.append(time.time()*1000)
-            before_predict_lineage_point = datetime.now()
-            proc_stat_before = check_output(["cat", "/proc/1/stat"]).strip().split()
-            user_before = int(proc_stat_before[13])
-            sys_before = int(proc_stat_before[14])
-
-
-            outputs = predict_fn(prediction_request.inputs)
-            proc_stat_after = check_output(["cat", "/proc/1/stat"]).strip().split()
-            user_after = int(proc_stat_after[13])
-            sys_after = int(proc_stat_after[14])
-
-            after_predict_lineage_point = datetime.now()
-            clock_time = (after_predict_lineage_point - before_predict_lineage_point).total_seconds()
-            user_time = user_after - user_before
-            sys_time = sys_after - sys_before
-            kd.write("{clock},{user},{kernel}\n".format(clock=clock_time, user=user_time, kernel=sys_time))
+        handle_start_times.append(time.time()*1000)
+        before_predict_lineage_point = datetime.now()
+        # proc_stat_before = check_output(["cat", "/proc/1/stat"]).strip().split()
+        # user_before = int(proc_stat_before[13])
+        # sys_before = int(proc_stat_before[14])
 
 
+        outputs = predict_fn(prediction_request.inputs)
+        # proc_stat_after = check_output(["cat", "/proc/1/stat"]).strip().split()
+        # user_after = int(proc_stat_after[13])
+        # sys_after = int(proc_stat_after[14])
 
-            pred_count += len(prediction_request.inputs)
-            t3 = datetime.now()
-            handle_times.append((t3 - t2).microseconds)
-            # hd.write("{}\n".format((t3 - t2).microseconds))
-            # Type check the outputs:
-            if not type(outputs) == list:
-                raise PredictionError("Model did not return a list")
-            if len(outputs) != len(prediction_request.inputs):
-                raise PredictionError(
-                    "Expected model to return %d outputs, found %d outputs" %
-                    (len(prediction_request.inputs), len(outputs)))
+        after_predict_lineage_point = datetime.now()
+        clock_time = (after_predict_lineage_point - before_predict_lineage_point).total_seconds()
+        # user_time = user_after - user_before
+        # sys_time = sys_after - sys_before
+        # user_time = 0
+        # sys_time = 0
+        # kd.write("{clock},{user},{kernel}\n".format(clock=clock_time, user=user_time, kernel=sys_time))
 
-            outputs_type = type(outputs[0])
-            if outputs_type == np.ndarray:
-                outputs_type = outputs[0].dtype
-            if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
-                raise PredictionError(
-                    "Model outputs list contains outputs of invalid type: {}!".
-                    format(outputs_type))
 
-            if outputs_type == str:
-                for i in range(0, len(outputs)):
-                    outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
-            else:
-                for i in range(0, len(outputs)):
-                    outputs[i] = outputs[i].tobytes()
 
-            total_length_elements = sum(len(o) for o in outputs)
+        pred_count += len(prediction_request.inputs)
+        t3 = datetime.now()
+        handle_times.append((t3 - t2).microseconds)
+        # hd.write("{}\n".format((t3 - t2).microseconds))
+        # Type check the outputs:
+        if not type(outputs) == list:
+            raise PredictionError("Model did not return a list")
+        if len(outputs) != len(prediction_request.inputs):
+            raise PredictionError(
+                "Expected model to return %d outputs, found %d outputs" %
+                (len(prediction_request.inputs), len(outputs)))
 
-            response = PredictionResponse(prediction_request.msg_id,
-                                          len(outputs), total_length_elements,
-                                          outputs_type)
-            for output in outputs:
-                response.add_output(output)
+        outputs_type = type(outputs[0])
+        if outputs_type == np.ndarray:
+            outputs_type = outputs[0].dtype
+        if outputs_type not in SUPPORTED_OUTPUT_TYPES_MAPPING.keys():
+            raise PredictionError(
+                "Model outputs list contains outputs of invalid type: {}!".
+                format(outputs_type))
 
-            response_queue.put((response, recv_time,
-                                before_predict_lineage_point,
-                                after_predict_lineage_point))
+        if outputs_type == str:
+            for i in range(0, len(outputs)):
+                outputs[i] = unicode(outputs[i], "utf-8").encode("utf-8")
+        else:
+            for i in range(0, len(outputs)):
+                outputs[i] = outputs[i].tobytes()
 
-            if len(loop_times) > 1000:
-                print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
-                print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
-                print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
-                throughput = float(pred_count) / (datetime.now() - trial_start).total_seconds()
-                print("Throughput: {}".format(throughput))
-                # ld.flush()
-                # hd.flush()
-                kd.flush()
+        total_length_elements = sum(len(o) for o in outputs)
 
-                loop_times = []
-                queue_get_times = []
-                handle_times = []
-                pred_count = 0
-                trial_start = datetime.now()
+        response = PredictionResponse(prediction_request.msg_id,
+                                        len(outputs), total_length_elements,
+                                        outputs_type)
+        for output in outputs:
+            response.add_output(output)
 
-            # if len(handle_start_times) % 200 == 0:
-            #     print(json.dumps(handle_start_times))
-            sys.stdout.flush()
-            sys.stderr.flush()
+        response_queue.put((response, recv_time,
+                            before_predict_lineage_point,
+                            after_predict_lineage_point))
+
+        if len(loop_times) > 1000:
+            print("\nLoop duration: {} +- {}".format(np.mean(loop_times), np.std(loop_times)))
+            print("Request dequeue duration: {} +- {}".format(np.mean(queue_get_times), np.std(queue_get_times)))
+            print("Handle duration: {} +- {}".format(np.mean(handle_times), np.std(handle_times)))
+            throughput = float(pred_count) / (datetime.now() - trial_start).total_seconds()
+            print("Throughput: {}".format(throughput))
+            # ld.flush()
+            # hd.flush()
+            # kd.flush()
+
+            loop_times = []
+            queue_get_times = []
+            handle_times = []
+            pred_count = 0
+            trial_start = datetime.now()
+
+        # if len(handle_start_times) % 200 == 0:
+        #     print(json.dumps(handle_start_times))
+        sys.stdout.flush()
+        sys.stderr.flush()
 
 
 
