@@ -593,18 +593,19 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 1000
-    run(init_throughput, 3000, "warmup", "constant")
-    throughput_results = run(init_throughput, 5, "throughput", "constant")
+    run(init_throughput, 5, "warmup", "constant")
+    throughput_results = run(init_throughput, 7, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
-    latency_results = run(0, 5, "latency", "batch", batch_size=config.batch_size)
+    # latency_results = run(0, 5, "latency", "batch", batch_size=config.batch_size)
 
     if with_contention:
         if contention_throughput_qps > 0:
             contention_proc.terminate()
     cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
-    return throughput_results, latency_results
+    # return throughput_results, latency_results
+    return throughput_results, None
 
 
 if __name__ == "__main__":
