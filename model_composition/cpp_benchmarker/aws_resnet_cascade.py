@@ -100,7 +100,7 @@ def setup_clipper(addr_config_map):
             query_cpu_str="0,16,1,17,2,18,3,19")
         time.sleep(10)
         for c in configs:
-            driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
+            driver_utils.setup_heavy_node(cl, c, None, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
 
@@ -318,8 +318,9 @@ def get_arrival_proc_file(lam, cv):
         arrival_file_name = "{lam}.deltas".format(lam=lam)
     else:
         arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
-        arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
-                                           "cached_arrival_processes/{f}").format(f=arrival_file_name))
+
+    arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
+                                       "cached_arrival_processes/{f}").format(f=arrival_file_name))
     return arrival_delay_file
 
 
@@ -612,7 +613,7 @@ def run_experiment_for_config(config):
 
     # results_dir = "pipeline_three_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
     #     slo=slo, cv=cv, util=utilization)
-    results_dir = "pipeline_three_e2e_sys_comp/util_{}".format(util=utilization)
+    results_dir = "pipeline_three_e2e_sys_comp/util_{util}".format(util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
@@ -630,7 +631,7 @@ def run_experiment_for_config(config):
 
     throughput_results = run_e2e(
         addr_config_map, model_name_to_addr_map, 2000, "../../release/src/inferline_client/resnet_cascade",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients)
+        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
     driver_utils.save_results_cpp_client(
         dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
         throughput_results,
@@ -646,10 +647,13 @@ if __name__ == "__main__":
     global RES152_CLIPPER_ADDR
 
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_three")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_1.0")
 
     config_paths = [
-        "aws_resnet_cascade_three_profiler_underestimate_slo_0.5_cv_1.0_cost_11.08.json"
+        # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1_higher_cost.json",
+        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0_higher_cost.json",
+        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0_higher_cost.json",
+        "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1_higher_cost.json"
     ]
 
 
@@ -664,6 +668,7 @@ if __name__ == "__main__":
         for config in provided_configs:
             ALEXNET_CLIPPER_ADDR = os.environ["ALEXNET_CLIPPER_ADDR"]
             RES50_CLIPPER_ADDR = os.environ["RES50_CLIPPER_ADDR"]
-            RES152_CLIPPER_ADDR = os.environ["RES152_CLIPPER_ADDR"]
+            # RES152_CLIPPER_ADDR = os.environ["RES152_CLIPPER_ADDR"]
+            RES152_CLIPPER_ADDR = os.environ["RES50_CLIPPER_ADDR"]
             run_experiment_for_config(config)
     sys.exit(0)
