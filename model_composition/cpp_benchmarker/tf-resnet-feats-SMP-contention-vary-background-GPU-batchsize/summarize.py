@@ -27,16 +27,16 @@ def summarize(fname):
     #HERE
     mean_lats = {}
 
-    for k in lats:
-        mean_lats[k] = np.mean(lats[k])
-    kernel_measures = results["kernel_measures"]
-
-    # HERE
-    agg_km = {}
-
-    for k in kernel_measures:
-        agg_km[k] = np.mean(kernel_measures[k])
-
+    # for k in lats:
+    #     mean_lats[k] = np.mean(lats[k])
+    # kernel_measures = results["kernel_measures"]
+    #
+    # # HERE
+    # agg_km = {}
+    #
+    # for k in kernel_measures:
+    #     agg_km[k] = np.mean(kernel_measures[k])
+    #
     # mean_user_ticks = np.mean(kernel_measures["user_ticks"])
     # mean_sys_ticks = np.mean(kernel_measures["sys_ticks"])
     # mean_wall_clock = np.mean(kernel_measures["wall_clock"])
@@ -50,21 +50,23 @@ def summarize(fname):
             contention_cpu_batch = c["batch_size"]
     print(("\nInception batch size: {ib}, KSVM batch size: {kb}\n"
             "Throughput: {thru}\n"
-            "Container latencies: {lats}\n"
-            "Kernel measures: {kern}\n\n").format(ib=contention_gpu_batch,
-                                                kb=contention_cpu_batch,
-                                                thru=mean_thru,
-                                                lats=mean_lats,
-                                                kern=agg_km))
-
-
-
+            # "Container latencies: {lats}\n"
+            # "Kernel measures: {kern}\n\n"
+           ).format(ib=contention_gpu_batch,
+                    kb=contention_cpu_batch,
+                    thru=mean_thru,
+                    lats=mean_lats,
+                    # kern=agg_km
+                    ))
+    return (mean_thru, contention_gpu_batch, contention_cpu_batch)
 
 
 def summarize_all():
+    results = []
     # fs = os.listdir(".")
     for f in sorted(os.listdir(".")):
         if f[-4:] == "json":
-            summarize(f)
+            results.append(summarize(f))
+    print(sorted(results))
 if __name__ == "__main__":
     summarize_all()

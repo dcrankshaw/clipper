@@ -616,8 +616,8 @@ if __name__ == "__main__":
     for model in [TF_RESNET]:
         # for batch_size in [16, 8, 12, 24, 32, 48, 64, 4, 2, 1]:
         for batch_size in [16]:
-            for contention_gpu_batch in [8, 16, 32]:
-                for contention_cpu_batch in [8, 32, 16]:
+            for contention_gpu_batch in [32]:
+                for contention_cpu_batch in [4]:
                     available_cpus = range(4, 16)
                     available_gpus = range(4)
                     config = get_heavy_node_config(
