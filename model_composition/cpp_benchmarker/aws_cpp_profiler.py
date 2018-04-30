@@ -8,7 +8,6 @@ import json
 from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
-from fabric.api import env, get
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
@@ -437,7 +436,7 @@ def start_contention_workload(profiler_cores_str, throughput, clipper_address):
     logger.info("Starting background contention process")
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     # Sleep for a long time to ensure that GPU models get loaded
-    time.sleep(150)
+    time.sleep(20)
     logger.info("Done letting contention driver warm up")
 
     # Make sure we didn't crash
@@ -594,105 +593,74 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 
     init_throughput = 1000
     run(init_throughput, 5, "warmup", "constant")
-    throughput_results = run(init_throughput, 7, "throughput", "constant")
+    throughput_results = run(init_throughput, 10, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
     time.sleep(1)
-    # latency_results = run(0, 5, "latency", "batch", batch_size=config.batch_size)
+    latency_results = run(0, 10, "latency", "batch", batch_size=config.batch_size)
 
     if with_contention:
         if contention_throughput_qps > 0:
             contention_proc.terminate()
     cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
-    # return throughput_results, latency_results
-    return throughput_results, None
+    return throughput_results, latency_results
 
 
 if __name__ == "__main__":
     with_contention = True
-    # cont_throughput = 600
     cont_throughput = 1000
     contention_cpu_batch = 8
-    for model in [TF_RESNET]:
-        # for batch_size in [16, 8, 12, 24, 32, 48, 64, 4, 2, 1]:
-        for batch_size in [16]:
-            for contention_gpu_batch in [32]:
-                for contention_cpu_batch in [4]:
-                    available_cpus = range(4, 16)
-                    available_gpus = range(4)
-                    config = get_heavy_node_config(
-                        model_name=model,
-                        batch_size=batch_size,
-                        num_replicas=1,
-                        cpus_per_replica=1,
-                        allocated_cpus=[available_cpus.pop()],
-                        allocated_gpus=[available_gpus.pop()]
-                    )
+    contention_gpu_batch = 32
+    for model in [TF_RESNET, TF_LOG_REG]:
+        for batch_size in [8, 12, 16, 24, 32, 48, 64, 4, 2, 1]:
+            available_cpus = range(4, 16)
+            available_gpus = range(4)
+            config = get_heavy_node_config(
+                model_name=model,
+                batch_size=batch_size,
+                num_replicas=1,
+                cpus_per_replica=1,
+                allocated_cpus=[available_cpus.pop()],
+                allocated_gpus=[available_gpus.pop()]
+            )
 
-                    if with_contention:
-                        contention_configs = get_contention_configs(available_cpus, available_gpus, contention_gpu_batch, contention_cpu_batch)
-                        contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
-                        contention_throughput_qps = cont_throughput
-                        contention_to_save = {
-                                "contention_configs": [c.__dict__ for c in contention_configs],
-                                "contention_throughput_qps": contention_throughput_qps
-                                }
-                    else:
-                        contention_configs = None
-                        contention_client_cpu_str = None
-                        contention_throughput_qps = None
-                        contention_to_save = None
+            if with_contention:
+                contention_configs = get_contention_configs(available_cpus, available_gpus, contention_gpu_batch, contention_cpu_batch)
+                contention_client_cpu_str = "8,9,10,11,12,13,14,15,40,41,42,43,44,45,46,47"
+                contention_throughput_qps = cont_throughput
+                contention_to_save = {
+                        "contention_configs": [c.__dict__ for c in contention_configs],
+                        "contention_throughput_qps": contention_throughput_qps
+                        }
+            else:
+                contention_configs = None
+                contention_client_cpu_str = None
+                contention_throughput_qps = None
+                contention_to_save = None
 
-                    input_size = get_input_size(config)
-                    # Lower bound on trial length is 500
-                    trial_length = max(30*batch_size, 500)
-                    # Upper bound on trial length is 2000
-                    trial_length = min(2000,trial_length)
-                    trial_length = 500
-                    throughput_results, latency_results = run_profiler(
-                        config=config,
-                        trial_length=trial_length,
-                        driver_path="../../release/src/inferline_client/profiler",
-                        input_size=input_size,
-                        profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-                        contention_configs=contention_configs,
-                        contention_driver_cores_str=contention_client_cpu_str,
-                        contention_throughput_qps=contention_throughput_qps)
-                    fname = "v100.model-{model}.contention-{contention}.batch-{batch}.contention_gpu_batch-{cgb}.contention_cpu_batch-{ccb}".format(
-                        model=model, batch=batch_size, contention=contention_throughput_qps, cgb=contention_gpu_batch, ccb=contention_cpu_batch)
-                    results_dir = "{model}-SMP-contention-vary-background-GPU-batchsize".format(model=model)
+            input_size = get_input_size(config)
+            # Lower bound on trial length is 500
+            trial_length = max(30*batch_size, 500)
+            # Upper bound on trial length is 2000
+            trial_length = min(2000,trial_length)
+            throughput_results, latency_results = run_profiler(
+                config=config,
+                trial_length=trial_length,
+                driver_path="../../release/src/inferline_client/profiler",
+                input_size=input_size,
+                profiler_cores_str="0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
+                contention_configs=contention_configs,
+                contention_driver_cores_str=contention_client_cpu_str,
+                contention_throughput_qps=contention_throughput_qps)
+            fname = "v100.model-{model}.contention-{contention}.batch-{batch}.contention_gpu_batch-{cgb}.contention_cpu_batch-{ccb}".format(
+                model=model, batch=batch_size, contention=contention_throughput_qps, cgb=contention_gpu_batch, ccb=contention_cpu_batch)
+            results_dir = "{model}-SMP-contention".format(model=model)
 
-
-                    # # Get kernel time file
-                    # env.host_string = CLIPPER_ADDRESS
-                    # env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
-                    # env.colorize_errors = True
-                    # env.disable_known_hosts = True
-                    # local_path = "/tmp/kernel_measures.csv"
-                    # get("/home/ubuntu/logs/kernel_measures.csv", local_path)
-                    # wall_clocks = []
-                    # user_ticks = []
-                    # sys_ticks = []
-                    # with open(local_path, "r") as kd:
-                    #     # To ensure that model has been warmed up, remove the first 7*trial_length/batch
-                    #     # size samples. Also remove the last couple lines in case the last line was only
-                    #     # partially written
-                    #     lines_to_remove = int(1*trial_length / batch_size)
-                    #     lines = kd.readlines()[lines_to_remove:-4]
-                    #
-                    #     for l in lines:
-                    #         splits = l.strip().split(",")
-                    #         assert len(splits) == 3
-                    #         wall_clocks.append(float(splits[0]))
-                    #         user_ticks.append(int(splits[1]))
-                    #         sys_ticks.append(int(splits[2]))
-
-                    driver_utils.save_results_cpp_client(
-                        [config, ],
-                        throughput_results,
-                        latency_results,
-                        results_dir,
-                        prefix=fname,
-                        contention=contention_to_save)
-                        # kernel_measures={"wall_clock": wall_clocks, "user_ticks": user_ticks, "sys_ticks": sys_ticks})
+            driver_utils.save_results_cpp_client(
+                [config, ],
+                throughput_results,
+                latency_results,
+                results_dir,
+                prefix=fname,
+                contention=contention_to_save)
     sys.exit(0)
