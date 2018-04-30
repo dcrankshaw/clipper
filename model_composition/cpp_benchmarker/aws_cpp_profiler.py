@@ -584,7 +584,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                     return driver_utils.Results(client_metrics,
                                                 clipper_metrics,
                                                 summary_results,
-                                                lineage)
+                                                None)
                 else:
                     logger.error("Error loading final metrics")
             except ValueError as e:
@@ -611,17 +611,21 @@ if __name__ == "__main__":
     cont_throughput = 1000
     contention_cpu_batch = 8
     contention_gpu_batch = 32
-    for model in [TF_RESNET, TF_LOG_REG]:
-        for batch_size in [8, 12, 16, 24, 32, 48, 64, 4, 2, 1]:
-            available_cpus = range(4, 16)
-            available_gpus = range(4)
+    for model in [TF_KERNEL_SVM]:
+        for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
+            available_cpus = list(range(4, 16))
+            available_gpus = list(range(4))
+            if model not in [TF_LOG_REG, TF_KERNEL_SVM]:
+                gpus = [available_gpus.pop()]
+            else:
+                gpus = None
             config = get_heavy_node_config(
                 model_name=model,
                 batch_size=batch_size,
                 num_replicas=1,
                 cpus_per_replica=1,
                 allocated_cpus=[available_cpus.pop()],
-                allocated_gpus=[available_gpus.pop()]
+                allocated_gpus=gpus
             )
 
             if with_contention:
