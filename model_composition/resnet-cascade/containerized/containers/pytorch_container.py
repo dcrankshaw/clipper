@@ -67,7 +67,10 @@ class TorchContainer(rpc.ModelContainerBase):
             i = t.reshape(self.height, self.width, 3)
             input_arrs.append(i)
         pred_classes = self._predict_raw(input_arrs)
-        outputs = [str(l) for l in pred_classes]
+        if pred_classes.shape == ():
+            outputs = [str(pred_classes)]
+        else:
+            outputs = [str(l) for l in pred_classes]
         end = datetime.now()
         # logger.info("BATCH TOOK %f seconds" % (end - start).total_seconds())
         return outputs
