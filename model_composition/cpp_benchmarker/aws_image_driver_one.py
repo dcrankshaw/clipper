@@ -8,7 +8,7 @@ import json
 from clipper_admin import ClipperConnection, AWSContainerManager
 from datetime import datetime
 from containerized_utils import driver_utils
-import argparse
+# import argparse
 import hashlib
 
 logging.basicConfig(
@@ -109,8 +109,30 @@ def setup_clipper(addr_config_map):
             mgmt_cpu_str="0",
             query_cpu_str="0,16,1,17,2,18,3,19")
         time.sleep(10)
+        # Collect all configs for same model into local and remote lists
+        grouped_configs_local = {}
+        grouped_configs_remotes = {}
+        unique_nodes = set()
         for c in configs:
-            driver_utils.setup_heavy_node(cl, c, DEFAULT_OUTPUT)
+            if c.remote_addr is None:
+                assert c.name not in grouped_configs_local
+                grouped_configs_local[c.name] = c
+            else:
+                # If we've already encountered remote configs for this model
+                # on different machines, append to existing remotes list.
+                if c.name in grouped_configs_remotes:
+                    grouped_configs_remotes[c.name].append(c)
+                else:
+                    grouped_configs_remotes[c.name] = [c]
+            unique_nodes.add(c.name)
+        for name in unique_nodes:
+            local = None
+            remotes = None
+            if name in grouped_configs_local:
+                local = grouped_configs_local[name]
+            if name in grouped_configs_remotes:
+                remotes = grouped_configs_remotes[name]
+            driver_utils.setup_heavy_node(cl, local, remotes, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
 
@@ -180,11 +202,12 @@ def get_profiler_stats(cur_client_metrics):
     all_latencies = []
     all_thrus = []
     all_counts = []
-    ingest_rate = None
+    all_ingest_rates = []
     for metrics_json in cur_client_metrics:
         latencies = {}
         thrus = {}
         counts = {}
+        ingest_rates = {}
 
         data_lists = metrics_json["data_lists"]
         for l in data_lists:
@@ -203,9 +226,14 @@ def get_profiler_stats(cur_client_metrics):
                 model = name.split(":")[0]
                 rate = float(m[name]["rate"])
                 thrus[model] = round(float(rate), 5)
-            elif "ingest_rate" in m.keys()[0]:
-                assert m.keys()[0] == "ingest:ingest_rate"
-                ingest_rate = round(float(m["ingest:ingest_rate"]["rate"]), 5)
+
+        for m in meters:
+            if "ingest_rate" in m.keys()[0]:
+                name = m.keys()[0]
+                model = name.split(":")[0]
+                rate = float(m[name]["rate"])
+                ingest_rates[model] = round(float(rate), 5)
+
         counters = metrics_json["counters"]
         counts = {}
         for c in counters:
@@ -216,6 +244,7 @@ def get_profiler_stats(cur_client_metrics):
                 counts[model] = int(count)
         all_latencies.append(latencies)
         all_thrus.append(thrus)
+        all_ingest_rates.append(ingest_rates)
         all_counts.append(counts)
     agg_p99_latency = {}
     agg_mean_latency = {}
@@ -229,12 +258,17 @@ def get_profiler_stats(cur_client_metrics):
         total_thru = np.sum([c[model] for c in all_thrus])
         agg_thrus[model] = total_thru
 
+    agg_ingest_rates = {}
+    for model in all_ingest_rates[0]:
+        total_ingest_rate = np.sum([c[model] for c in all_ingest_rates])
+        agg_ingest_rates[model] = total_ingest_rate
+
     agg_counts = {}
     for model in all_counts[0]:
         total_count = np.sum([c[model] for c in all_counts])
         agg_counts[model] = total_count
 
-    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts, ingest_rate)
+    return (agg_mean_latency, agg_p99_latency, agg_thrus, agg_counts, agg_ingest_rates)
 
 
 def load_clipper_metrics(clipper_path):
@@ -269,10 +303,10 @@ def print_stats(cur_client_metrics, trial_num):
     results_dict = {}
     results_dict["client_mean_lats"], results_dict["client_p99_lats"], \
         results_dict["client_thrus"], results_dict["client_counts"], \
-        results_dict["ingest_rate"] = get_profiler_stats(cur_client_metrics)
+        results_dict["ingest_rates"] = get_profiler_stats(cur_client_metrics)
     logger.info(("\nThroughput: {client_thrus}\nP99 lat: {client_p99_lats}"
                 "\nMean lat: {client_mean_lats}"
-                 "\nIngest rate: {ingest_rate}\n").format(**results_dict))
+                 "\nIngest rates: {ingest_rates}\n").format(**results_dict))
     return results_dict
 
 
@@ -320,14 +354,18 @@ def get_arrival_proc_file(lam, cv):
         arrival_file_name = "{lam}.deltas".format(lam=lam)
     else:
         arrival_file_name = "{lam}_{cv}.deltas".format(lam=lam, cv=cv)
-    arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
-                                        "cached_arrival_processes/{f}").format(f=arrival_file_name))
+        arrival_delay_file = os.path.join(("/home/ubuntu/plots-model-comp-paper/experiments/"
+                                           "cached_arrival_processes/{f}").format(f=arrival_file_name))
     return arrival_delay_file
+
 
 def get_arrival_proc_files(lam, cv, num_clients, out_dir):
     arrival_delay_file = get_arrival_proc_file(lam, cv)
     if num_clients == 1:
         return [arrival_delay_file]
+    # else:
+    #     div = get_arrival_proc_file(int(lam/num_clients), cv)
+    #     return [div for _ in range(num_clients)]
 
     with open(arrival_delay_file, "r") as f:
         deltas = np.array([float(l.strip()) for l in f]).flatten()
@@ -433,12 +471,12 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                         # Run for a couple trials before checking for divergence
                         if check_for_divergence and recorded_trials > 2:
                             models_to_replicate = []
-                            ingest_rate = new_stats["ingest_rate"]
+                            ingest_rates = new_stats["ingest_rates"]
                             for m, t in new_stats["client_thrus"].iteritems():
                                 if m != "e2e":
-                                    if t/ingest_rate < DIVERGENCE_THRESHOLD:
+                                    if t/ingest_rates[m] < DIVERGENCE_THRESHOLD:
                                         logger.info("GREPTHISBBBB: Detected divergence in model {m}: {t}/{i}".format(
-                                            m=m, t=t, i=ingest_rate))
+                                            m=m, t=t, i=ingest_rates[m]))
                                         models_to_replicate.append(m)
                             # No need to keep running if we're already diverging
                             # if len(models_to_replicate) > 0:
@@ -451,8 +489,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                             #     #     proc, _, _, _ = procs[client_num]
                             #     #     proc.terminate()
                             #     return None, models_to_replicate
-                    else:
-                        logger.info("Recorded trials is still {}".format(new_recorded_trials))
+                    # else:
+                    #     logger.info("Recorded trials is still {}".format(new_recorded_trials))
 
 
                 if print_stats_this_iter:
@@ -507,6 +545,7 @@ def hash_file(fname):
         fbytes = f.read()
         return hashlib.sha256(fbytes).hexdigest()
 
+
 def assign_models_to_nodes(resnet_addr, inception_addr, config):
     """
 
@@ -523,12 +562,12 @@ def assign_models_to_nodes(resnet_addr, inception_addr, config):
 
     # Map from address to resource name
     addr_resource_map = {
-        resnet_addr: {"cpus": list(range(4,16)),
-            "gpus": list(range(MAX_GPUS_PER_NODE))
-            },
-        inception_addr: {"cpus": list(range(4,16)),
-            "gpus": list(range(MAX_GPUS_PER_NODE))
-            }
+        resnet_addr: {"cpus": list(range(4, 16)),
+                      "gpus": list(range(MAX_GPUS_PER_NODE))
+                      },
+        inception_addr: {"cpus": list(range(4, 16)),
+                         "gpus": list(range(MAX_GPUS_PER_NODE))
+                         }
     }
 
 
@@ -553,6 +592,7 @@ def assign_models_to_nodes(resnet_addr, inception_addr, config):
         )
         addr_config_map[name_addr_map[TF_RESNET]].append(local_res_node_conf)
         if num_remote_res_replicas > 0:
+            print("adding a remote replica")
             remote_res_node_conf = get_heavy_node_config(
                 model_name=TF_RESNET,
                 batch_size=int(res_config["batch_size"]),
@@ -643,9 +683,9 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
 
     if "latency_percentage" not in config:
         config["latency_percentage"] = 1.0
-    latency_perc = config["latency_percentage"]
+    # latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_e2e_sys_comp"
+    results_dir = "pipeline_one_e2e_sys_comp/util_{}".format(utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
@@ -693,10 +733,13 @@ if __name__ == "__main__":
     # print(get_arrival_proc_files(322, 0.1, 4, "/tmp"))
     # sys.exit(0)
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
+    # base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_0.95")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one_DEBUG/util_1.0")
 
     config_paths = [
-        "all_configs_pipeline_one.json"
+        # "all_configs_pipeline_one_working.json"
+        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1_DEBUG.json"
+        "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1_DEBUG_RES_CONTENTION_PROFS.json"
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]

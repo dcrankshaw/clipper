@@ -215,6 +215,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
                                                          std::shared_ptr<QueryLineage> lineage) {
           log_reg_callback(output, lineage, cur_time);
         });
+
+    metrics.ingests_.find(TF_LOG_REG)->second->mark(1);
     metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_lists_.find(INCEPTION_FEATS)
         ->second->insert(static_cast<int64_t>(latency_micros));
@@ -274,6 +276,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
                                                          std::shared_ptr<QueryLineage> lineage) {
           ksvm_callback(output, lineage, cur_time);
         });
+    metrics.ingests_.find(TF_KERNEL_SVM)->second->mark(1);
     metrics.latencies_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_lists_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.throughputs_.find(TF_RESNET)->second->mark(1);
@@ -301,10 +304,12 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
     query_lineage_file << "}" << std::endl;
   };
-  metrics.throughputs_.find("ingest")->second->mark(1);
+  metrics.ingests_.find("e2e")->second->mark(1);
 
   clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, latency_budget_micros, inception_callback);
+  metrics.ingests_.find(INCEPTION_FEATS)->second->mark(1);
   clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, latency_budget_micros, resnet_callback);
+  metrics.ingests_.find(TF_RESNET)->second->mark(1);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {

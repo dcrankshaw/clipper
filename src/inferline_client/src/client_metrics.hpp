@@ -32,9 +32,9 @@ class ClientMetrics {
     throughputs_.emplace(
         "e2e",
         clipper::metrics::MetricsRegistry::get_metrics().create_meter("e2e:prediction_throughput"));
-    throughputs_.emplace(
-        "ingest",
-        clipper::metrics::MetricsRegistry::get_metrics().create_meter("ingest:ingest_rate"));
+    ingests_.emplace(
+        "e2e",
+        clipper::metrics::MetricsRegistry::get_metrics().create_meter("e2e:ingest_rate"));
     num_predictions_.emplace(
         "e2e",
         clipper::metrics::MetricsRegistry::get_metrics().create_counter("e2e:num_predictions"));
@@ -49,6 +49,9 @@ class ClientMetrics {
       throughputs_.emplace(model,
                            clipper::metrics::MetricsRegistry::get_metrics().create_meter(
                                model + ":prediction_throughput"));
+      ingests_.emplace(model,
+                           clipper::metrics::MetricsRegistry::get_metrics().create_meter(
+                               model + ":ingest_rate"));
       num_predictions_.emplace(model,
                                clipper::metrics::MetricsRegistry::get_metrics().create_counter(
                                    model + ":num_predictions"));
@@ -70,6 +73,7 @@ class ClientMetrics {
   std::unordered_map<std::string, std::shared_ptr<clipper::metrics::DataList<long long>>>
       latency_lists_;
   std::unordered_map<std::string, std::shared_ptr<clipper::metrics::Meter>> throughputs_;
+  std::unordered_map<std::string, std::shared_ptr<clipper::metrics::Meter>> ingests_;
   std::unordered_map<std::string, std::shared_ptr<clipper::metrics::Counter>> num_predictions_;
 };
 }
