@@ -17,7 +17,20 @@ tag="bench"
 # models
 cd $DIR/../../../container_utils/
 time docker build -t model-comp/py-rpc -f RpcDockerfile ./
-time docker build -t model-comp/tf-rpc -f TfRpcDockerfile ./
+time docker build -t model-comp/tf-rpc-uncompiled -f TfRpcDockerfile ./
+
+tf_sha=$(nvidia-docker run -d model-comp/tf-rpc-uncompiled)
+
+d=$(docker ps -q | wc -l)
+
+while [ $d -ne "0" ]; do
+        sleep 3
+        d=$(docker ps -q | wc -l)
+        docker ps
+done
+
+docker container commit $tf_sha model-comp/tf-rpc
+
 time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
