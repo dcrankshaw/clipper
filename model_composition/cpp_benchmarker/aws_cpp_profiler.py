@@ -593,7 +593,7 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
                 raise e
 
     init_throughput = 1000
-    run(init_throughput, 3, "warmup", "constant")
+    run(init_throughput, 3000, "warmup", "constant")
     throughput_results = run(init_throughput, 5, "throughput", "constant")
     cl.drain_queues()
     cl.set_full_batches()
@@ -615,8 +615,8 @@ if __name__ == "__main__":
     for model in [TF_RESNET]:
         # for batch_size in [16, 8, 12, 24, 32, 48, 64, 4, 2, 1]:
         for batch_size in [16]:
-            for contention_gpu_batch in [16, 32]:
-                for contention_cpu_batch in [32, 16, 4]:
+            for contention_gpu_batch in [8, 16, 32]:
+                for contention_cpu_batch in [8, 32, 16]:
                     available_cpus = range(4, 16)
                     available_gpus = range(4)
                     config = get_heavy_node_config(
@@ -662,29 +662,29 @@ if __name__ == "__main__":
                     results_dir = "{model}-SMP-contention-vary-background-GPU-batchsize".format(model=model)
 
 
-                    # Get kernel time file
-                    env.host_string = CLIPPER_ADDRESS
-                    env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
-                    env.colorize_errors = True
-                    env.disable_known_hosts = True
-                    local_path = "/tmp/kernel_measures.csv"
-                    get("/home/ubuntu/logs/kernel_measures.csv", local_path)
-                    wall_clocks = []
-                    user_ticks = []
-                    sys_ticks = []
-                    with open(local_path, "r") as kd:
-                        # To ensure that model has been warmed up, remove the first 7*trial_length/batch
-                        # size samples. Also remove the last couple lines in case the last line was only
-                        # partially written
-                        lines_to_remove = int(1*trial_length / batch_size)
-                        lines = kd.readlines()[lines_to_remove:-4]
-
-                        for l in lines:
-                            splits = l.strip().split(",")
-                            assert len(splits) == 3
-                            wall_clocks.append(float(splits[0]))
-                            user_ticks.append(int(splits[1]))
-                            sys_ticks.append(int(splits[2]))
+                    # # Get kernel time file
+                    # env.host_string = CLIPPER_ADDRESS
+                    # env.key_filename = os.path.expanduser("~/.ssh/aws_rsa")
+                    # env.colorize_errors = True
+                    # env.disable_known_hosts = True
+                    # local_path = "/tmp/kernel_measures.csv"
+                    # get("/home/ubuntu/logs/kernel_measures.csv", local_path)
+                    # wall_clocks = []
+                    # user_ticks = []
+                    # sys_ticks = []
+                    # with open(local_path, "r") as kd:
+                    #     # To ensure that model has been warmed up, remove the first 7*trial_length/batch
+                    #     # size samples. Also remove the last couple lines in case the last line was only
+                    #     # partially written
+                    #     lines_to_remove = int(1*trial_length / batch_size)
+                    #     lines = kd.readlines()[lines_to_remove:-4]
+                    #
+                    #     for l in lines:
+                    #         splits = l.strip().split(",")
+                    #         assert len(splits) == 3
+                    #         wall_clocks.append(float(splits[0]))
+                    #         user_ticks.append(int(splits[1]))
+                    #         sys_ticks.append(int(splits[2]))
 
                     driver_utils.save_results_cpp_client(
                         [config, ],
@@ -692,6 +692,6 @@ if __name__ == "__main__":
                         latency_results,
                         results_dir,
                         prefix=fname,
-                        contention=contention_to_save,
-                        kernel_measures={"wall_clock": wall_clocks, "user_ticks": user_ticks, "sys_ticks": sys_ticks})
+                        contention=contention_to_save)
+                        # kernel_measures={"wall_clock": wall_clocks, "user_ticks": user_ticks, "sys_ticks": sys_ticks})
     sys.exit(0)
