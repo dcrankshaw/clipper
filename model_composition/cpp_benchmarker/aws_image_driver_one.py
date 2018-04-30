@@ -391,7 +391,8 @@ def get_arrival_proc_files(lam, cv, num_clients, out_dir):
 
 
 def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs,
-            lam, cv, num_clients, slo):
+            lam, cv, num_clients, slo, arrival_file_path=None):
+    assert num_clients == 1
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -412,7 +413,12 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
         for cl in cls:
             cl.drain_queues()
         time.sleep(30)
-        arrival_delay_files = get_arrival_proc_files(lam, cv, num_clients, log_dir)
+
+        if lam is not None and cv is not None:
+            arrival_delay_files = get_arrival_proc_files(lam, cv, num_clients, log_dir)
+        else:
+            assert arrival_file_path is not None
+            arrival_delay_files = [arrival_file_path]
         try:
             procs = {}
             for client_num in range(num_clients):
@@ -678,36 +684,40 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
     print("\n\n\nADDR CONFIG MAP:\n{}".format(json.dumps(dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]), indent=2)))
     print("NAME ADDR MAP:\n:{}".format(json.dumps(name_addr_map, indent=2)))
     lam = config["lam"]
-    cv = config["cv"]
+    # cv = config["cv"]
     slo = config["slo"]
-    cost = config["cost"]
+    # cost = config["cost"]
     utilization = config["utilization"]
-    config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
+    arrival_file_path = config["square_wave"]["deltas_file_path"]
+    config["deltas_file_path"] = arrival_file_path
+    # config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
+    sw_period = config["square_wave"]["period"]
+    sw_duty_cycle = config["square_wave"]["duty_cycle"]
 
     if "latency_percentage" not in config:
         config["latency_percentage"] = 1.0
     # latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_e2e_sys_comp/util_{}".format(utilization)
-    reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
-                         for c in config["node_configs"].values()])
-    results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
-        lam=lam, cv=cv, slo=slo, cost=cost, reps_str=reps_str)
+    results_dir = "pipeline_one_square_wave_analysis/util_{util}".format(util=utilization)
+    # reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
+    #                      for c in config["node_configs"].values()])
+    results_fname = "aws_slo_{slo}_lambda_{lam}_period_{period}_duty_cycle_{duty_cycle}".format(
+        lam=lam, slo=slo, period=sw_period, duty_cycle=sw_duty_cycle)
 
 
     # For client on standalone machine
     client_cpu_strs = [
         "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
+        # "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
     ]
 
-    num_clients = 2
-    trial_length = 4000
+    num_clients = 1
+    trial_length = 2000
 
     throughput_results, models_to_replicate = run_e2e(
         addr_config_map, name_addr_map, trial_length, "../../release/src/inferline_client/image_driver_one",
-        client_cpu_strs, lam, cv, num_clients, slo)
+        client_cpu_strs, None, None, num_clients, slo, arrival_file_path=arrival_file_path)
     if models_to_replicate is None:
         driver_utils.save_results_cpp_client(
             dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
@@ -731,15 +741,9 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
 
 if __name__ == "__main__":
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_one_square_wave/")
 
     config_paths = [
-        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_0.1.json",
-        "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
-        "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json"
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]

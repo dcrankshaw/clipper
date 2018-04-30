@@ -352,7 +352,8 @@ def get_arrival_proc_files(lam, cv, num_clients, out_dir):
 
 
 def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_cores_strs,
-            lam, cv, num_clients, slo):
+            lam, cv, num_clients, slo, arrival_file_path=None):
+    assert num_clients == 1
     assert len(addr_config_map) >= 1
     setup_clipper(addr_config_map)
     # clipper_address = CLIPPER_ADDRESS
@@ -373,7 +374,11 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
         for cl in cls:
             cl.drain_queues()
         time.sleep(10)
-        arrival_delay_files = get_arrival_proc_files(lam, cv, num_clients, log_dir)
+        if lam is not None and cv is not None:
+            arrival_delay_files = get_arrival_proc_files(lam, cv, num_clients, log_dir)
+        else:
+            assert arrival_file_path is not None
+            arrival_delay_files = [arrival_file_path]
         try:
             procs = {}
             for client_num in range(num_clients):
@@ -601,37 +606,43 @@ def run_experiment_for_config(config):
     print("NAME ADDR MAP:\n:{}".format(json.dumps(model_name_to_addr_map, indent=2)))
 
     lam = config["lam"]
-    cv = config["cv"]
+    # cv = config["cv"]
     slo = config["slo"]
-    cost = config["cost"]
+    # cost = config["cost"]
     utilization = config["utilization"]
-    config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
+    arrival_file_path = config["square_wave"]["deltas_file_path"]
+    config["deltas_file_path"] = arrival_file_path
+    # config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
     if "latency_percentage" not in config:
         config["latency_percentage"] = 1.0
-    latency_perc = config["latency_percentage"]
+    # latency_perc = config["latency_percentage"]
+    sw_period = config["square_wave"]["period"]
+    sw_duty_cycle = config["square_wave"]["duty_cycle"]
 
     # results_dir = "pipeline_three_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
     #     slo=slo, cv=cv, util=utilization)
-    results_dir = "pipeline_three_e2e_sys_comp/util_{util}".format(util=utilization)
-    reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
-                         for c in config["node_configs"].values()])
-    results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
-        lam=lam, perc=latency_perc)
+    results_dir = "pipeline_three_square_wave_analysis/util_{util}".format(util=utilization)
+    # reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
+    #                      for c in config["node_configs"].values()])
+    results_fname = "aws_slo_{slo}_lambda_{lam}_period_{period}_duty_cycle_{duty_cycle}".format(
+        lam=lam, slo=slo, period=sw_period, duty_cycle=sw_duty_cycle)
 
 
     # For client on standalone machine
     client_cpu_strs = [
         # "4,20,5,21,6,22,7,23"
         "0,1,2,3,4,5,6,7,32,33,34,35,36,37,38,39",
-        "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
+        # "16,17,18,19,20,21,22,23,48,49,50,51,52,43,54,55"
     ]
 
-    num_clients = 2
+    num_clients = 1
+
+    trial_length = 2000
 
     throughput_results = run_e2e(
-        addr_config_map, model_name_to_addr_map, 2000, "../../release/src/inferline_client/resnet_cascade",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
+        addr_config_map, model_name_to_addr_map, trial_length, "../../release/src/inferline_client/resnet_cascade",
+        client_cpu_strs, None, None, num_clients, slo, arrival_file_path=arrival_file_path)
     driver_utils.save_results_cpp_client(
         dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
         throughput_results,
@@ -647,13 +658,9 @@ if __name__ == "__main__":
     global RES152_CLIPPER_ADDR
 
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_1.0")
+    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/pipeline_three_square_wave/")
 
     config_paths = [
-        # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1_higher_cost.json"
     ]
 
 
