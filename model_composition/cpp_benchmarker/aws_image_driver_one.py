@@ -532,7 +532,7 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
             for c in procs:
                 procs[c][0].terminate()
 
-    run(100, 7, "warmup", "constant", check_for_divergence=False)
+    run(100, 6, "warmup", "constant", check_for_divergence=False)
     throughput_results, models_to_replicate = run(0, 12, "throughput", "file", check_for_divergence=True)
 
     for cl in cls:
@@ -692,10 +692,10 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr, 
         config["latency_percentage"] = 1.0
     # latency_perc = config["latency_percentage"]
 
-    results_dir = "no_netcalc_e2e_sys_comp/pipeline_one/util_{}".format(utilization)
+    results_dir = "e2e_sys_comp_tq_half_ts/pipeline_one/util_{}".format(utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
-    results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
+    results_fname = "aws_tq_half_ts_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
         lam=lam, cv=cv, slo=slo, cost=cost, reps_str=reps_str)
 
 
@@ -734,11 +734,12 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr, 
 
 if __name__ == "__main__":
 
-    base_path = os.path.expanduser("/home/ubuntu/plots-model-comp-paper/experiments/e2e_sys_comp_no_netcalc/pipeline_one/util_1.0")
+    base_path = "/home/ubuntu/plots-model-comp-paper/experiments/e2e_sys_comp_no_netcalc_t_q_half_t_s/pipeline_one/util_1.0"
 
     config_paths = [
-        "aws_image_driver_one_ifl_configs_slo_0.5_util_1.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_util_1.0.json"
+        "aws_image_driver_one_ifl_configs_slo_0.3_util_1.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_0.4_util_1.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_0.5_util_1.0.json",
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]
@@ -748,8 +749,7 @@ if __name__ == "__main__":
             provided_configs = json.load(f)
 
         for config in provided_configs:
-            # for cv in [0.1, 0.0]:
-            for cv in [4.0, 1.0]:
+            for cv in [4.0, 1.0, 0.1, 0.0]:
                 run_experiment_for_config(
                     config, config.copy(),
                     os.environ["RESNET_CLIPPER_ADDR"],
