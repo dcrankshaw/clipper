@@ -513,8 +513,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                     logger.info("stderr: {}".format(prof_stderr))
                 try:
                     loaded_metrics = load_metrics(client_path)
-                    # lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
-                    lineages = None
+                    lineages = {name: load_lineage(p) for name, p in lineage_paths.items()}
+                    # lineages = None
                     if loaded_metrics is not None:
                         all_client_metrics.append(loaded_metrics)
                     else:
@@ -532,8 +532,8 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
             for c in procs:
                 procs[c][0].terminate()
 
-    run(100, 10, "warmup", "constant", check_for_divergence=False)
-    throughput_results, models_to_replicate = run(0, 25, "throughput", "file", check_for_divergence=True)
+    run(100, 7, "warmup", "constant", check_for_divergence=False)
+    throughput_results, models_to_replicate = run(0, 12, "throughput", "file", check_for_divergence=True)
 
     for cl in cls:
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
@@ -668,7 +668,7 @@ def assign_models_to_nodes(resnet_addr, inception_addr, config):
     return name_addr_map, addr_config_map
 
 
-def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
+def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr, cv):
     try:
         name_addr_map, addr_config_map = assign_models_to_nodes(resnet_addr, inception_addr, config)
     except BenchmarkConfigurationException as e:
@@ -677,19 +677,22 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
         return None
     print("\n\n\nADDR CONFIG MAP:\n{}".format(json.dumps(dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]), indent=2)))
     print("NAME ADDR MAP:\n:{}".format(json.dumps(name_addr_map, indent=2)))
+
     lam = config["lam"]
-    cv = config["cv"]
+    config["cv"] = cv
     slo = config["slo"]
     cost = config["cost"]
     utilization = config["utilization"]
     config["deltas_file_path"] = get_arrival_proc_file(lam, cv)
     config["deltas_file_md5sum"] = hash_file(config["deltas_file_path"])
 
+    print("RUNNING SLO: {}, CV: {}, LAMBDA: {}".format(slo, cv, lam))
+
     if "latency_percentage" not in config:
         config["latency_percentage"] = 1.0
     # latency_perc = config["latency_percentage"]
 
-    results_dir = "pipeline_one_e2e_sys_comp/util_{}".format(utilization)
+    results_dir = "no_netcalc_e2e_sys_comp/pipeline_one/util_{}".format(utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_cv_{cv}_slo_{slo}_lambda_{lam}_cost_{cost}_reps_{reps_str}".format(
@@ -703,7 +706,7 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
     ]
 
     num_clients = 2
-    trial_length = 4000
+    trial_length = 2000
 
     throughput_results, models_to_replicate = run_e2e(
         addr_config_map, name_addr_map, trial_length, "../../release/src/inferline_client/image_driver_one",
@@ -731,15 +734,11 @@ def run_experiment_for_config(config, orig_config, resnet_addr, inception_addr):
 
 if __name__ == "__main__":
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_one/util_1.0")
+    base_path = os.path.expanduser("/home/ubuntu/plots-model-comp-paper/experiments/e2e_sys_comp_no_netcalc/pipeline_one/util_1.0")
 
     config_paths = [
-        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_0.1.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_0.1.json",
-        "aws_image_driver_one_ifl_configs_slo_0.5_cv_1.0.json",
-        "aws_image_driver_one_ifl_configs_slo_1.0_cv_1.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_0.5_cv_4.0.json",
-        # "aws_image_driver_one_ifl_configs_slo_1.0_cv_4.0.json"
+        "aws_image_driver_one_ifl_configs_slo_0.5_util_1.0.json",
+        # "aws_image_driver_one_ifl_configs_slo_1.0_util_1.0.json"
     ]
 
     config_paths = [os.path.join(base_path, c) for c in config_paths]
@@ -749,8 +748,10 @@ if __name__ == "__main__":
             provided_configs = json.load(f)
 
         for config in provided_configs:
-            run_experiment_for_config(
-                config, config.copy(),
-                os.environ["RESNET_CLIPPER_ADDR"],
-                os.environ["INCEPTION_CLIPPER_ADDR"])
+            # for cv in [0.1, 0.0]:
+            for cv in [4.0, 1.0]:
+                run_experiment_for_config(
+                    config, config.copy(),
+                    os.environ["RESNET_CLIPPER_ADDR"],
+                    os.environ["INCEPTION_CLIPPER_ADDR"], cv)
     sys.exit(0)
