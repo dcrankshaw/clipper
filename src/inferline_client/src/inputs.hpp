@@ -16,6 +16,7 @@ static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
 static const std::string TF_KERNEL_SVM = "tf-kernel-svm";
 static const std::string INCEPTION_FEATS = "inception";
+static const std::string CASCADE_PREPROCESS = "cascadepreprocess";
 static const std::string TF_LOG_REG = "tf-log-reg";
 static const std::string TF_RESNET = "tf-resnet-feats";
 static const std::string TF_RESNET_VAR = "tf-resnet-feats-var";
@@ -27,7 +28,8 @@ static const std::string TF_LSTM = "tf-lstm";
 
 const std::vector<std::string> FLOAT_VECTOR_MODELS{RES50,         RES152,          ALEXNET,
                                                    TF_KERNEL_SVM, INCEPTION_FEATS, TF_LOG_REG,
-                                                   TF_RESNET,     TF_RESNET_VAR,   TF_RESNET_SLEEP};
+                                                   TF_RESNET,     TF_RESNET_VAR,   TF_RESNET_SLEEP,
+                                                   CASCADE_PREPROCESS};
 
 std::vector<ClientFeatureVector> generate_text_inputs(const std::string& workload_path,
                                                       size_t desired_input_length) {

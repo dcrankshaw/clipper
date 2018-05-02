@@ -24,6 +24,7 @@ CLIPPER_ADDRESS = os.environ["CLIPPER_ADDRESS"]
 RES50 = "res50"
 RES152 = "res152"
 ALEXNET = "alexnet"
+CASCADE_PREPROCESS = "cascadepreprocess"
 INCEPTION_FEATS = "inception"
 TF_KERNEL_SVM = "tf-kernel-svm"
 TF_LOG_REG = "tf-log-reg"
@@ -62,6 +63,21 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
                                             remote_addr=remote_addr)
+
+    elif model_name == CASCADE_PREPROCESS:
+        image = "gcr.io/clipper-model-comp/pytorch-preprocess:bench"
+        return driver_utils.HeavyNodeConfig(name=CASCADE_PREPROCESS,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=[],
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=True,
+                                            no_diverge=True,
+                                            remote_addr=remote_addr
+                                            )
 
     elif model_name == RES50:
         image = "gcr.io/clipper-model-comp/pytorch-res50:bench"
@@ -228,9 +244,9 @@ def get_heavy_node_config(model_name,
 def get_input_size(config):
     if config.name in [TF_LOG_REG, TF_KERNEL_SVM]:
         return 2048
-    elif config.name in [ALEXNET, RES50, RES152, INCEPTION_FEATS]:
+    elif config.name in [CASCADE_PREPROCESS, INCEPTION_FEATS]:
         return 299*299*3
-    elif config.name in [TF_RESNET, ]:
+    elif config.name in [TF_RESNET, ALEXNET, RES50, RES152]:
         return 224*224*3
     elif config.name in [TF_RESNET_VAR, TF_RESNET_SLEEP]:
         return config.input_size
@@ -609,13 +625,15 @@ def run_profiler(config, trial_length, driver_path, input_size, profiler_cores_s
 if __name__ == "__main__":
     with_contention = True
     cont_throughput = 1000
+    # cont_throughput = 0
     contention_cpu_batch = 8
     contention_gpu_batch = 32
-    for model in [RES152]:
-        for batch_size in [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]:
+    for batch_size in [4, 8, 12, 16, 24, 32, 48, 64]:
+        # for model in [ALEXNET]:
+        for model in [CASCADE_PREPROCESS]:
             available_cpus = list(range(4, 16))
             available_gpus = list(range(4))
-            if model not in [TF_LOG_REG, TF_KERNEL_SVM]:
+            if model not in [TF_LOG_REG, TF_KERNEL_SVM, CASCADE_PREPROCESS]:
                 gpus = [available_gpus.pop()]
             else:
                 gpus = None
