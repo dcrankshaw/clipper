@@ -1,10 +1,4 @@
-FROM model-comp/cuda-rpc
-
-# RUN conda install pytorch torchvision cuda90 -c pytorch
-# RUN conda install pytorch torchvision -c pytorch
-RUN conda install pillow
-
-# COPY pytorch_models/ /root/.torch/
+FROM gcr.io/clipper-model-comp/pytorch:bench
 
 COPY preprocessing_container.py /container/
 

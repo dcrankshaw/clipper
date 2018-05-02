@@ -19,10 +19,11 @@ cd $DIR/../../../container_utils/
 time docker build -t model-comp/cuda-rpc -f CudaPyRpcDockerfile ./
 
 cd $DIR
-time docker build -t $prefix/pytorch-preprocess:$tag -f PreprocessPyTorchDockerfile ./
 
 # Build model-specific images
 time docker build -t $prefix/pytorch:$tag -f PyTorchDockerfile ./
+
+time docker build -t $prefix/pytorch-preprocess:$tag -f PreprocessPyTorchDockerfile ./
 # gcloud docker -- push $prefix/pytorch:$tag
 time docker build -t $prefix/pytorch-alexnet:$tag -f AlexnetPyTorchDockerfile ./
 # gcloud docker -- push $prefix/pytorch-alexnet:$tag
