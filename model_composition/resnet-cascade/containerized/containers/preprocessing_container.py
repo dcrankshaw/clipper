@@ -34,12 +34,19 @@ class TorchPreprocessContainer(rpc.ModelContainerBase):
             normalize
         ])
 
+        sample = np.random.random(299*299*3)
+        xx = self.predict_doubles([sample])
+        print(type(xx[0]))
+        print(xx[0].shape)
+        print(xx)
+
     def predict_doubles(self, inputs):
         reshaped_inputs = []
         for i in inputs:
-            img = Image.fromarray(i, mode="RGB")
+            x = i.reshape(self.height, self.width, 3)
+            img = Image.fromarray(x, mode="RGB")
             reshaped_inputs.append(self.preprocess(img))
-        return [r.flatten() for r in reshaped_inputs]
+        return [np.array(r.numpy().flatten(), dtype=np.float32) for r in reshaped_inputs]
         # start = datetime.now()
         # input_arrs = []
         # for t in inputs:
@@ -107,7 +114,7 @@ if __name__ == "__main__":
     else:
         print("Connecting to Clipper on localhost")
 
-    input_type = "bytes"
+    input_type = "floats"
     if "CLIPPER_INPUT_TYPE" in os.environ:
         input_type = os.environ["CLIPPER_INPUT_TYPE"]
 

@@ -64,9 +64,9 @@ class TorchContainer(rpc.ModelContainerBase):
         # start = datetime.now()
         input_arrs = []
         for t in inputs:
-            i = t.reshape(224, 224, 3)
+            i = torch.from_numpy(t.reshape(3, 224, 224).astype(np.float32))
             input_arrs.append(i)
-        input_batch = Variable(torch.stack(inputs, dim=0))
+        input_batch = Variable(torch.stack(input_arrs, dim=0))
         if torch.cuda.is_available():
             input_batch = input_batch.cuda()
         logits = self.model(input_batch)
