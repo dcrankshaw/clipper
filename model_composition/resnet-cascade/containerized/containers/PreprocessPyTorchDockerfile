@@ -1,0 +1,13 @@
+FROM model-comp/cuda-rpc
+
+# RUN conda install pytorch torchvision cuda90 -c pytorch
+# RUN conda install pytorch torchvision -c pytorch
+RUN conda install pillow
+
+# COPY pytorch_models/ /root/.torch/
+
+COPY preprocessing_container.py /container/
+
+CMD ["python", "/container/preprocessing_container.py"]
+
+# vim: set filetype=dockerfile:
