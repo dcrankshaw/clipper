@@ -22,6 +22,7 @@ using namespace zmq_client;
 static const std::string RES50 = "res50";
 static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
+static const std::string CASCADE_PREPROCESS = "cascadepreprocess";
 
 // From https://stackoverflow.com/a/29710970/814642
 double double_rand(double min, double max) {
@@ -30,7 +31,7 @@ double double_rand(double min, double max) {
   return distribution(generator);
 }
 
-void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector input,
+void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients, ClientFeatureVector raw_input,
              ClientMetrics &metrics, std::atomic<int>& prediction_counter,
              std::unordered_map<std::string, std::ofstream>& lineage_file_map,
              std::unordered_map<std::string, std::mutex>& lineage_mutex_map) {
@@ -91,9 +92,9 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  auto res50_callback = [input, &metrics, clients, res152_callback, completion_callback,
+  auto res50_callback = [&metrics, clients, res152_callback, completion_callback,
                          &lineage_file_map, &lineage_mutex_map](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
+      ClientFeatureVector transformed_input, ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
       std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
@@ -107,7 +108,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     double idk = double_rand(0.0, 1.0);
     if (idk > 0.9) {
       clients[RES152]->send_request(
-          RES152, input, 0, [cur_time, res152_callback](ClientFeatureVector output,
+          RES152, transformed_input, 0, [cur_time, res152_callback](ClientFeatureVector output,
                                                      std::shared_ptr<QueryLineage> lineage) {
             res152_callback(output, lineage, cur_time);
           });
@@ -145,9 +146,11 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
-  auto alexnet_callback = [input, &metrics, clients, res50_callback, completion_callback,
+  auto alexnet_callback = [&metrics, clients, res50_callback, res152_callback, completion_callback,
                            &lineage_file_map, &lineage_mutex_map, start_time](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+      ClientFeatureVector transformed_input,
+      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
+      std::chrono::time_point<std::chrono::system_clock> request_start_time) {
     if (output.type_ == DataType::Strings) {
       std::string output_str =
           std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
@@ -158,17 +161,27 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     auto cur_time = std::chrono::system_clock::now();
 
     double idk = double_rand(0.0, 1.0);
-    if (idk > 0.192) {
-      clients[RES50]->send_request(
-          RES50, input, 0, [cur_time, res50_callback](ClientFeatureVector output,
-                                                   std::shared_ptr<QueryLineage> lineage) {
-            res50_callback(output, lineage, cur_time);
+    // if (idk > 0.192) {
+    //   clients[RES50]->send_request(
+    //       RES50, transformed_input, 0, [transformed_input, cur_time, res50_callback](ClientFeatureVector output,
+    //                                                std::shared_ptr<QueryLineage> lineage) {
+    //         res50_callback(transformed_input, output, lineage, cur_time);
+    //       });
+    //     metrics.ingests_.find(RES50)->second->mark(1);
+    // } else {
+    //   completion_callback();
+    // }
+    if (idk > 0.9) {
+      clients[RES152]->send_request(
+          RES152, transformed_input, 0, [transformed_input, cur_time, res152_callback](
+            ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+            res152_callback(output, lineage, cur_time);
           });
-        metrics.ingests_.find(RES50)->second->mark(1);
+        metrics.ingests_.find(RES152)->second->mark(1);
     } else {
       completion_callback();
     }
-    auto latency = cur_time - start_time;
+    auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latencies_.find(ALEXNET)->second->insert(static_cast<int64_t>(latency_micros));
     metrics.latency_lists_.find(ALEXNET)->second->insert(static_cast<int64_t>(latency_micros));
@@ -198,9 +211,59 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     query_lineage_file << "}" << std::endl;
   };
 
+  auto preprocess_callback = [&metrics, clients, alexnet_callback,
+                           &lineage_file_map, &lineage_mutex_map, start_time](
+      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+    if (output.type_ == DataType::Strings) {
+      std::string output_str =
+          std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
+      if (output_str == "TIMEOUT") {
+        return;
+      }
+    }
+    auto cur_time = std::chrono::system_clock::now();
+    ClientFeatureVector transformed_input = output;
+
+    clients[ALEXNET]->send_request(
+        ALEXNET, transformed_input, 0, [transformed_input, cur_time, alexnet_callback](
+          ClientFeatureVector output,
+          std::shared_ptr<QueryLineage> lineage) {
+          alexnet_callback(transformed_input, output, lineage, cur_time);
+        });
+      metrics.ingests_.find(ALEXNET)->second->mark(1);
+    auto latency = cur_time - start_time;
+    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+    metrics.latencies_.find(CASCADE_PREPROCESS)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(CASCADE_PREPROCESS)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.throughputs_.find(CASCADE_PREPROCESS)->second->mark(1);
+    metrics.num_predictions_.find(CASCADE_PREPROCESS)->second->increment(1);
+
+    lineage->add_timestamp(
+        "driver::send",
+        std::chrono::duration_cast<std::chrono::microseconds>(start_time.time_since_epoch())
+            .count());
+
+    lineage->add_timestamp(
+        "driver::recv",
+        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[CASCADE_PREPROCESS]);
+    auto& query_lineage_file = lineage_file_map[CASCADE_PREPROCESS];
+    query_lineage_file << "{";
+    int num_entries = lineage->get_timestamps().size();
+    int idx = 0;
+    for (auto& entry : lineage->get_timestamps()) {
+      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+      if (idx < num_entries - 1) {
+        query_lineage_file << ", ";
+      }
+      idx += 1;
+    }
+    query_lineage_file << "}" << std::endl;
+  };
+
   metrics.ingests_.find("e2e")->second->mark(1);
-  clients[ALEXNET]->send_request(ALEXNET, input, 0, alexnet_callback);
-  metrics.ingests_.find(ALEXNET)->second->mark(1);
+  clients[RES50]->send_request(CASCADE_PREPROCESS, raw_input, 0, preprocess_callback);
+  metrics.ingests_.find(CASCADE_PREPROCESS)->second->mark(1);
 }
 
 std::vector<ClientFeatureVector> generate_float_inputs(int input_length) {
@@ -261,7 +324,7 @@ int main(int argc, char* argv[]) {
   clock::ClipperClock::get_clock().get_uptime();
   std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
 
-  std::vector<std::string> models = {ALEXNET, RES50, RES152};
+  std::vector<std::string> models = {ALEXNET, CASCADE_PREPROCESS, RES152};
   ClientMetrics metrics(models);
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
   // std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;

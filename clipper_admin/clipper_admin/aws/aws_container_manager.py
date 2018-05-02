@@ -345,30 +345,26 @@ class AWSContainerManager(ContainerManager):
                 # GPU resources
                 cmd.append("-e")
                 cmd.append("CUDA_VISIBLE_DEVICES=''")
-            for k, v in labels.iteritems():
-                cmd.append("-l")
-                cmd.append("%s=%s" % (k, v))
-            for k, v in env_vars.iteritems():
-                cmd.append("-e")
-                cmd.append("%s=%s" % (k, v))
-            if cpu_str:
-                cmd.append("--cpuset-cpus=%s" % cpu_str)
-            # Mount logs dir
-            cmd.append("-v")
-            cmd.append("/home/ubuntu/logs:/logs")
-            cmd.append(image)
-            cmd_str = " ".join(cmd)
-            logger.info("Docker command: \"%s\"" % cmd_str)
-            self._execute(cmd_str)
-            # subprocess.check_call(cmd, env=os_env)
         else:
-            raise ClipperException("Model deployment requires nvidia docker")
-            # self.docker_client.containers.run(
-            #     image,
-            #     environment=env_vars,
-            #     labels=labels,
-            #     cpuset_cpus=cpu_str,
-            #     **self.extra_container_kwargs)
+            cmd = ["docker", "run", "-d",
+                   "--network=%s" % self.docker_network]
+
+        for k, v in labels.iteritems():
+            cmd.append("-l")
+            cmd.append("%s=%s" % (k, v))
+        for k, v in env_vars.iteritems():
+            cmd.append("-e")
+            cmd.append("%s=%s" % (k, v))
+        if cpu_str:
+            cmd.append("--cpuset-cpus=%s" % cpu_str)
+        # Mount logs dir
+        cmd.append("-v")
+        cmd.append("/home/ubuntu/logs:/logs")
+        cmd.append(image)
+        cmd_str = " ".join(cmd)
+        logger.info("Docker command: \"%s\"" % cmd_str)
+        self._execute(cmd_str)
+        # subprocess.check_call(cmd, env=os_env)
 
     def _add_replica_remote(self, name, version, input_type, image, remote_addr,
                             gpu_num=None, cpu_str=None, use_nvidia_docker=True):
@@ -473,7 +469,7 @@ class AWSContainerManager(ContainerManager):
             else:
                 gpu_num = None
             cpus = allocated_cpus[i*cpus_per_replica: (i+1)*cpus_per_replica]
-            cpus = self.get_virtual_cpus(cpus)
+            cpus = self.get_virtual_cpus(cpus, name)
             cpus = [str(c) for c in cpus]
             cpu_str = ",".join(cpus)
 
@@ -537,22 +533,33 @@ class AWSContainerManager(ContainerManager):
                 self._add_replica_remote(name, version, input_type, image, remote_addr=remote_addr, gpu_num=gpu_num,
                                   cpu_str=cpu_str, use_nvidia_docker=use_nvidia_docker)
 
-    def get_virtual_cpus(self, pcpus):
+    def get_virtual_cpus(self, pcpus, name=None):
         """
         Given a list of physical cpus,
         obtains a list of corresponding virtual cpus.
 
         NOTE: This method assumes a p2.8xlarge instance
         """
-        vcpus_map = {}
-        for i in range(16):
-            vcpus_map[i] = (i, i + 16)
 
-        vcpus = []
-        for pcpu in pcpus:
-            vcpus += list(vcpus_map[pcpu])
+        if name == "cascadepreprocess":
+            vcpus_map = {}
+            for i in range(32):
+                vcpus_map[i] = (i, i + 32)
 
-        return vcpus
+            vcpus = []
+            for pcpu in pcpus:
+                vcpus += list(vcpus_map[pcpu])
+            return vcpus
+        else:
+            vcpus_map = {}
+            for i in range(16):
+                vcpus_map[i] = (i, i + 16)
+
+            vcpus = []
+            for pcpu in pcpus:
+                vcpus += list(vcpus_map[pcpu])
+
+            return vcpus
 
 
     def get_logs(self, logging_dir):

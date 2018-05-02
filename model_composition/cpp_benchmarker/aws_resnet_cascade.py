@@ -24,6 +24,8 @@ DEFAULT_OUTPUT = "TIMEOUT"
 RES50 = "res50"
 RES152 = "res152"
 ALEXNET = "alexnet"
+CASCADE_PREPROCESS = "cascadepreprocess"
+
 
 
 GPUS_PER_MACHINE = 4
@@ -54,6 +56,21 @@ def get_heavy_node_config(model_name,
                                             use_nvidia_docker=True,
                                             no_diverge=True,
                                             remote_addr=remote_addr)
+
+    elif model_name == CASCADE_PREPROCESS:
+        image = "gcr.io/clipper-model-comp/pytorch-preprocess:bench"
+        return driver_utils.HeavyNodeConfig(name=CASCADE_PREPROCESS,
+                                            input_type="floats",
+                                            model_image=image,
+                                            allocated_cpus=allocated_cpus,
+                                            cpus_per_replica=cpus_per_replica,
+                                            gpus=[],
+                                            batch_size=batch_size,
+                                            num_replicas=num_replicas,
+                                            use_nvidia_docker=False,
+                                            no_diverge=True,
+                                            remote_addr=remote_addr
+                                            )
 
     elif model_name == RES50:
         image = "gcr.io/clipper-model-comp/pytorch-res50:bench"
@@ -93,13 +110,18 @@ def setup_clipper(addr_config_map):
         # cl = ClipperConnection(DockerContainerManager(redis_port=6380))
         cl.connect()
         cl.stop_all(remote_addrs=ALL_REMOTE_ADDRS)
+        if addr == "172.30.6.215":
+            query_cpu_str = "0,1,2,3,4,5,6,7,8,32,33,34,35,36,37,38,39"
+        else:
+            query_cpu_str = "0,16,1,17,2,18,3,19,4,20,5,21,6,22,7,23"
         cl.start_clipper(
             query_frontend_image="clipper/zmq_frontend:develop",
             redis_cpu_str="0",
             mgmt_cpu_str="0",
-            query_cpu_str="0,16,1,17,2,18,3,19")
+            query_cpu_str=query_cpu_str)
         time.sleep(10)
         for c in configs:
+            print("Setting up {}".format(c.__dict__))
             driver_utils.setup_heavy_node(cl, c, None, DEFAULT_OUTPUT)
     time.sleep(10)
     logger.info("Clipper is set up!")
@@ -389,7 +411,7 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                     "--num_trials={}".format(num_trials),
                     "--log_file={}".format(log_path),
                     "--clipper_address_alexnet={}".format(name_addr_map[ALEXNET]),
-                    "--clipper_address_res50={}".format(name_addr_map[RES50]),
+                    "--clipper_address_res50={}".format(name_addr_map[CASCADE_PREPROCESS]),
                     "--clipper_address_res152={}".format(name_addr_map[RES152]),
                     "--request_delay_file={}".format(arrival_delay_files[client_num])]
                 if client_num == 0:
@@ -469,7 +491,7 @@ def run_e2e(addr_config_map, name_addr_map, trial_length, driver_path, profiler_
                 procs[c][0].terminate()
 
     # Warmup with throughput of 1000 seems to choke the system, so warm up with 100 qps instead
-    run(100, 10, "warmup", "constant")
+    run(1000, 10, "warmup", "constant")
     throughput_results = run(0, 25, "throughput", "file")
 
     for cl in cls:
@@ -491,14 +513,14 @@ def hash_file(fname):
 def run_experiment_for_config(config):
     cpu_map = {
         ALEXNET_CLIPPER_ADDR: range(8, 16),
-        RES50_CLIPPER_ADDR: range(8, 16),
-        RES152_CLIPPER_ADDR: range(8, 16)
+        RES50_CLIPPER_ADDR: range(12,32),
+        # RES152_CLIPPER_ADDR: range(8, 16)
     }
 
     gpu_map = {
         ALEXNET_CLIPPER_ADDR: range(GPUS_PER_MACHINE),
-        RES50_CLIPPER_ADDR: range(GPUS_PER_MACHINE),
-        RES152_CLIPPER_ADDR: range(GPUS_PER_MACHINE)
+        # RES50_CLIPPER_ADDR: range(GPUS_PER_MACHINE),
+        # RES152_CLIPPER_ADDR: range(GPUS_PER_MACHINE)
     }
 
     # NOTE: Distribution of models among nodes assumes all models are running on V100s
@@ -521,30 +543,30 @@ def run_experiment_for_config(config):
             "cpus": c["num_replicas"] * c["num_cpus"]
         }
 
-    all_models = [RES152, ALEXNET, RES50]
+    all_models = [RES152, ALEXNET, CASCADE_PREPROCESS]
 
     # Default addr config map is each model on separate machine
     model_name_to_addr_map = {
         ALEXNET: ALEXNET_CLIPPER_ADDR,
-        RES50: RES50_CLIPPER_ADDR,
-        RES152: RES152_CLIPPER_ADDR
+        CASCADE_PREPROCESS: RES50_CLIPPER_ADDR,
+        RES152: ALEXNET_CLIPPER_ADDR
     }
 
     # First check if all 3 models can fit onto one machine
-    if combined_gpu_usage <= GPUS_PER_MACHINE:
-        # If so, assign all models to ALEXNET_CLIPPER_ADDR
-        model_name_to_addr_map = dict([(m, ALEXNET_CLIPPER_ADDR) for m in all_models])
-        logger.info("Running all models on {}".format(ALEXNET_CLIPPER_ADDR))
-    else:
-        # Now check if any 2 models can fit onto the same machine
-        model_pairs = combinations(all_models, 2)
-        for a, b in model_pairs:
-            if total_resource_bundle_map[a]["gpus"] + total_resource_bundle_map[b]["gpus"] <= GPUS_PER_MACHINE:
-                # Put model A and B onto same machine
-                model_name_to_addr_map[a] = model_name_to_addr_map[b]
-                logger.info("Running {a} and {b} on same physical machine: {machine}".format(
-                    a=a, b=b, machine=model_name_to_addr_map[b]))
-                break
+    # if combined_gpu_usage <= GPUS_PER_MACHINE:
+    #     # If so, assign all models to ALEXNET_CLIPPER_ADDR
+    #     model_name_to_addr_map = dict([(m, ALEXNET_CLIPPER_ADDR) for m in all_models])
+    #     logger.info("Running all models on {}".format(ALEXNET_CLIPPER_ADDR))
+    # else:
+    #     # Now check if any 2 models can fit onto the same machine
+    #     model_pairs = combinations(all_models, 2)
+    #     for a, b in model_pairs:
+    #         if total_resource_bundle_map[a]["gpus"] + total_resource_bundle_map[b]["gpus"] <= GPUS_PER_MACHINE:
+    #             # Put model A and B onto same machine
+    #             model_name_to_addr_map[a] = model_name_to_addr_map[b]
+    #             logger.info("Running {a} and {b} on same physical machine: {machine}".format(
+    #                 a=a, b=b, machine=model_name_to_addr_map[b]))
+    #             break
 
 
     def get_cpus(num, addr):
@@ -577,6 +599,10 @@ def run_experiment_for_config(config):
             addr_config_map[v] = []
 
         for name, c in config["node_configs"].iteritems():
+            # if name == CASCADE_PREPROCESS:
+            #     addr = RES50_CLIPPER_ADDR
+            # else:
+            #     addr = ALEXNET_CLIPPER_ADDR
             addr = model_name_to_addr_map[name]
             node = get_heavy_node_config(model_name=name,
                                 batch_size=int(c["batch_size"]),
@@ -601,7 +627,8 @@ def run_experiment_for_config(config):
     print("NAME ADDR MAP:\n:{}".format(json.dumps(model_name_to_addr_map, indent=2)))
 
     lam = config["lam"]
-    cv = config["cv"]
+    cv = 1.0
+    config["cv"] = cv
     slo = config["slo"]
     cost = config["cost"]
     utilization = config["utilization"]
@@ -613,7 +640,7 @@ def run_experiment_for_config(config):
 
     # results_dir = "pipeline_three_prof_underestimate_slo_{slo}_cv_{cv}_util_{util}".format(
     #     slo=slo, cv=cv, util=utilization)
-    results_dir = "pipeline_three_e2e_sys_comp/util_{util}".format(util=utilization)
+    results_dir = "pipeline_three_FINAL_EXPERIMENT".format(util=utilization)
     reps_str = "_".join(["{name}-{reps}".format(name=c["name"], reps=c["num_replicas"])
                          for c in config["node_configs"].values()])
     results_fname = "aws_latency_percentage_{perc}_lambda_{lam}".format(
@@ -630,8 +657,8 @@ def run_experiment_for_config(config):
     num_clients = 2
 
     throughput_results = run_e2e(
-        addr_config_map, model_name_to_addr_map, 2000, "../../release/src/inferline_client/resnet_cascade",
-        client_cpu_strs, int(lam / num_clients), cv, num_clients, slo)
+        addr_config_map, model_name_to_addr_map, 10000, "../../release/src/inferline_client/resnet_cascade",
+        client_cpu_strs, lam, cv, num_clients, slo)
     driver_utils.save_results_cpp_client(
         dict([(a, [c.__dict__ for c in cs]) for a, cs in addr_config_map.iteritems()]),
         throughput_results,
@@ -647,28 +674,29 @@ if __name__ == "__main__":
     global RES152_CLIPPER_ADDR
 
 
-    base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_1.0")
+    # base_path = os.path.expanduser("~/plots-model-comp-paper/experiments/e2e_sys_comp_pipeline_three/util_1.0")
 
-    config_paths = [
-        # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0_higher_cost.json",
-        "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1_higher_cost.json"
-    ]
+    # config_paths = [
+    #     # "aws_resnet_cascade_ifl_configs_slo_1.0_cv_0.1_higher_cost.json",
+    #     "aws_resnet_cascade_ifl_configs_slo_1.0_cv_1.0_higher_cost.json",
+    #     "aws_resnet_cascade_ifl_configs_slo_1.0_cv_4.0_higher_cost.json",
+    #     "aws_resnet_cascade_ifl_configs_slo_0.5_cv_0.1_higher_cost.json"
+    # ]
 
 
-    config_paths = [os.path.join(base_path, c) for c in config_paths]
+    # config_paths = [os.path.join(base_path, c) for c in config_paths]
 
-    # for config_path in args.config_paths:
-    for config_path in config_paths:
-        print(config_path)
-        with open(os.path.abspath(os.path.expanduser(config_path)), "r") as f:
-            provided_configs = json.load(f)
 
-        for config in provided_configs:
-            ALEXNET_CLIPPER_ADDR = os.environ["ALEXNET_CLIPPER_ADDR"]
-            RES50_CLIPPER_ADDR = os.environ["RES50_CLIPPER_ADDR"]
-            # RES152_CLIPPER_ADDR = os.environ["RES152_CLIPPER_ADDR"]
-            RES152_CLIPPER_ADDR = os.environ["RES50_CLIPPER_ADDR"]
-            run_experiment_for_config(config)
+    # for config_path in config_paths:
+    #     print(config_path)
+    with open("cascade_final_attempt.json", "r") as f:
+        provided_configs = json.load(f)
+        config = provided_configs[0]
+
+        # for config in provided_configs:
+        ALEXNET_CLIPPER_ADDR = "172.30.6.113"
+        RES50_CLIPPER_ADDR = "172.30.6.215"
+        # RES152_CLIPPER_ADDR = os.environ["RES152_CLIPPER_ADDR"]
+        RES152_CLIPPER_ADDR = ALEXNET_CLIPPER_ADDR
+        run_experiment_for_config(config)
     sys.exit(0)

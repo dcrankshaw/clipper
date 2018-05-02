@@ -23,7 +23,7 @@ using namespace zmq_client;
 static const std::string TF_RESNET = "tf-resnet-feats";
 static const std::string TF_KERNEL_SVM = "tf-kernel-svm";
 
-static const std::string INCEPTION_FEATS = "inception";
+static const std::string ALEXNET_FEATS = "tf-alexnet";
 static const std::string TF_LOG_REG = "tf-log-reg";
 
 static const std::string E2E = "e2e";
@@ -184,7 +184,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
   };
 
-  auto inception_callback = [clients, &metrics, start_time, log_reg_callback, &lineage_file_map,
+  auto alexnet_callback = [clients, &metrics, start_time, log_reg_callback, &lineage_file_map,
                              &lineage_mutex_map, latency_budget_micros, completion_callback,
                              expired, branches_completed](ClientFeatureVector output,
                                                  std::shared_ptr<QueryLineage> lineage) {
@@ -195,8 +195,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
         // NOTE: This ignores lineage
         long latency_micros = std::numeric_limits<int>::max();
         expired->store(true);
-        metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
-        metrics.latency_lists_.find(INCEPTION_FEATS)
+        metrics.latencies_.find(TF_ALEXNET)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(TF_ALEXNET)
             ->second->insert(static_cast<int64_t>(latency_micros));
         int num_branches_completed = branches_completed->fetch_add(1);
         if (num_branches_completed == 1) {
@@ -210,18 +210,18 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     auto latency = cur_time - start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     int new_latency_budget = std::max(0L, latency_budget_micros - latency_micros);
-    clients[INCEPTION_FEATS]->send_request(
+    clients[TF_ALEXNET]->send_request(
         TF_LOG_REG, output, new_latency_budget, [cur_time, log_reg_callback](ClientFeatureVector output,
                                                          std::shared_ptr<QueryLineage> lineage) {
           log_reg_callback(output, lineage, cur_time);
         });
 
     metrics.ingests_.find(TF_LOG_REG)->second->mark(1);
-    metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_.find(INCEPTION_FEATS)
+    metrics.latencies_.find(TF_ALEXNET)->second->insert(static_cast<int64_t>(latency_micros));
+    metrics.latency_lists_.find(TF_ALEXNET)
         ->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_.find(INCEPTION_FEATS)->second->mark(1);
-    metrics.num_predictions_.find(INCEPTION_FEATS)->second->increment(1);
+    metrics.throughputs_.find(TF_ALEXNET)->second->mark(1);
+    metrics.num_predictions_.find(TF_ALEXNET)->second->increment(1);
 
     lineage->add_timestamp(
         "driver::send",
@@ -231,8 +231,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     lineage->add_timestamp(
         "driver::recv",
         std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
-    std::unique_lock<std::mutex> lock(lineage_mutex_map[INCEPTION_FEATS]);
-    auto& query_lineage_file = lineage_file_map[INCEPTION_FEATS];
+    std::unique_lock<std::mutex> lock(lineage_mutex_map[TF_ALEXNET]);
+    auto& query_lineage_file = lineage_file_map[TF_ALEXNET];
     query_lineage_file << "{";
     int num_entries = lineage->get_timestamps().size();
     int idx = 0;
@@ -257,8 +257,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
         // NOTE: This ignores lineage
         long latency_micros = std::numeric_limits<int>::max();
         expired->store(true);
-        metrics.latencies_.find(INCEPTION_FEATS)->second->insert(static_cast<int64_t>(latency_micros));
-        metrics.latency_lists_.find(INCEPTION_FEATS)
+        metrics.latencies_.find(TF_RESNET)->second->insert(static_cast<int64_t>(latency_micros));
+        metrics.latency_lists_.find(TF_RESNET)
             ->second->insert(static_cast<int64_t>(latency_micros));
         int num_branches_completed = branches_completed->fetch_add(1);
         if (num_branches_completed == 1) {
@@ -306,8 +306,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
   metrics.ingests_.find("e2e")->second->mark(1);
 
-  clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, input, latency_budget_micros, inception_callback);
-  metrics.ingests_.find(INCEPTION_FEATS)->second->mark(1);
+  clients[TF_ALEXNET]->send_request(TF_ALEXNET, input, latency_budget_micros, alexnet_callback);
+  metrics.ingests_.find(TF_ALEXNET)->second->mark(1);
   clients[TF_RESNET]->send_request(TF_RESNET, resnet_input, latency_budget_micros, resnet_callback);
   metrics.ingests_.find(TF_RESNET)->second->mark(1);
 }
@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address_resnet", "IP address or hostname of ZMQ frontend to use for the resnet branch",
        cxxopts::value<std::string>())
-      ("clipper_address_inception", "IP address or hostname of ZMQ frontend to user for the inception branch",
+      ("clipper_address_alexnet", "IP address or hostname of ZMQ frontend to user for the alexnet branch",
        cxxopts::value<std::string>())
       ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
        cxxopts::value<std::string>())
@@ -369,7 +369,7 @@ int main(int argc, char* argv[]) {
   // soon as the frontend starts
   clock::ClipperClock::get_clock().get_uptime();
   std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
-  std::vector<std::string> models = {TF_RESNET, INCEPTION_FEATS, TF_KERNEL_SVM, TF_LOG_REG};
+  std::vector<std::string> models = {TF_RESNET, TF_ALEXNET, TF_KERNEL_SVM, TF_LOG_REG};
   ClientMetrics metrics(models);
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
   // std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
@@ -404,7 +404,7 @@ int main(int argc, char* argv[]) {
   }
   std::unordered_map<std::string, std::string> addresses;
   addresses.emplace(TF_RESNET, options["clipper_address_resnet"].as<std::string>());
-  addresses.emplace(INCEPTION_FEATS, options["clipper_address_inception"].as<std::string>());
+  addresses.emplace(TF_ALEXNET, options["clipper_address_alexnet"].as<std::string>());
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), addresses, -1, delays_ms,
