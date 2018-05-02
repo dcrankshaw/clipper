@@ -3,9 +3,9 @@ import rpc
 import os
 import sys
 import numpy as np
-# import torch
-# from torchvision import models, transforms
-# from torch.autograd import Variable
+import torch
+from torchvision import models, transforms
+from torch.autograd import Variable
 from PIL import Image
 import logging
 from datetime import datetime
