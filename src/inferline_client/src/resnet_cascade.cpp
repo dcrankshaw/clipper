@@ -19,8 +19,8 @@
 using namespace clipper;
 using namespace zmq_client;
 
-static const std::string RES50 = "res50";
-static const std::string RES152 = "res152";
+// static const std::string RES50 = "res50";
+// static const std::string RES152 = "res152";
 static const std::string ALEXNET = "alexnet";
 static const std::string CASCADE_PREPROCESS = "cascadepreprocess";
 
@@ -48,105 +48,106 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     prediction_counter += 1;
   };
 
-  auto res152_callback = [&metrics, completion_callback, &lineage_file_map,
-                          &lineage_mutex_map](
-      ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
-      std::chrono::time_point<std::chrono::system_clock> request_start_time) {
-    if (output.type_ == DataType::Strings) {
-      std::string output_str =
-          std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
-      if (output_str == "TIMEOUT") {
-        return;
-      }
-    }
-    auto cur_time = std::chrono::system_clock::now();
+  // auto res152_callback = [&metrics, completion_callback, &lineage_file_map,
+  //                         &lineage_mutex_map](
+  //     ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
+  //     std::chrono::time_point<std::chrono::system_clock> request_start_time) {
+  //   if (output.type_ == DataType::Strings) {
+  //     std::string output_str =
+  //         std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
+  //     if (output_str == "TIMEOUT") {
+  //       return;
+  //     }
+  //   }
+  //   auto cur_time = std::chrono::system_clock::now();
+  //
+  //   completion_callback();
+  //   auto latency = cur_time - request_start_time;
+  //   long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+  //   metrics.latencies_.find(RES152)->second->insert(static_cast<int64_t>(latency_micros));
+  //   metrics.latency_lists_.find(RES152)->second->insert(static_cast<int64_t>(latency_micros));
+  //   metrics.throughputs_.find(RES152)->second->mark(1);
+  //   metrics.num_predictions_.find(RES152)->second->increment(1);
+  //
+  //   lineage->add_timestamp(
+  //       "driver::send",
+  //       std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+  //           .count());
+  //
+  //   lineage->add_timestamp(
+  //       "driver::recv",
+  //       std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+  //   std::unique_lock<std::mutex> lock(lineage_mutex_map[RES152]);
+  //   auto& query_lineage_file = lineage_file_map[RES152];
+  //   query_lineage_file << "{";
+  //   int num_entries = lineage->get_timestamps().size();
+  //   int idx = 0;
+  //   for (auto& entry : lineage->get_timestamps()) {
+  //     query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+  //     if (idx < num_entries - 1) {
+  //       query_lineage_file << ", ";
+  //     }
+  //     idx += 1;
+  //   }
+  //   query_lineage_file << "}" << std::endl;
+  // };
+  //
+  // auto res50_callback = [&metrics, clients, res152_callback, completion_callback,
+  //                        &lineage_file_map, &lineage_mutex_map](
+  //     ClientFeatureVector transformed_input, ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
+  //     std::chrono::time_point<std::chrono::system_clock> request_start_time) {
+  //   if (output.type_ == DataType::Strings) {
+  //     std::string output_str =
+  //         std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
+  //     if (output_str == "TIMEOUT") {
+  //       return;
+  //     }
+  //   }
+  //   auto cur_time = std::chrono::system_clock::now();
+  //
+  //   double idk = double_rand(0.0, 1.0);
+  //   if (idk > 0.9) {
+  //     clients[RES152]->send_request(
+  //         RES152, transformed_input, 0, [cur_time, res152_callback](ClientFeatureVector output,
+  //                                                    std::shared_ptr<QueryLineage> lineage) {
+  //           res152_callback(output, lineage, cur_time);
+  //         });
+  //       metrics.ingests_.find(RES152)->second->mark(1);
+  //   } else {
+  //     completion_callback();
+  //   }
+  //   auto latency = cur_time - request_start_time;
+  //   long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
+  //   metrics.latencies_.find(RES50)->second->insert(static_cast<int64_t>(latency_micros));
+  //   metrics.latency_lists_.find(RES50)->second->insert(static_cast<int64_t>(latency_micros));
+  //   metrics.throughputs_.find(RES50)->second->mark(1);
+  //   metrics.num_predictions_.find(RES50)->second->increment(1);
+  //
+  //   lineage->add_timestamp(
+  //       "driver::send",
+  //       std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
+  //           .count());
+  //
+  //   lineage->add_timestamp(
+  //       "driver::recv",
+  //       std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
+  //   std::unique_lock<std::mutex> lock(lineage_mutex_map[RES50]);
+  //   auto& query_lineage_file = lineage_file_map[RES50];
+  //   query_lineage_file << "{";
+  //   int num_entries = lineage->get_timestamps().size();
+  //   int idx = 0;
+  //   for (auto& entry : lineage->get_timestamps()) {
+  //     query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
+  //     if (idx < num_entries - 1) {
+  //       query_lineage_file << ", ";
+  //     }
+  //     idx += 1;
+  //   }
+  //   query_lineage_file << "}" << std::endl;
+  // };
 
-    completion_callback();
-    auto latency = cur_time - request_start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_.find(RES152)->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_.find(RES152)->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_.find(RES152)->second->mark(1);
-    metrics.num_predictions_.find(RES152)->second->increment(1);
-
-    lineage->add_timestamp(
-        "driver::send",
-        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
-            .count());
-
-    lineage->add_timestamp(
-        "driver::recv",
-        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
-    std::unique_lock<std::mutex> lock(lineage_mutex_map[RES152]);
-    auto& query_lineage_file = lineage_file_map[RES152];
-    query_lineage_file << "{";
-    int num_entries = lineage->get_timestamps().size();
-    int idx = 0;
-    for (auto& entry : lineage->get_timestamps()) {
-      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
-      if (idx < num_entries - 1) {
-        query_lineage_file << ", ";
-      }
-      idx += 1;
-    }
-    query_lineage_file << "}" << std::endl;
-  };
-
-  auto res50_callback = [&metrics, clients, res152_callback, completion_callback,
-                         &lineage_file_map, &lineage_mutex_map](
-      ClientFeatureVector transformed_input, ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
-      std::chrono::time_point<std::chrono::system_clock> request_start_time) {
-    if (output.type_ == DataType::Strings) {
-      std::string output_str =
-          std::string(reinterpret_cast<char*>(output.get_data()), output.size_typed_);
-      if (output_str == "TIMEOUT") {
-        return;
-      }
-    }
-    auto cur_time = std::chrono::system_clock::now();
-
-    double idk = double_rand(0.0, 1.0);
-    if (idk > 0.9) {
-      clients[RES152]->send_request(
-          RES152, transformed_input, 0, [cur_time, res152_callback](ClientFeatureVector output,
-                                                     std::shared_ptr<QueryLineage> lineage) {
-            res152_callback(output, lineage, cur_time);
-          });
-        metrics.ingests_.find(RES152)->second->mark(1);
-    } else {
-      completion_callback();
-    }
-    auto latency = cur_time - request_start_time;
-    long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
-    metrics.latencies_.find(RES50)->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.latency_lists_.find(RES50)->second->insert(static_cast<int64_t>(latency_micros));
-    metrics.throughputs_.find(RES50)->second->mark(1);
-    metrics.num_predictions_.find(RES50)->second->increment(1);
-
-    lineage->add_timestamp(
-        "driver::send",
-        std::chrono::duration_cast<std::chrono::microseconds>(request_start_time.time_since_epoch())
-            .count());
-
-    lineage->add_timestamp(
-        "driver::recv",
-        std::chrono::duration_cast<std::chrono::microseconds>(cur_time.time_since_epoch()).count());
-    std::unique_lock<std::mutex> lock(lineage_mutex_map[RES50]);
-    auto& query_lineage_file = lineage_file_map[RES50];
-    query_lineage_file << "{";
-    int num_entries = lineage->get_timestamps().size();
-    int idx = 0;
-    for (auto& entry : lineage->get_timestamps()) {
-      query_lineage_file << "\"" << entry.first << "\": " << std::to_string(entry.second);
-      if (idx < num_entries - 1) {
-        query_lineage_file << ", ";
-      }
-      idx += 1;
-    }
-    query_lineage_file << "}" << std::endl;
-  };
-
-  auto alexnet_callback = [&metrics, clients, res50_callback, res152_callback, completion_callback,
+  // auto alexnet_callback = [&metrics, clients, res50_callback, res152_callback, completion_callback,
+  auto alexnet_callback = [&metrics, clients, completion_callback,
                            &lineage_file_map, &lineage_mutex_map, start_time](
       ClientFeatureVector transformed_input,
       ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage,
@@ -160,7 +161,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
     auto cur_time = std::chrono::system_clock::now();
 
-    double idk = double_rand(0.0, 1.0);
+    // double idk = double_rand(0.0, 1.0);
     // if (idk > 0.192) {
     //   clients[RES50]->send_request(
     //       RES50, transformed_input, 0, [transformed_input, cur_time, res50_callback](ClientFeatureVector output,
@@ -171,16 +172,17 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     // } else {
     //   completion_callback();
     // }
-    if (idk > 0.9) {
-      clients[RES152]->send_request(
-          RES152, transformed_input, 0, [transformed_input, cur_time, res152_callback](
-            ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
-            res152_callback(output, lineage, cur_time);
-          });
-        metrics.ingests_.find(RES152)->second->mark(1);
-    } else {
+    // if (idk > 0.9) {
+    //   clients[RES152]->send_request(
+    //       RES152, transformed_input, 0, [transformed_input, cur_time, res152_callback](
+    //         ClientFeatureVector output, std::shared_ptr<QueryLineage> lineage) {
+    //         res152_callback(output, lineage, cur_time);
+    //       });
+    //     metrics.ingests_.find(RES152)->second->mark(1);
+    // } else {
+    //   completion_callback();
+    // }
       completion_callback();
-    }
     auto latency = cur_time - request_start_time;
     long latency_micros = std::chrono::duration_cast<std::chrono::microseconds>(latency).count();
     metrics.latencies_.find(ALEXNET)->second->insert(static_cast<int64_t>(latency_micros));
@@ -262,7 +264,7 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
   };
 
   metrics.ingests_.find("e2e")->second->mark(1);
-  clients[RES50]->send_request(CASCADE_PREPROCESS, raw_input, 0, preprocess_callback);
+  clients[ALEXNET]->send_request(CASCADE_PREPROCESS, raw_input, 0, preprocess_callback);
   metrics.ingests_.find(CASCADE_PREPROCESS)->second->mark(1);
 }
 
@@ -301,10 +303,10 @@ int main(int argc, char* argv[]) {
        cxxopts::value<std::string>())
       ("clipper_address_alexnet", "IP address or hostname of ZMQ frontend to use for alexnet",
        cxxopts::value<std::string>())
-      ("clipper_address_res50", "IP address or hostname of ZMQ frontend to user for resnet50",
-       cxxopts::value<std::string>())
-      ("clipper_address_res152", "IP address or hostname of ZMQ frontend to user for resnet152",
-       cxxopts::value<std::string>())
+      // ("clipper_address_res50", "IP address or hostname of ZMQ frontend to user for resnet50",
+      //  cxxopts::value<std::string>())
+      // ("clipper_address_res152", "IP address or hostname of ZMQ frontend to user for resnet152",
+      //  cxxopts::value<std::string>())
       ("request_delay_file", "Path to file containing a list of inter-arrival delays, one per line.",
        cxxopts::value<std::string>())
       ("get_clipper_metrics", "Collect Clipper metrics",
@@ -324,7 +326,8 @@ int main(int argc, char* argv[]) {
   clock::ClipperClock::get_clock().get_uptime();
   std::vector<ClientFeatureVector> inputs = generate_float_inputs(299 * 299 * 3);
 
-  std::vector<std::string> models = {ALEXNET, CASCADE_PREPROCESS, RES152};
+  // std::vector<std::string> models = {ALEXNET, CASCADE_PREPROCESS, RES152};
+  std::vector<std::string> models = {ALEXNET, CASCADE_PREPROCESS};
   ClientMetrics metrics(models);
   std::unordered_map<std::string, std::ofstream> lineage_file_map;
   // std::unordered_map<std::string, std::ofstream&> lineage_file_map_refs;
@@ -358,8 +361,8 @@ int main(int argc, char* argv[]) {
   }
   std::unordered_map<std::string, std::string> addresses;
   addresses.emplace(ALEXNET, options["clipper_address_alexnet"].as<std::string>());
-  addresses.emplace(RES50, options["clipper_address_res50"].as<std::string>());
-  addresses.emplace(RES152, options["clipper_address_res152"].as<std::string>());
+  // addresses.emplace(RES50, options["clipper_address_res50"].as<std::string>());
+  // addresses.emplace(RES152, options["clipper_address_res152"].as<std::string>());
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, options["trial_length"].as<int>(), options["num_trials"].as<int>(),
                 options["log_file"].as<std::string>(), addresses, -1, delays_ms,
