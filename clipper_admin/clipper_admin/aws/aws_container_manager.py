@@ -541,25 +541,25 @@ class AWSContainerManager(ContainerManager):
         NOTE: This method assumes a p2.8xlarge instance
         """
 
-        if name == "cascadepreprocess":
-            vcpus_map = {}
-            for i in range(32):
-                vcpus_map[i] = (i, i + 32)
+        # if name == "cascadepreprocess":
+        #     vcpus_map = {}
+        #     for i in range(32):
+        #         vcpus_map[i] = (i, i + 32)
+        #
+        #     vcpus = []
+        #     for pcpu in pcpus:
+        #         vcpus += list(vcpus_map[pcpu])
+        #     return vcpus
+        # else:
+        vcpus_map = {}
+        for i in range(16):
+            vcpus_map[i] = (i, i + 16)
 
-            vcpus = []
-            for pcpu in pcpus:
-                vcpus += list(vcpus_map[pcpu])
-            return vcpus
-        else:
-            vcpus_map = {}
-            for i in range(16):
-                vcpus_map[i] = (i, i + 16)
+        vcpus = []
+        for pcpu in pcpus:
+            vcpus += list(vcpus_map[pcpu])
 
-            vcpus = []
-            for pcpu in pcpus:
-                vcpus += list(vcpus_map[pcpu])
-
-            return vcpus
+        return vcpus
 
 
     def get_logs(self, logging_dir):
