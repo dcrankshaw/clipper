@@ -19,13 +19,14 @@ using namespace clipper;
 using namespace zmq_client;
 
 static const std::string INCEPTION_FEATS = "tf-inception-contention";
-static const std::string TF_KERNEL_SVM = "tf-kernel-svm-contention";
+// static const std::string TF_KERNEL_SVM = "tf-kernel-svm-contention";
+static const std::string CASCADE_PREPROCESS = "cascadepreprocess-contention";
 
 void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>> clients,
     ClientFeatureVector inception_input, std::atomic<int>& prediction_counter) {
-  size_t ksvm_input_length = 2048;
-  ClientFeatureVector ksvm_input(inception_input.data_, ksvm_input_length,
-                                   ksvm_input_length * sizeof(float), DataType::Floats);
+  // size_t ksvm_input_length = 2048;
+  // ClientFeatureVector ksvm_input(inception_input.data_, ksvm_input_length,
+  //                                  ksvm_input_length * sizeof(float), DataType::Floats);
 
   std::shared_ptr<std::atomic_int> branches_completed = std::make_shared<std::atomic_int>(0);
   // NOOP
@@ -37,7 +38,8 @@ void predict(std::unordered_map<std::string, std::shared_ptr<FrontendRPCClient>>
     }
   };
 
-  clients[TF_KERNEL_SVM]->send_request(TF_KERNEL_SVM, ksvm_input, callback);
+  // clients[TF_KERNEL_SVM]->send_request(TF_KERNEL_SVM, ksvm_input, callback);
+  clients[CASCADE_PREPROCESS]->send_request(CASCADE_PREPROCESS, ksvm_input, callback);
   clients[INCEPTION_FEATS]->send_request(INCEPTION_FEATS, inception_input, callback);
 }
 
@@ -101,7 +103,7 @@ int main(int argc, char* argv[]) {
   };
   std::unordered_map<std::string, std::string> addresses;
   addresses.emplace(INCEPTION_FEATS, options["clipper_address"].as<std::string>());
-  addresses.emplace(TF_KERNEL_SVM, options["clipper_address"].as<std::string>());
+  addresses.emplace(CASCADE_PREPROCESS, options["clipper_address"].as<std::string>());
   Driver driver(predict_func, std::move(inputs), options["target_throughput"].as<float>(),
                 distribution, 100000, 100000, /* Basically just run forever */
                 log_file, addresses, -1, {},
