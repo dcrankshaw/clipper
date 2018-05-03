@@ -4,9 +4,9 @@ import os
 import sys
 import numpy as np
 import torch
-from torchvision import models, transforms
+from torchvision import transforms
 from torch.autograd import Variable
-from PIL import Image
+from PIL import Image, ImageEnhance
 import logging
 from datetime import datetime
 
@@ -44,7 +44,13 @@ class TorchPreprocessContainer(rpc.ModelContainerBase):
         reshaped_inputs = []
         for i in inputs:
             x = i.reshape(self.height, self.width, 3)
-            img = Image.fromarray(x, mode="RGB")
+            img = Image.fromarray(x, mode="RGB").resize((400, 400))
+            sharpener = ImageEnhance.Sharpness(img)
+            img = sharpener.enhance(1.8)
+            brightener = ImageEnhance.Brightness(img)
+            img = brightener.enhance(1.5)
+            contraster = ImageEnhance.Contrast(img)
+            img = contraster.enhance(1.5)
             reshaped_inputs.append(self.preprocess(img))
         return [np.array(r.numpy().flatten(), dtype=np.float32) for r in reshaped_inputs]
         # start = datetime.now()
@@ -63,6 +69,19 @@ class TorchPreprocessContainer(rpc.ModelContainerBase):
 
     def predict_floats(self, inputs):
         return self.predict_doubles(inputs)
+
+    def bench(self, num_iters, batch_size):
+        lats = []
+        for i in range(num_iters):
+            inputs = [np.random.random(299*299*3) for _ in range(batch_size)]
+            start = datetime.now()
+            self.predict_doubles(inputs)
+            end = datetime.now()
+            lats.append((end-start).total_seconds())
+        print("Mean: {mean:.3f} ms, P99: {p99:.3f} ms".format(
+            mean=1000.0*np.mean(lats), p99=1000.0*np.percentile(lats, 99)))
+
+
 
     # def predict_bytes(self, inputs):
     #     start = datetime.now()
@@ -122,5 +141,6 @@ if __name__ == "__main__":
     # with open(mpath, "rb") as f:
     #     model_arch = f.read().strip()
     model = TorchPreprocessContainer()
+    # model.bench(100, 4)
     rpc_service = rpc.RPCService()
     rpc_service.start(model, ip, model_name, model_version, input_type)
