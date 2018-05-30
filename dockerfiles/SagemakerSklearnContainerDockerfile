@@ -1,0 +1,13 @@
+ARG CODE_VERSION
+FROM clipper/py-rpc:${CODE_VERSION}
+
+LABEL maintainer="Dan Crankshaw <dscrankshaw@gmail.com>"
+
+RUN pip install boto3==1.7.* scikit-learn==0.19.* scipy numpy
+
+COPY containers/python/sagemaker_sklearn_container.py \
+       containers/python/container_entry.sh /container/
+
+ENTRYPOINT ["/container/container_entry.sh", "sagemaker-sklearn-container", "/container/sagemaker_sklearn_container.py"]
+
+# vim: set filetype=dockerfile:

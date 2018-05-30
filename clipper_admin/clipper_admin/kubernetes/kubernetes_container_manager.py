@@ -316,6 +316,12 @@ class KubernetesContainerManager(ContainerManager):
                                     }, {
                                         'name': 'CLIPPER_INPUT_TYPE',
                                         'value': input_type
+                                    }, {
+                                        'name': 'AWS_ACCESS_KEY_ID',
+                                        'valueFrom': {"secretKeyRef": {"name": "aws-creds", "key": "AWS_ACCESS_KEY_ID"}}
+                                    }, {
+                                        'name': 'AWS_SECRET_ACCESS_KEY',
+                                        'valueFrom': {"secretKeyRef": {"name": "aws-creds", "key": "AWS_SECRET_ACCESS_KEY"}}
                                     }]
                                 }]
                             }
