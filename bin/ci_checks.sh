@@ -32,7 +32,7 @@ $DIR/aws_docker_repo_login.sh
 docker pull 568959175238.dkr.ecr.us-west-1.amazonaws.com/clipper/query_frontend:$tag
 
 # Set up credentials for K8s testing cluster.
-export KUBECONFIG=~/kubeconfig_$(date +"%Y%m%d%H%M%S")
+# export KUBECONFIG=~/kubeconfig_$(date +"%Y%m%d%H%M%S")
 
 # We only need to trap exit starting here, because before this line
 # KUBECONFIG hasn't been set yet and we haven't created any resources
@@ -44,7 +44,10 @@ trap clean_up SIGHUP SIGINT SIGTERM EXIT
 # + CLIPPER_K8S_CLIENT_CERT
 # + CLIPPER_K8S_CLIENT_KEY
 # + CLIPPER_K8S_PASSWORD
-python $DIR/construct_kube_config.py $KUBECONFIG
+# python $DIR/construct_kube_config.py $KUBECONFIG
+
+mkdir -p /home/ubuntu
+ln -s /root/.minikube /home/ubuntu
 
 # Test K8s cluster access
 kubectl get nodes

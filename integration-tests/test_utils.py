@@ -105,9 +105,9 @@ def create_kubernetes_connection(cleanup=True,
                                  num_frontend_replicas=1):
     logger.info("Creating KubernetesContainerManager")
     if with_proxy:
-        cm = KubernetesContainerManager(kubernetes_proxy_addr="127.0.0.1:8080")
+        cm = KubernetesContainerManager(kubernetes_proxy_addr="127.0.0.1:8080", useInternalIP=True)
     else:
-        cm = KubernetesContainerManager()
+        cm = KubernetesContainerManager(useInternalIP=True)
     cl = ClipperConnection(cm)
     if cleanup:
         cl.stop_all()
