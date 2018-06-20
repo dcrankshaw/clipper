@@ -65,17 +65,21 @@ class QueryFrontendTest : public ::testing::Test {
 TEST_F(QueryFrontendTest, TestDecodeCorrectInputInts) {
   std::string test_json_ints = "{\"input\": [1,2,3,4]}";
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_ints, "test", {}, "test_policy",
+      rh_.decode_and_handle_predict(test_json_ints, "test", "test_policy",
                                     30000, InputType::Ints)
           .get();
   Response response = responses[0].value();
 
   Query parsed_query = response.query_;
+  std::shared_ptr<IntVector> parsed_input =
+      std::dynamic_pointer_cast<IntVector>(parsed_query.input_);
+  int* data = get_data(parsed_input).get();
+  std::vector<int> parsed_input_data(
+      data + parsed_input->start(),
+      data + parsed_input->start() + parsed_input->size());
 
-  const std::vector<int>& parsed_input =
-      std::static_pointer_cast<IntVector>(parsed_query.input_)->get_data();
-  std::vector<int> expected_input{1, 2, 3, 4};
-  EXPECT_EQ(parsed_input, expected_input);
+  std::vector<int> expected_input_data{1, 2, 3, 4};
+  EXPECT_EQ(parsed_input_data, expected_input_data);
   EXPECT_EQ(parsed_query.label_, "test");
   EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
   EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -84,18 +88,24 @@ TEST_F(QueryFrontendTest, TestDecodeCorrectInputInts) {
 TEST_F(QueryFrontendTest, TestDecodeCorrectInputIntsBatch) {
   std::string test_json_ints =
       "{\"input_batch\": [[1, 2], [10, 20], [100, 200]]}";
-  std::vector<std::vector<int>> expected_input{{1, 2}, {10, 20}, {100, 200}};
+  std::vector<std::vector<int>> expected_input_data{
+      {1, 2}, {10, 20}, {100, 200}};
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_ints, "test", {}, "test_policy",
+      rh_.decode_and_handle_predict(test_json_ints, "test", "test_policy",
                                     30000, InputType::Ints)
           .get();
   for (size_t index = 0; index < responses.size(); ++index) {
     Response response = responses[index].value();
     Query parsed_query = response.query_;
 
-    const std::vector<int>& parsed_input =
-        std::static_pointer_cast<IntVector>(parsed_query.input_)->get_data();
-    EXPECT_EQ(parsed_input, expected_input[index]);
+    std::shared_ptr<IntVector> parsed_input =
+        std::dynamic_pointer_cast<IntVector>(parsed_query.input_);
+    int* data = get_data(parsed_input).get();
+    std::vector<int> parsed_input_data(
+        data + parsed_input->start(),
+        data + parsed_input->start() + parsed_input->size());
+
+    EXPECT_EQ(parsed_input_data, expected_input_data[index]);
     EXPECT_EQ(parsed_query.label_, "test");
     EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
     EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -105,17 +115,22 @@ TEST_F(QueryFrontendTest, TestDecodeCorrectInputIntsBatch) {
 TEST_F(QueryFrontendTest, TestDecodeCorrectInputDoubles) {
   std::string test_json_doubles = "{\"input\": [1.4,2.23,3.243242,0.3223424]}";
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_doubles, "test", {},
-                                    "test_policy", 30000, InputType::Doubles)
+      rh_.decode_and_handle_predict(test_json_doubles, "test", "test_policy",
+                                    30000, InputType::Doubles)
           .get();
   Response response = responses[0].value();
 
   Query parsed_query = response.query_;
 
-  const std::vector<double>& parsed_input =
-      std::static_pointer_cast<DoubleVector>(parsed_query.input_)->get_data();
-  std::vector<double> expected_input{1.4, 2.23, 3.243242, 0.3223424};
-  EXPECT_EQ(parsed_input, expected_input);
+  std::shared_ptr<DoubleVector> parsed_input =
+      std::dynamic_pointer_cast<DoubleVector>(parsed_query.input_);
+  double* data = get_data(parsed_input).get();
+  std::vector<double> parsed_input_data(
+      data + parsed_input->start(),
+      data + parsed_input->start() + parsed_input->size());
+
+  std::vector<double> expected_input_data{1.4, 2.23, 3.243242, 0.3223424};
+  EXPECT_EQ(parsed_input_data, expected_input_data);
   EXPECT_EQ(parsed_query.label_, "test");
   EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
   EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -124,19 +139,24 @@ TEST_F(QueryFrontendTest, TestDecodeCorrectInputDoubles) {
 TEST_F(QueryFrontendTest, TestDecodeCorrectInputDoublesBatch) {
   std::string test_json_doubles =
       "{\"input_batch\": [[1.1, 2.2], [10.1, 20.2], [100.1, 200.2]]}";
-  std::vector<std::vector<double>> expected_input{
+  std::vector<std::vector<double>> expected_input_data{
       {1.1, 2.2}, {10.1, 20.2}, {100.1, 200.2}};
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_doubles, "test", {},
-                                    "test_policy", 30000, InputType::Doubles)
+      rh_.decode_and_handle_predict(test_json_doubles, "test", "test_policy",
+                                    30000, InputType::Doubles)
           .get();
   for (size_t index = 0; index < responses.size(); ++index) {
     Response response = responses[index].value();
     Query parsed_query = response.query_;
 
-    const std::vector<double>& parsed_input =
-        std::static_pointer_cast<DoubleVector>(parsed_query.input_)->get_data();
-    EXPECT_EQ(parsed_input, expected_input[index]);
+    std::shared_ptr<DoubleVector> parsed_input =
+        std::dynamic_pointer_cast<DoubleVector>(parsed_query.input_);
+    double* data = get_data(parsed_input).get();
+    std::vector<double> parsed_input_data(
+        data + parsed_input->start(),
+        data + parsed_input->start() + parsed_input->size());
+
+    EXPECT_EQ(parsed_input_data, expected_input_data[index]);
     EXPECT_EQ(parsed_query.label_, "test");
     EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
     EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -148,19 +168,23 @@ TEST_F(QueryFrontendTest, TestDecodeCorrectInputString) {
       "{\"input\": \"hello world. This is a test string with "
       "punctionation!@#$Y#;}#\"}";
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_string, "test", {}, "test_policy",
+      rh_.decode_and_handle_predict(test_json_string, "test", "test_policy",
                                     30000, InputType::Strings)
           .get();
   Response response = responses[0].value();
 
   Query parsed_query = response.query_;
 
-  const std::string& parsed_input =
-      std::static_pointer_cast<SerializableString>(parsed_query.input_)
-          ->get_data();
-  std::string expected_input(
+  std::shared_ptr<SerializableString> parsed_input =
+      std::dynamic_pointer_cast<SerializableString>(parsed_query.input_);
+  char* data = get_data(parsed_input).get();
+  std::string parsed_input_data(
+      data + parsed_input->start(),
+      data + parsed_input->start() + parsed_input->size());
+
+  std::string expected_input_data(
       "hello world. This is a test string with punctionation!@#$Y#;}#");
-  EXPECT_EQ(parsed_input, expected_input);
+  EXPECT_EQ(parsed_input_data, expected_input_data);
   EXPECT_EQ(parsed_query.label_, "test");
   EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
   EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -169,19 +193,23 @@ TEST_F(QueryFrontendTest, TestDecodeCorrectInputString) {
 TEST_F(QueryFrontendTest, TestDecodeCorrectInputStringBatch) {
   std::string test_json_strings =
       "{\"input_batch\": [ \"this\", \"is\", \"a\", \"test\" ]}";
-  std::vector<std::string> expected_input{"this", "is", "a", "test"};
+  std::vector<std::string> expected_input_data{"this", "is", "a", "test"};
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json_strings, "test", {},
-                                    "test_policy", 30000, InputType::Strings)
+      rh_.decode_and_handle_predict(test_json_strings, "test", "test_policy",
+                                    30000, InputType::Strings)
           .get();
   for (size_t index = 0; index < responses.size(); ++index) {
     Response response = responses[index].value();
     Query parsed_query = response.query_;
 
-    const std::string& parsed_input =
-        std::static_pointer_cast<SerializableString>(parsed_query.input_)
-            ->get_data();
-    EXPECT_EQ(parsed_input, expected_input[index]);
+    std::shared_ptr<SerializableString> parsed_input =
+        std::dynamic_pointer_cast<SerializableString>(parsed_query.input_);
+    char* data = get_data(parsed_input).get();
+    std::string parsed_input_data(
+        data + parsed_input->start(),
+        data + parsed_input->start() + parsed_input->size());
+
+    EXPECT_EQ(parsed_input_data, expected_input_data[index]);
     EXPECT_EQ(parsed_query.label_, "test");
     EXPECT_EQ(parsed_query.latency_budget_micros_, 30000);
     EXPECT_EQ(parsed_query.selection_policy_, "test_policy");
@@ -196,12 +224,12 @@ TEST_F(QueryFrontendTest, TestDecodeMalformedJSON) {
       "dshfdshffhkj32fsd32jk huf32h, 3 } 24j dskjfh32r\"3r32";
 
   ASSERT_THROW(
-      rh_.decode_and_handle_predict(gibberish_string1, "test", {},
-                                    "test_policy", 30000, InputType::Doubles),
+      rh_.decode_and_handle_predict(gibberish_string1, "test", "test_policy",
+                                    30000, InputType::Doubles),
       json_parse_error);
   ASSERT_THROW(
-      rh_.decode_and_handle_predict(gibberish_string2, "test", {},
-                                    "test_policy", 30000, InputType::Strings),
+      rh_.decode_and_handle_predict(gibberish_string2, "test", "test_policy",
+                                    30000, InputType::Strings),
       json_parse_error);
 }
 
@@ -209,8 +237,8 @@ TEST_F(QueryFrontendTest, TestDecodeMissingJsonField) {
   std::string json_missing_field =
       "{\"other_field\": [1.4,2.23,3.243242,0.3223424]}";
   ASSERT_THROW(
-      rh_.decode_and_handle_predict(json_missing_field, "test", {},
-                                    "test_policy", 30000, InputType::Doubles),
+      rh_.decode_and_handle_predict(json_missing_field, "test", "test_policy",
+                                    30000, InputType::Doubles),
       json_semantic_error);
 }
 
@@ -218,8 +246,8 @@ TEST_F(QueryFrontendTest, TestDecodeWrongInputType) {
   std::string test_json_doubles =
       "{\"uid\": 23, \"input\": [1.4,2.23,3.243242,0.3223424]}";
   ASSERT_THROW(
-      rh_.decode_and_handle_predict(test_json_doubles, "test", {},
-                                    "test_policy", 30000, InputType::Ints),
+      rh_.decode_and_handle_predict(test_json_doubles, "test", "test_policy",
+                                    30000, InputType::Ints),
       json_semantic_error);
 }
 
@@ -227,8 +255,8 @@ TEST_F(QueryFrontendTest, TestDecodeWrongInputTypeInBatch) {
   std::string test_json_doubles =
       "{\"uid\": 23, \"input_batch\": [[1,2], [3.243242,0.3223424]]}";
   ASSERT_THROW(
-      rh_.decode_and_handle_predict(test_json_doubles, "test", {},
-                                    "test_policy", 30000, InputType::Ints),
+      rh_.decode_and_handle_predict(test_json_doubles, "test", "test_policy",
+                                    30000, InputType::Ints),
       json_semantic_error);
 }
 
@@ -274,11 +302,41 @@ TEST_F(QueryFrontendTest, TestAddManyApplications) {
   EXPECT_EQ(apps, (size_t)500);
 }
 
+TEST_F(QueryFrontendTest, TestDeleteOneApplication) {
+  size_t no_apps = rh_.num_applications();
+  EXPECT_EQ(no_apps, (size_t)0);
+
+  rh_.add_application("test_app_1", InputType::Doubles, "test_policy", "0.4",
+                      30000);
+  rh_.delete_application("test_app_1");
+  no_apps = rh_.num_applications();
+  EXPECT_EQ(no_apps, (size_t)0);
+}
+
+TEST_F(QueryFrontendTest, TestDeleteManyApplications) {
+  size_t no_apps = rh_.num_applications();
+  EXPECT_EQ(no_apps, (size_t)0);
+
+  // Add 500 applications and delete half of them
+  for (int i = 0; i < 500; ++i) {
+    std::string cur_name = "test_app_" + std::to_string(i);
+    rh_.add_application(cur_name, InputType::Doubles, "test_policy", "0.4",
+                        30000);
+  }
+  for (int i = 0; i < 250; ++i) {
+    std::string cur_name = "test_app_" + std::to_string(i);
+    rh_.delete_application(cur_name);
+  }
+
+  size_t apps = rh_.num_applications();
+  EXPECT_EQ(apps, (size_t)250);
+}
+
 TEST_F(QueryFrontendTest,
        TestJsonResponseForSuccessfulPredictionFormattedCorrectly) {
   std::string test_json = "{\"uid\": 1, \"input\": [1,2,3]}";
   std::vector<folly::Try<Response>> responses =
-      rh_.decode_and_handle_predict(test_json, "test", {}, "test_policy", 30000,
+      rh_.decode_and_handle_predict(test_json, "test", "test_policy", 30000,
                                     InputType::Ints)
           .get();
   Response response = responses[0].value();
@@ -308,7 +366,7 @@ TEST_F(QueryFrontendTest,
        TestJsonResponseForFailedPredictionFormattedCorrectly) {
   std::string test_json = "{\"uid\": 1, \"input\": [1,}";
   try {
-    rh_.decode_and_handle_predict(test_json, "test", {}, "test_policy", 30000,
+    rh_.decode_and_handle_predict(test_json, "test", "test_policy", 30000,
                                   InputType::Ints)
         .get();
     FAIL() << "Expected an error parsing malformed json: " << test_json;

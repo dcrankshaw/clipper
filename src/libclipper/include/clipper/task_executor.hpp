@@ -82,10 +82,10 @@ class PredictionCache {
  public:
   PredictionCache(size_t size_bytes);
   folly::Future<Output> fetch(const VersionedModelId &model,
-                              const std::shared_ptr<Input> &input);
+                              std::shared_ptr<PredictionData> &input);
 
-  void put(const VersionedModelId &model, const std::shared_ptr<Input> &input,
-           const Output &output);
+  void put(const VersionedModelId &model,
+           std::shared_ptr<PredictionData> &input, const Output &output);
 
  private:
   size_t hash(const VersionedModelId &model, size_t input_hash) const;
@@ -138,17 +138,42 @@ class ModelQueue {
   }
 
   std::vector<PredictTask> get_batch(
-      std::function<int(Deadline)> &&get_batch_size) {
+      std::shared_ptr<ModelContainer> requesting_container,
+      std::function<BatchSizeInfo(Deadline)> &&get_batch_size) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     remove_tasks_with_elapsed_deadlines();
     queue_not_empty_condition_.wait(lock, [this]() { return !queue_.empty(); });
     remove_tasks_with_elapsed_deadlines();
-    Deadline deadline = queue_.top().first;
-    int max_batch_size = get_batch_size(deadline);
+
     std::vector<PredictTask> batch;
-    while (batch.size() < (size_t)max_batch_size && queue_.size() > 0) {
-      batch.push_back(queue_.top().second);
-      queue_.pop();
+    if (requesting_container->is_active()) {
+      Deadline deadline = queue_.top().first;
+
+      size_t max_batch_size;
+      BatchSizeDeterminationMethod method;
+      std::tie(max_batch_size, method) = get_batch_size(deadline);
+
+      while (batch.size() < max_batch_size && queue_.size() > 0) {
+        batch.push_back(queue_.top().second);
+        queue_.pop();
+      }
+      size_t batch_differential = max_batch_size - batch.size();
+      if (batch_differential > 0 &&
+          method == BatchSizeDeterminationMethod::Exploration) {
+        // Artificially inject queries to create
+        // a full batch
+        //
+        // Create a copy of the last task in the batch and make it artifical
+        PredictTask last_task = batch.back();
+        last_task.artificial_ = true;
+
+        std::fill_n(std::back_inserter(batch), batch_differential, last_task);
+      }
+    }
+
+    lock.unlock();
+    if (!queue_.empty()) {
+      queue_not_empty_condition_.notify_one();
     }
     return batch;
   }
@@ -188,12 +213,14 @@ class InflightMessage {
   InflightMessage(
       const std::chrono::time_point<std::chrono::system_clock> send_time,
       const int container_id, const VersionedModelId model,
-      const int replica_id, const std::shared_ptr<Input> input)
-      : send_time_(send_time),
+      const int replica_id, const std::shared_ptr<PredictionData> input,
+      const bool discard_result)
+      : send_time_(std::move(send_time)),
         container_id_(container_id),
-        model_(model),
+        model_(std::move(model)),
         replica_id_(replica_id),
-        input_(input) {}
+        input_(std::move(input)),
+        discard_result_(discard_result) {}
 
   // Default copy and move constructors
   InflightMessage(const InflightMessage &) = default;
@@ -207,7 +234,8 @@ class InflightMessage {
   int container_id_;
   VersionedModelId model_;
   int replica_id_;
-  std::shared_ptr<Input> input_;
+  std::shared_ptr<PredictionData> input_;
+  bool discard_result_;
 };
 
 class TaskExecutor {
@@ -233,7 +261,7 @@ class TaskExecutor {
                      "TaskExecutor has been destroyed.");
           }
         },
-        [ this, task_executor_valid = active_ ](rpc::RPCResponse response) {
+        [ this, task_executor_valid = active_ ](rpc::RPCResponse & response) {
           if (*task_executor_valid) {
             on_response_recv(std::move(response));
           } else {
@@ -242,6 +270,16 @@ class TaskExecutor {
                      "TaskExecutor has been destroyed.");
           }
 
+        },
+        [ this, task_executor_valid = active_ ](VersionedModelId model,
+                                                int replica_id) {
+          if (*task_executor_valid) {
+            on_remove_container(model, replica_id);
+          } else {
+            log_info(LOGGING_TAG_TASK_EXECUTOR,
+                     "Not running on_remove_container callback because "
+                     "TaskExecutor has been destroyed.");
+          }
         });
     Config &conf = get_config();
     while (!redis_connection_.connect(conf.get_redis_address(),
@@ -306,6 +344,7 @@ class TaskExecutor {
             }
             active_containers_->register_batch_size(vm, batch_size);
 
+            EstimatorFittingThreadPool::create_queue(vm, replica_id);
             TaskExecutionThreadPool::create_queue(vm, replica_id);
             TaskExecutionThreadPool::submit_job(
                 vm, replica_id, [this, vm, replica_id]() {
@@ -323,7 +362,6 @@ class TaskExecutor {
                      "subscribe_to_container_changes callback because "
                      "TaskExecutor has been destroyed.");
           }
-
         });
     throughput_meter_ = metrics::MetricsRegistry::get_metrics().create_meter(
         "internal:aggregate_model_throughput");
@@ -347,9 +385,28 @@ class TaskExecutor {
       // add each task to the queue corresponding to its associated model
       boost::shared_lock<boost::shared_mutex> lock(model_queues_mutex_);
       auto model_queue_entry = model_queues_.find(t.model_);
+
       if (model_queue_entry != model_queues_.end()) {
-        output_futures.push_back(cache_->fetch(t.model_, t.input_));
-        if (!output_futures.back().isReady()) {
+        auto cache_result = cache_->fetch(t.model_, t.input_);
+
+        if (cache_result.isReady()) {
+          output_futures.push_back(std::move(cache_result));
+          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
+              model_metrics_mutex_);
+          auto cur_model_metric_entry = model_metrics_.find(t.model_);
+          if (cur_model_metric_entry != model_metrics_.end()) {
+            auto cur_model_metric = cur_model_metric_entry->second;
+            cur_model_metric.cache_hit_ratio_->increment(1, 1);
+          }
+        }
+
+        else if (active_containers_->get_replicas_for_model(t.model_).size() ==
+                 0) {
+          log_error_formatted(LOGGING_TAG_TASK_EXECUTOR,
+                              "No active model containers for model: {} : {}",
+                              t.model_.get_name(), t.model_.get_id());
+        } else {
+          output_futures.push_back(std::move(cache_result));
           t.recv_time_ = std::chrono::system_clock::now();
           model_queue_entry->second->add_task(t);
           log_info_formatted(LOGGING_TAG_TASK_EXECUTOR,
@@ -361,14 +418,6 @@ class TaskExecutor {
           if (cur_model_metric_entry != model_metrics_.end()) {
             auto cur_model_metric = cur_model_metric_entry->second;
             cur_model_metric.cache_hit_ratio_->increment(0, 1);
-          }
-        } else {
-          boost::shared_lock<boost::shared_mutex> model_metrics_lock(
-              model_metrics_mutex_);
-          auto cur_model_metric_entry = model_metrics_.find(t.model_);
-          if (cur_model_metric_entry != model_metrics_.end()) {
-            auto cur_model_metric = cur_model_metric_entry->second;
-            cur_model_metric.cache_hit_ratio_->increment(1, 1);
           }
         }
       } else {
@@ -405,6 +454,7 @@ class TaskExecutor {
       model_queues_;
   boost::shared_mutex model_metrics_mutex_;
   std::unordered_map<VersionedModelId, ModelMetrics> model_metrics_;
+
   static constexpr int INITIAL_MODEL_QUEUES_MAP_SIZE = 100;
 
   bool create_model_queue_if_necessary(const VersionedModelId &model_id) {
@@ -446,8 +496,10 @@ class TaskExecutor {
     // goes out of scope.
     l.unlock();
 
-    std::vector<PredictTask> batch = current_model_queue->get_batch([container](
-        Deadline deadline) { return container->get_batch_size(deadline); });
+    std::vector<PredictTask> batch = current_model_queue->get_batch(
+        container, [container](Deadline deadline) {
+          return container->get_batch_size(deadline);
+        });
 
     if (batch.size() > 0) {
       // move the lock up here, so that nothing can pull from the
@@ -463,7 +515,7 @@ class TaskExecutor {
       for (auto b : batch) {
         prediction_request.add_input(b.input_);
         cur_batch.emplace_back(current_time, container->container_id_, b.model_,
-                               container->replica_id_, b.input_);
+                               container->replica_id_, b.input_, b.artificial_);
         query_ids_in_batch << b.query_id_ << " ";
       }
       int message_id = rpc_->send_message(prediction_request.serialize(),
@@ -492,9 +544,9 @@ class TaskExecutor {
     inflight_messages_.erase(response.first);
     rpc::PredictionResponse parsed_response =
         rpc::PredictionResponse::deserialize_prediction_response(
-            response.second);
+            std::move(response.second));
     assert(parsed_response.outputs_.size() == keys.size());
-    int batch_size = keys.size();
+    size_t batch_size = keys.size();
     throughput_meter_->mark(batch_size);
     std::chrono::time_point<std::chrono::system_clock> current_time =
         std::chrono::system_clock::now();
@@ -503,7 +555,7 @@ class TaskExecutor {
       const VersionedModelId &cur_model = first_message.model_;
       const int cur_replica_id = first_message.replica_id_;
       auto batch_latency = current_time - first_message.send_time_;
-      long batch_latency_micros =
+      long long batch_latency_micros =
           std::chrono::duration_cast<std::chrono::microseconds>(batch_latency)
               .count();
 
@@ -514,7 +566,8 @@ class TaskExecutor {
       std::shared_ptr<ModelContainer> processing_container =
           active_containers_->get_model_replica(cur_model, cur_replica_id);
 
-      processing_container->update_throughput(batch_size, batch_latency_micros);
+      processing_container->add_processing_datapoint(batch_size,
+                                                     batch_latency_micros);
 
       boost::optional<ModelMetrics> cur_model_metric;
       auto cur_model_metric_entry = model_metrics_.find(cur_model);
@@ -526,11 +579,13 @@ class TaskExecutor {
         (*cur_model_metric).num_predictions_->increment(batch_size);
         (*cur_model_metric).batch_size_->insert(batch_size);
       }
-      for (int batch_num = 0; batch_num < batch_size; ++batch_num) {
+      for (size_t batch_num = 0; batch_num < batch_size; ++batch_num) {
         InflightMessage completed_msg = keys[batch_num];
-        cache_->put(completed_msg.model_, completed_msg.input_,
-                    Output{parsed_response.outputs_[batch_num],
-                           {completed_msg.model_}});
+        if (!completed_msg.discard_result_) {
+          cache_->put(completed_msg.model_, completed_msg.input_,
+                      Output{parsed_response.outputs_[batch_num],
+                             {completed_msg.model_}});
+        }
         auto task_latency = current_time - completed_msg.send_time_;
         long task_latency_micros =
             std::chrono::duration_cast<std::chrono::microseconds>(task_latency)
@@ -541,6 +596,11 @@ class TaskExecutor {
         }
       }
     }
+  }
+
+  void on_remove_container(VersionedModelId model_id, int replica_id) {
+    // remove the given model_id from active_containers_
+    active_containers_->remove_container(model_id, replica_id);
   }
 };
 

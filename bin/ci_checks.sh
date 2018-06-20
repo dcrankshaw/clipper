@@ -4,6 +4,9 @@ set -e
 set -u
 set -o pipefail
 
+
+run_all=$1
+
 function clean_up {
     # Clean up credentials
     rm $KUBECONFIG
@@ -21,6 +24,9 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR/..
 tag=$(<VERSION.txt)
 cd -
+
+# Log in to Kubernetes Docker repo
+$DIR/aws_docker_repo_login.sh
 
 # Test docker login
 docker pull 568959175238.dkr.ecr.us-west-1.amazonaws.com/clipper/query_frontend:$tag
@@ -42,6 +48,12 @@ python $DIR/construct_kube_config.py $KUBECONFIG
 
 # Test K8s cluster access
 kubectl get nodes
+# Set kubectl proxy for k8s tests later
+kubectl proxy --port 8080 &
 
-$DIR/check_format.sh
-$DIR/run_unittests.sh
+if [[ $run_all = "true" ]]; then
+    $DIR/check_format.sh
+    $DIR/run_unittests.sh
+else
+    $DIR/run_unittests.sh -i
+fi

@@ -35,7 +35,7 @@ function clean_up {
     # echo Killing jobs
     echo Exiting unit tests...
     kill $(jobs -p) &> /dev/null
-    echo
+    echo "Cleanup exit code: $?"
     sleep 2
     # echo Remaining background jobs: $(jobs -l)
     exit
@@ -94,12 +94,6 @@ function run_jvm_container_tests {
   mvn test
 }
 
-function run_cpp_container_tests {
-  cd $DIR/../debug
-  echo "Running CPP container tests..."
-  ./src/container/container_tests
-}
-
 function run_r_container_tests {
   cd $DIR
   cd ../containers/R/tests
@@ -141,10 +135,17 @@ function run_integration_tests {
   python ../integration-tests/deploy_pyspark_pipeline_models.py
   python ../integration-tests/deploy_pyspark_sparkml_models.py
   python ../integration-tests/kubernetes_integration_test.py
+  python ../integration-tests/kubernetes_multi_frontend.py
   python ../integration-tests/deploy_tensorflow_models.py
+  python ../integration-tests/deploy_mxnet_models.py 
+  python ../integration-tests/deploy_pytorch_models.py 
+  # See issue #475
+  # python ../integration-tests/deploy_pytorch_to_caffe2_with_onnx.py
   ../integration-tests/r_integration_test/rclipper_test.sh
   python ../integration-tests/clipper_metric_docker.py 
   python ../integration-tests/clipper_metric_kube.py 
+  echo "Exit code: $?"
+  echo "GREPTHIS Done running unit tests"
 }
 
 function run_all_tests {
@@ -157,8 +158,6 @@ function run_all_tests {
   run_integration_tests
   redis-cli -p $REDIS_PORT "flushall"
   run_jvm_container_tests
-  redis-cli -p $REDIS_PORT "flushall"
-  run_cpp_container_tests
   redis-cli -p $REDIS_PORT "flushall"
   run_r_container_tests
   redis-cli -p $REDIS_PORT "flushall"
@@ -174,34 +173,31 @@ else
 fi
 
 case $args in
-    -a | --all )            set_test_environment
-                            run_all_tests
-                            ;;
-    -l | --libclipper )     set_test_environment
-                            run_libclipper_tests
-                            ;;
-    -m | --management )     set_test_environment
-                            run_management_tests
-                            ;;
-    -f | --frontend )       set_test_environment
-                            run_frontend_tests
-                            ;;
-    -j | --jvm-container )  set_test_environment
-                            run_jvm_container_tests
-                            ;;
-    -c | --cpp-container )  set_test_environment
-                            run_cpp_container_tests
-                            ;;
-    -rc | --r-container )   set_test_environment
-                            run_r_container_tests
-                            ;;
-    -r | --rpc-container )  set_test_environment
-                            run_rpc_container_tests
-                            ;;
+    -a | --all )                set_test_environment
+                                run_all_tests
+                                ;;
+    -l | --libclipper )         set_test_environment
+                                run_libclipper_tests
+                                ;;
+    -m | --management )         set_test_environment
+                                run_management_tests
+                                ;;
+    -f | --frontend )           set_test_environment
+                                run_frontend_tests
+                                ;;
+    -j | --jvm-container )      set_test_environment
+                                run_jvm_container_tests
+                                ;;
+    -rc | --r-container )       set_test_environment
+                                run_r_container_tests
+                                ;;
+    -r | --rpc-container )      set_test_environment
+                                run_rpc_container_tests
+                                ;;
     -i | --integration_tests )  set_test_environment
-                            run_integration_tests
-                            ;;
-    -h | --help )           usage
-                            ;;
-    * )                     usage
+                                run_integration_tests
+                                ;;
+    -h | --help )               usage
+                                ;;
+    * )                         usage
 esac

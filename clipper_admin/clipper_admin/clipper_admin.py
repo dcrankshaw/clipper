@@ -10,10 +10,19 @@ import time
 import re
 import os
 import tarfile
-import six
+import sys
 from cloudpickle import CloudPickler
 import pickle
 import numpy as np
+if sys.version_info < (3, 0):
+    try:
+        from cStringIO import StringIO
+    except ImportError:
+        from StringIO import StringIO
+    PY3 = False
+else:
+    from io import BytesIO as StringIO
+    PY3 = True
 
 from .container_manager import CONTAINERLESS_MODEL_IMAGE
 from .exceptions import ClipperException, UnconnectedException
@@ -76,7 +85,8 @@ class ClipperConnection(object):
                 __version__),
             mgmt_frontend_image='clipper/management_frontend:{}'.format(
                 __version__),
-            cache_size=DEFAULT_PREDICTION_CACHE_SIZE_BYTES):
+            cache_size=DEFAULT_PREDICTION_CACHE_SIZE_BYTES,
+            num_frontend_replicas=1):
         """Start a new Clipper cluster and connect to it.
 
         This command will start a new Clipper instance using the container manager provided when
@@ -101,12 +111,14 @@ class ClipperConnection(object):
         """
         try:
             self.cm.start_clipper(query_frontend_image, mgmt_frontend_image,
-                                  cache_size)
+                                  cache_size, num_frontend_replicas)
             while True:
                 try:
                     url = "http://{host}/metrics".format(
                         host=self.cm.get_query_addr())
-                    requests.get(url, timeout=5)
+                    r = requests.get(url, timeout=5)
+                    if r.status_code != requests.codes.ok:
+                        raise RequestException
                     break
                 except RequestException:
                     logger.info("Clipper still initializing.")
@@ -188,6 +200,25 @@ class ClipperConnection(object):
             logger.info("Application {app} was successfully registered".format(
                 app=name))
 
+    def delete_application(self, name):
+        if not self.connected:
+            raise UnconnectedException()
+
+        url = "http://{host}/admin/delete_app".format(
+            host=self.cm.get_admin_addr())
+        req_json = json.dumps({"name": name})
+        headers = {"Content-type": "application/json"}
+        r = requests.post(url, headers=headers, data=req_json)
+        logger.debug(r.text)
+        if r.status_code != requests.codes.ok:
+            msg = "Received error status code: {code} and message: {msg}".format(
+                code=r.status_code, msg=r.text)
+            logger.error(msg)
+            raise ClipperException(msg)
+        else:
+            logger.info(
+                "Application {app} was successfully deleted".format(app=name))
+
     def link_model_to_app(self, app_name, model_name):
         """Routes requests from the specified app to be evaluted by the specified model.
 
@@ -247,8 +278,8 @@ class ClipperConnection(object):
 
         This method does two things.
 
-        1. Builds a new Docker image from the provided base image with the local directory
-        specified by ``model_data_path`` copied into the image by calling
+        1. Builds a new Docker image from the provided base image with the local directory specified
+        by ``model_data_path`` copied into the image by calling
         :py:meth:`clipper_admin.ClipperConnection.build_model`.
 
         2. Registers and deploys a model with the specified metadata using the newly built
@@ -383,17 +414,31 @@ class ClipperConnection(object):
                     fileobj=context_file, mode="w") as context_tar:
                 context_tar.add(model_data_path)
                 # From https://stackoverflow.com/a/740854/814642
-                df_contents = six.StringIO(
-                    "FROM {container_name}\nCOPY {data_path} /model/\n{run_command}\n".
-                    format(
-                        container_name=base_image,
-                        data_path=model_data_path,
-                        run_command=run_cmd))
-                df_tarinfo = tarfile.TarInfo('Dockerfile')
-                df_contents.seek(0, os.SEEK_END)
-                df_tarinfo.size = df_contents.tell()
-                df_contents.seek(0)
-                context_tar.addfile(df_tarinfo, df_contents)
+                try:
+                    df_contents = StringIO(
+                        str.encode(
+                            "FROM {container_name}\nCOPY {data_path} /model/\n{run_command}\n".
+                            format(
+                                container_name=base_image,
+                                data_path=model_data_path,
+                                run_command=run_cmd)))
+                    df_tarinfo = tarfile.TarInfo('Dockerfile')
+                    df_contents.seek(0, os.SEEK_END)
+                    df_tarinfo.size = df_contents.tell()
+                    df_contents.seek(0)
+                    context_tar.addfile(df_tarinfo, df_contents)
+                except TypeError:
+                    df_contents = StringIO(
+                        "FROM {container_name}\nCOPY {data_path} /model/\n{run_command}\n".
+                        format(
+                            container_name=base_image,
+                            data_path=model_data_path,
+                            run_command=run_cmd))
+                    df_tarinfo = tarfile.TarInfo('Dockerfile')
+                    df_contents.seek(0, os.SEEK_END)
+                    df_tarinfo.size = df_contents.tell()
+                    df_contents.seek(0)
+                    context_tar.addfile(df_tarinfo, df_contents)
             # Exit Tarfile context manager to finish the tar file
             # Seek back to beginning of file for reading
             context_file.seek(0)
@@ -405,11 +450,14 @@ class ClipperConnection(object):
             logger.info(
                 "Building model Docker image with model data from {}".format(
                     model_data_path))
-            docker_client.images.build(
+            image_result, build_logs = docker_client.images.build(
                 fileobj=context_file, custom_context=True, tag=image)
+            for b in build_logs:
+                logger.info(b)
 
         logger.info("Pushing model Docker image to {}".format(image))
-        docker_client.images.push(repository=image)
+        for line in docker_client.images.push(repository=image, stream=True):
+            logger.debug(line)
         return image
 
     def deploy_model(self,
@@ -1231,7 +1279,7 @@ class ClipperConnection(object):
         the predict function, and the input type for the model.
 
         For example, the function can be called like:
-            ``clipper_conn.test_predict_function({"input": [1.0, 2.0]}, predict_func, "doubles")``
+            clipper_conn.test_predict_function({"input": [1.0, 2.0, 3.0]}, predict_func, "doubles")
 
         Parameters
         ----------
@@ -1287,7 +1335,7 @@ class ClipperConnection(object):
                 if type(x) != str:
                     return "Invalid input type"
 
-        s = six.StringIO()
+        s = StringIO()
         c = CloudPickler(s, 2)
         c.dump(func)
         serialized_func = s.getvalue()

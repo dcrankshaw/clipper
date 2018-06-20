@@ -15,19 +15,23 @@ MXNET_MODEL_RELATIVE_PATH = "mxnet_model"
 
 
 def load_predict_func(file_path):
-    with open(file_path, 'r') as serialized_func_file:
-        return cloudpickle.load(serialized_func_file)
+    if sys.version_info < (3, 0):
+        with open(file_path, 'r') as serialized_func_file:
+            return cloudpickle.load(serialized_func_file)
+    else:
+        with open(file_path, 'rb') as serialized_func_file:
+            return cloudpickle.load(serialized_func_file)
 
 
 # load mxnet model from serialized dir
-def load_mxnet_model(path):
-    mxnet_model_path = os.path.join(path, MXNET_MODEL_RELATIVE_PATH)
+def load_mxnet_model(model_path):
+    mxnet_model_path = os.path.join(model_path, MXNET_MODEL_RELATIVE_PATH)
 
     data_shapes = json.load(
-        open(os.path.join(path, "mxnet_model_metadata.json")))
+        open(os.path.join(model_path, "mxnet_model_metadata.json")))
 
     sym, arg_params, aux_params = mx.model.load_checkpoint(
-        prefix=model_path, epoch=0)
+        prefix=mxnet_model_path, epoch=0)
 
     mxnet_model = mx.mod.Module(symbol=sym)
     mxnet_model.bind(data_shapes["data_shapes"])
@@ -72,50 +76,12 @@ class MXNetContainer(rpc.ModelContainerBase):
 
 if __name__ == "__main__":
     print("Starting MXNetContainer container")
+    rpc_service = rpc.RPCService()
     try:
-        model_name = os.environ["CLIPPER_MODEL_NAME"]
-    except KeyError:
-        print(
-            "ERROR: CLIPPER_MODEL_NAME environment variable must be set",
-            file=sys.stdout)
-        sys.exit(1)
-    try:
-        model_version = os.environ["CLIPPER_MODEL_VERSION"]
-    except KeyError:
-        print(
-            "ERROR: CLIPPER_MODEL_VERSION environment variable must be set",
-            file=sys.stdout)
-        sys.exit(1)
-
-    ip = "127.0.0.1"
-    if "CLIPPER_IP" in os.environ:
-        ip = os.environ["CLIPPER_IP"]
-    else:
-        print("Connecting to Clipper on localhost")
-
-    port = 7000
-    if "CLIPPER_PORT" in os.environ:
-        port = int(os.environ["CLIPPER_PORT"])
-    else:
-        print("Connecting to Clipper with default port: {port}".format(
-            port=port))
-
-    input_type = "doubles"
-    if "CLIPPER_INPUT_TYPE" in os.environ:
-        input_type = os.environ["CLIPPER_INPUT_TYPE"]
-    else:
-        print("Using default input type: doubles")
-
-    model_path = os.environ["CLIPPER_MODEL_PATH"]
-
-    print("Initializing MXNet function container")
-    sys.stdout.flush()
-    sys.stderr.flush()
-
-    try:
-        model = MXNetContainer(model_path, input_type)
-        rpc_service = rpc.RPCService()
-        rpc_service.start(model, ip, port, model_name, model_version,
-                          input_type)
+        model = MXNetContainer(rpc_service.get_model_path(),
+                               rpc_service.get_input_type())
+        sys.stdout.flush()
+        sys.stderr.flush()
     except ImportError:
         sys.exit(IMPORT_ERROR_RETURN_CODE)
+    rpc_service.start(model)

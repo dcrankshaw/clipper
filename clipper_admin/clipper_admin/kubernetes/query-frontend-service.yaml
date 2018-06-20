@@ -8,9 +8,6 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - name: "7000"
-    port: 7000
-    targetPort: 7000
   - name: "1337"
     port: 1337
     targetPort: 1337

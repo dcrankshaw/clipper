@@ -9,15 +9,10 @@ import logging
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 
-sys.path.insert(0, os.path.abspath('%s/util_direct_import/' % cur_dir))
-
-from util_package import mock_module_in_package as mmip
-import mock_module as mm
-
 import mxnet as mx
 
-from test_utils import (create_docker_connection, BenchmarkException, headers,
-                        log_clipper_state)
+from test_utils import create_docker_connection, BenchmarkException, headers
+
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath("%s/../clipper_admin" % cur_dir))
 
@@ -47,8 +42,15 @@ def deploy_and_test_model(clipper_conn,
                           version,
                           link_model=False,
                           predict_fn=predict):
-    deploy_mxnet_model(clipper_conn, model_name, version, "integers",
-                       predict_fn, model, data_shapes)
+    deploy_mxnet_model(
+        clipper_conn,
+        model_name,
+        version,
+        "integers",
+        predict_fn,
+        model,
+        data_shapes,
+        batch_size=1)
 
     time.sleep(5)
 
@@ -131,7 +133,7 @@ if __name__ == "__main__":
             mxnet_model = mx.mod.Module(softmax)
             mxnet_model.fit(data_iter, num_epoch=0)
 
-            train_data_shape = [1, 785]
+            train_data_shape = data_iter.provide_data
 
             deploy_and_test_model(
                 clipper_conn,
@@ -139,13 +141,18 @@ if __name__ == "__main__":
                 train_data_shape,
                 version,
                 link_model=True)
-
             app_and_model_name = "easy-register-app-model"
-            create_endpoint(clipper_conn, app_and_model_name, "integers",
-                            predict, mxnet_model, train_data_shape)
+            create_endpoint(
+                clipper_conn,
+                app_and_model_name,
+                "integers",
+                predict,
+                mxnet_model,
+                train_data_shape,
+                batch_size=1)
             test_model(clipper_conn, app_and_model_name, 1)
 
-        except BenchmarkException as e:
+        except BenchmarkException:
             logger.exception("BenchmarkException")
             clipper_conn = create_docker_connection(
                 cleanup=True, start_clipper=False)
@@ -153,8 +160,9 @@ if __name__ == "__main__":
         else:
             clipper_conn = create_docker_connection(
                 cleanup=True, start_clipper=False)
-    except Exception as e:
+    except Exception:
         logger.exception("Exception")
         clipper_conn = create_docker_connection(
             cleanup=True, start_clipper=False)
+
         sys.exit(1)

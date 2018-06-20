@@ -4,9 +4,6 @@ import os
 with open('README.rst') as f:
     readme = f.read()
 
-with open('LICENSE.txt') as f:
-    license = f.read()
-
 with open(os.path.abspath("clipper_admin/VERSION.txt"), "r") as fp:
     version = fp.read().strip()
 
@@ -18,16 +15,18 @@ setup(
     maintainer='Dan Crankshaw',
     maintainer_email='crankshaw@cs.berkeley.edu',
     url='http://clipper.ai',
-    license=license,
+    license='Apache-2.0',
     packages=[
         "clipper_admin", "clipper_admin.docker", "clipper_admin.kubernetes",
-        "clipper_admin.deployers"
+        "clipper_admin.deployers", "clipper_admin.metrics"
     ],
     package_data={'clipper_admin': ['*.txt', '*/*.yaml']},
     keywords=['clipper', 'prediction', 'model', 'management'],
     install_requires=[
-        'requests', 'subprocess32', 'pyyaml', 'docker', 'kubernetes',
-        'prometheus_client', 'six', 'cloudpickle>=0.5.2'
+        'requests', 'numpy', 'subprocess32; python_version<"3"', 'pyyaml',
+        'docker>=3.0', 'kubernetes>=6.0.0', 'prometheus_client',
+        'cloudpickle>=0.5', 'enum34; python_version<"3.4"', 'redis', 'psutil',
+        'jsonschema'
     ],
     extras_require={
         'PySpark': ['pyspark'],
